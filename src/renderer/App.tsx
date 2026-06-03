@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import CommandBar, { CommandBarItem } from "./components/CommandBar";
 import Sidebar from "./components/Sidebar";
 import StartPage from "./components/StartPage";
@@ -13,6 +13,7 @@ const PINNED_URLS = {
 
 const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
+const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
 
 type PinnedTarget = "github" | "linear" | "docs";
 
@@ -52,6 +53,8 @@ export default function App() {
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
   const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
+  const [draggedTab, setDraggedTab] = useState<BrowserTab | null>(null);
+  const [isSplitDropTargetActive, setSplitDropTargetActive] = useState(false);
   const {
     state,
     activeTab,
@@ -65,6 +68,8 @@ export default function App() {
     openUrl,
     openMainUrl,
     openSplitUrl,
+    selectTab,
+    closeTab,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
@@ -202,9 +207,10 @@ export default function App() {
       if (activePane === "main") {
         setAddressValue(getUrlDisplayValue(activeTab.url));
       }
+      flushContentLayout();
       void window.andromeda.navigate(activeTab.url, "main");
     }
-  }, [activePane, activeTab.id, activeTab.url, showReactStartPage]);
+  }, [activePane, activeTab.id, activeTab.url, flushContentLayout, showReactStartPage]);
 
   useEffect(() => {
     if (!isSplitOpen || !splitUrl) {
@@ -323,6 +329,20 @@ export default function App() {
     [selectSpace]
   );
 
+  const handleSelectSidebarTab = useCallback(
+    (spaceId: SpaceId, tabId: string) => {
+      selectTab(spaceId, tabId);
+    },
+    [selectTab]
+  );
+
+  const handleCloseSidebarTab = useCallback(
+    (spaceId: SpaceId, tabId: string) => {
+      closeTab(spaceId, tabId);
+    },
+    [closeTab]
+  );
+
   const handleBack = useCallback(() => {
     void window.andromeda.goBack(activePane);
   }, [activePane]);
@@ -369,6 +389,68 @@ export default function App() {
     lastSplitRequestRef.current = null;
     handleSelectPane("main");
   }, [closeSplitView, flushContentLayout, handleSelectPane]);
+
+  const handleSidebarTabDragStart = useCallback(
+    (event: DragEvent<HTMLElement>, tab: BrowserTab) => {
+      if (!tab.url || tab.isStartPage) {
+        event.preventDefault();
+        return;
+      }
+
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData(TAB_DRAG_DATA_TYPE, tab.url);
+      event.dataTransfer.setData("text/uri-list", tab.url);
+      event.dataTransfer.setData("text/plain", tab.title);
+      setDraggedTab(tab);
+      setSplitDropTargetActive(false);
+      void window.andromeda.setCommandBarOpen(true);
+    },
+    []
+  );
+
+  const handleSidebarTabDragEnd = useCallback(() => {
+    setDraggedTab(null);
+    setSplitDropTargetActive(false);
+    void window.andromeda.setCommandBarOpen(isCommandBarOpen);
+  }, [isCommandBarOpen]);
+
+  const handleContentDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!draggedTab?.url) {
+        return;
+      }
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      setSplitDropTargetActive(true);
+    },
+    [draggedTab]
+  );
+
+  const handleContentDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+
+    setSplitDropTargetActive(false);
+  }, []);
+
+  const handleContentDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!draggedTab?.url) {
+        return;
+      }
+
+      event.preventDefault();
+      const url = event.dataTransfer.getData(TAB_DRAG_DATA_TYPE) || draggedTab.url;
+      setDraggedTab(null);
+      setSplitDropTargetActive(false);
+      navigateSplitTo(url);
+      void window.andromeda.setCommandBarOpen(isCommandBarOpen);
+    },
+    [draggedTab, isCommandBarOpen, navigateSplitTo]
+  );
 
   const handleOpenPinned = useCallback(
     (target: "github" | "linear" | "docs") => {
@@ -604,11 +686,31 @@ export default function App() {
           selectedSpaceId={state.selectedSpaceId}
           activePinnedId={activePinnedTarget}
           onSelectSpace={handleSelectSpace}
+          onSelectTab={handleSelectSidebarTab}
+          onCloseTab={handleCloseSidebarTab}
+          onTabDragStart={handleSidebarTabDragStart}
+          onTabDragEnd={handleSidebarTabDragEnd}
           onNewTab={handleShowStartPage}
           onOpenPinned={handleOpenPinned}
         />
 
-        <div ref={contentRef} className="content-view-host">
+        <div
+          ref={contentRef}
+          className={
+            isSplitDropTargetActive ? "content-view-host is-split-drop-target" : "content-view-host"
+          }
+          onDragOver={handleContentDragOver}
+          onDragLeave={handleContentDragLeave}
+          onDrop={handleContentDrop}
+        >
+          {draggedTab?.url ? (
+            <div className="split-drop-layer" aria-hidden="true">
+              <div className="split-drop-card">
+                <span>Split View</span>
+                <small>{draggedTab.title}</small>
+              </div>
+            </div>
+          ) : null}
           {isSplitOpen ? (
             <div className="split-view-frame" aria-label="Split view">
               <button

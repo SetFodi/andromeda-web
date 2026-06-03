@@ -40,21 +40,21 @@ const DEFAULT_STATE: BrowserState = {
     {
       id: "dev",
       name: "Dev",
-      count: 7,
+      count: 1,
       activeTabId: "dev-start",
       tabs: [{ id: "dev-start", title: "Start", url: null, isStartPage: true }]
     },
     {
       id: "work",
       name: "Work",
-      count: 12,
+      count: 1,
       activeTabId: "work-start",
       tabs: [{ id: "work-start", title: "Start", url: null, isStartPage: true }]
     },
     {
       id: "personal",
       name: "Personal",
-      count: 5,
+      count: 1,
       activeTabId: "personal-start",
       tabs: [{ id: "personal-start", title: "Start", url: null, isStartPage: true }]
     }
@@ -168,6 +168,7 @@ function sanitizeState(value: unknown): BrowserState {
 
     return {
       ...defaultSpace,
+      count: tabs.length,
       tabs,
       activeTabId
     };
@@ -203,6 +204,7 @@ function selectLaunchStartPage(state: BrowserState): BrowserState {
     const startTab = createLocalStartTab(space);
     return {
       ...space,
+      count: space.tabs.length + 1,
       tabs: [startTab, ...space.tabs],
       activeTabId: startTab.id
     };
@@ -260,6 +262,9 @@ export function useBrowserStore() {
   }, [selectedSpace]);
 
   const selectSpace = useCallback((spaceId: SpaceId) => {
+    const nextSpace = state.spaces.find((space) => space.id === spaceId);
+    const nextActiveTab = nextSpace?.tabs.find((tab) => tab.id === nextSpace.activeTabId);
+
     setState((current) => {
       if (current.selectedSpaceId === spaceId) {
         return current;
@@ -270,7 +275,15 @@ export function useBrowserStore() {
         selectedSpaceId: spaceId
       };
     });
-  }, []);
+
+    setSplitState((current) => {
+      if (nextActiveTab?.isStartPage) {
+        return DEFAULT_SPLIT_STATE;
+      }
+
+      return current.activePane === "main" ? current : { ...current, activePane: "main" };
+    });
+  }, [state.spaces]);
 
   const openMainUrl = useCallback((url: string) => {
     setState((current) => {
@@ -282,10 +295,12 @@ export function useBrowserStore() {
           }
 
           const tab = createTab(url, getTitleFromUrl(url));
+          const tabs = [...space.tabs.slice(-7), tab];
 
           return {
             ...space,
-            tabs: [...space.tabs.slice(-7), tab],
+            count: tabs.length,
+            tabs,
             activeTabId: tab.id
           };
         })
@@ -314,6 +329,94 @@ export function useBrowserStore() {
     },
     [openMainUrl, openSplitUrl, splitState.activePane, splitState.isSplitOpen]
   );
+
+  const selectTab = useCallback((spaceId: SpaceId, tabId: string) => {
+    const targetSpace = state.spaces.find((space) => space.id === spaceId);
+    const targetTab = targetSpace?.tabs.find((tab) => tab.id === tabId);
+    if (!targetSpace || !targetTab) {
+      return;
+    }
+
+    setState((current) => {
+      const currentTargetSpace = current.spaces.find((space) => space.id === spaceId);
+      if (current.selectedSpaceId === spaceId && currentTargetSpace?.activeTabId === tabId) {
+        return current;
+      }
+
+      return {
+        ...current,
+        selectedSpaceId: spaceId,
+        spaces: current.spaces.map((space) => {
+          if (space.id !== spaceId) {
+            return space;
+          }
+
+          return {
+            ...space,
+            activeTabId: tabId
+          };
+        })
+      };
+    });
+
+    setSplitState((current) => {
+      if (targetTab.isStartPage) {
+        return DEFAULT_SPLIT_STATE;
+      }
+
+      return current.activePane === "main" ? current : { ...current, activePane: "main" };
+    });
+  }, [state.spaces]);
+
+  const closeTab = useCallback((spaceId: SpaceId, tabId: string) => {
+    const targetSpace = state.spaces.find((space) => space.id === spaceId);
+    if (!targetSpace?.tabs.some((tab) => tab.id === tabId)) {
+      return;
+    }
+
+    const closingIndex = targetSpace.tabs.findIndex((tab) => tab.id === tabId);
+    const remainingTabs = targetSpace.tabs.filter((tab) => tab.id !== tabId);
+    const fallbackTabs = remainingTabs.length > 0 ? remainingTabs : [createLocalStartTab(targetSpace)];
+    const fallbackIndex = Math.max(0, Math.min(closingIndex - 1, fallbackTabs.length - 1));
+    const fallbackActiveTab =
+      targetSpace.activeTabId === tabId
+        ? fallbackTabs[fallbackIndex]
+        : fallbackTabs.find((tab) => tab.id === targetSpace.activeTabId) ?? fallbackTabs[0];
+
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== spaceId || !space.tabs.some((tab) => tab.id === tabId)) {
+          return space;
+        }
+
+        const closingIndex = space.tabs.findIndex((tab) => tab.id === tabId);
+        const remainingTabs = space.tabs.filter((tab) => tab.id !== tabId);
+        const tabs = remainingTabs.length > 0 ? remainingTabs : [createLocalStartTab(space)];
+        const fallbackIndex = Math.max(0, Math.min(closingIndex - 1, tabs.length - 1));
+        const activeTabId = space.activeTabId === tabId ? tabs[fallbackIndex].id : space.activeTabId;
+        const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+
+        didChange = true;
+        return {
+          ...space,
+          count: tabs.length,
+          tabs,
+          activeTabId: activeTab.id
+        };
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+
+    setSplitState((current) => {
+      if (spaceId === state.selectedSpaceId && fallbackActiveTab.isStartPage) {
+        return DEFAULT_SPLIT_STATE;
+      }
+
+      return current.activePane === "main" ? current : { ...current, activePane: "main" };
+    });
+  }, [state.selectedSpaceId, state.spaces]);
 
   const updateMainUrl = useCallback((url: string) => {
     setState((current) => {
@@ -344,6 +447,7 @@ export function useBrowserStore() {
 
         return {
           ...space,
+          count: tabs.length,
           tabs
         };
       });
@@ -408,6 +512,7 @@ export function useBrowserStore() {
 
         return {
           ...space,
+          count: tabs.length,
           tabs
         };
       });
@@ -472,6 +577,7 @@ export function useBrowserStore() {
 
         return {
           ...space,
+          count: tabs.length,
           tabs
         };
       });
@@ -539,10 +645,12 @@ export function useBrowserStore() {
         }
 
         const tab = createTab(null, "Start", true);
+        const tabs = [...space.tabs.slice(-7), tab];
 
         return {
           ...space,
-          tabs: [...space.tabs.slice(-7), tab],
+          count: tabs.length,
+          tabs,
           activeTabId: tab.id
         };
       })
@@ -564,6 +672,8 @@ export function useBrowserStore() {
     openUrl,
     openMainUrl,
     openSplitUrl,
+    selectTab,
+    closeTab,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
