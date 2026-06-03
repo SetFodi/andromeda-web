@@ -1,5 +1,10 @@
 import { BrowserWindow, IpcMainInvokeEvent, ipcMain } from "electron";
-import { BrowserViewManager, ContentBounds } from "./browserViewManager";
+import {
+  BrowserPane,
+  ContentBounds,
+  ContentLayout,
+  WebContentsViewManager
+} from "./webContentsViewManager";
 
 const MAX_BOUND = 10000;
 
@@ -26,6 +31,10 @@ function isLoadableUrl(value: unknown): value is string {
   }
 }
 
+function normalizePane(value: unknown): BrowserPane {
+  return value === "split" ? "split" : "main";
+}
+
 function normalizeBounds(value: unknown): ContentBounds | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -49,6 +58,33 @@ function normalizeBounds(value: unknown): ContentBounds | null {
   };
 }
 
+function normalizeLayout(value: unknown): ContentLayout | null {
+  const directBounds = normalizeBounds(value);
+  if (directBounds) {
+    return { main: directBounds };
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as { main?: unknown; split?: unknown };
+  const main = normalizeBounds(candidate.main);
+  if (!main) {
+    return null;
+  }
+
+  const split = candidate.split === null || candidate.split === undefined ? null : normalizeBounds(candidate.split);
+  if (candidate.split !== null && candidate.split !== undefined && !split) {
+    return null;
+  }
+
+  return {
+    main,
+    split
+  };
+}
+
 function normalizeNumber(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return null;
@@ -65,31 +101,32 @@ function setHandler(
   ipcMain.handle(channel, listener);
 }
 
-export function registerIpc(manager: BrowserViewManager, window: BrowserWindow): void {
+export function registerIpc(manager: WebContentsViewManager, window: BrowserWindow): void {
   setHandler("browser:navigate", (event, payload: unknown) => {
     assertTrustedSender(event, window);
 
     const url = (payload as { url?: unknown } | null)?.url;
+    const pane = normalizePane((payload as { pane?: unknown } | null)?.pane);
     if (!isLoadableUrl(url)) {
       throw new Error("Invalid navigation URL");
     }
 
-    manager.navigate(url);
+    manager.navigate(url, pane);
   });
 
-  setHandler("browser:goBack", (event) => {
+  setHandler("browser:goBack", (event, payload: unknown) => {
     assertTrustedSender(event, window);
-    manager.goBack();
+    manager.goBack(normalizePane((payload as { pane?: unknown } | null)?.pane));
   });
 
-  setHandler("browser:goForward", (event) => {
+  setHandler("browser:goForward", (event, payload: unknown) => {
     assertTrustedSender(event, window);
-    manager.goForward();
+    manager.goForward(normalizePane((payload as { pane?: unknown } | null)?.pane));
   });
 
-  setHandler("browser:reload", (event) => {
+  setHandler("browser:reload", (event, payload: unknown) => {
     assertTrustedSender(event, window);
-    manager.reload();
+    manager.reload(normalizePane((payload as { pane?: unknown } | null)?.pane));
   });
 
   setHandler("browser:showStartPage", (event) => {
@@ -100,12 +137,22 @@ export function registerIpc(manager: BrowserViewManager, window: BrowserWindow):
   setHandler("browser:resizeContentView", (event, payload: unknown) => {
     assertTrustedSender(event, window);
 
-    const bounds = normalizeBounds(payload);
-    if (!bounds) {
+    const layout = normalizeLayout(payload);
+    if (!layout) {
       throw new Error("Invalid content bounds");
     }
 
-    manager.resize(bounds);
+    manager.resize(layout);
+  });
+
+  setHandler("browser:setActivePane", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    manager.setActivePane(normalizePane((payload as { pane?: unknown } | null)?.pane));
+  });
+
+  setHandler("browser:closeSplitView", (event) => {
+    assertTrustedSender(event, window);
+    manager.closeSplitView();
   });
 
   setHandler("browser:setCommandBarOpen", (event, payload: unknown) => {

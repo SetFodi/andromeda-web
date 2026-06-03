@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type SpaceId = "dev" | "work" | "personal";
+export type BrowserPane = "main" | "split";
 
 export type BrowserTab = {
   id: string;
@@ -21,6 +22,14 @@ export type BrowserSpace = {
 type BrowserState = {
   selectedSpaceId: SpaceId;
   spaces: BrowserSpace[];
+};
+
+type SplitState = {
+  activePane: BrowserPane;
+  isSplitOpen: boolean;
+  splitUrl: string | null;
+  splitTitle: string;
+  splitFaviconUrl?: string;
 };
 
 const STORAGE_KEY = "andromeda.browserState.v2";
@@ -50,6 +59,13 @@ const DEFAULT_STATE: BrowserState = {
       tabs: [{ id: "personal-start", title: "Start", url: null, isStartPage: true }]
     }
   ]
+};
+
+const DEFAULT_SPLIT_STATE: SplitState = {
+  activePane: "main",
+  isSplitOpen: false,
+  splitUrl: null,
+  splitTitle: "Split View"
 };
 
 function createTab(url: string | null, title: string, isStartPage = false): BrowserTab {
@@ -219,6 +235,7 @@ export function useBrowserStore() {
   }
 
   const [state, setState] = useState<BrowserState>(() => initialStateRef.current!.state);
+  const [splitState, setSplitState] = useState<SplitState>(DEFAULT_SPLIT_STATE);
   const persistedStateRef = useRef(initialStateRef.current.persistedValue ?? "");
 
   useEffect(() => {
@@ -255,26 +272,50 @@ export function useBrowserStore() {
     });
   }, []);
 
-  const openUrl = useCallback((url: string) => {
-    setState((current) => ({
-      ...current,
-      spaces: current.spaces.map((space) => {
-        if (space.id !== current.selectedSpaceId) {
-          return space;
-        }
+  const openMainUrl = useCallback((url: string) => {
+    setState((current) => {
+      return {
+        ...current,
+        spaces: current.spaces.map((space) => {
+          if (space.id !== current.selectedSpaceId) {
+            return space;
+          }
 
-        const tab = createTab(url, getTitleFromUrl(url));
+          const tab = createTab(url, getTitleFromUrl(url));
 
-        return {
-          ...space,
-          tabs: [...space.tabs.slice(-7), tab],
-          activeTabId: tab.id
-        };
-      })
-    }));
+          return {
+            ...space,
+            tabs: [...space.tabs.slice(-7), tab],
+            activeTabId: tab.id
+          };
+        })
+      };
+    });
+    setSplitState((current) => ({ ...current, activePane: "main" }));
   }, []);
 
-  const updateActiveUrl = useCallback((url: string) => {
+  const openSplitUrl = useCallback((url: string) => {
+    setSplitState({
+      activePane: "split",
+      isSplitOpen: true,
+      splitUrl: url,
+      splitTitle: getTitleFromUrl(url)
+    });
+  }, []);
+
+  const openUrl = useCallback(
+    (url: string) => {
+      if (splitState.isSplitOpen && splitState.activePane === "split") {
+        openSplitUrl(url);
+        return;
+      }
+
+      openMainUrl(url);
+    },
+    [openMainUrl, openSplitUrl, splitState.activePane, splitState.isSplitOpen]
+  );
+
+  const updateMainUrl = useCallback((url: string) => {
     setState((current) => {
       let didChange = false;
       const spaces = current.spaces.map((space) => {
@@ -311,7 +352,36 @@ export function useBrowserStore() {
     });
   }, []);
 
-  const updateActiveTitle = useCallback((title: string) => {
+  const updateSplitUrl = useCallback((url: string) => {
+    setSplitState((current) => {
+      if (current.splitUrl === url && current.isSplitOpen) {
+        return current;
+      }
+
+      return {
+        ...current,
+        activePane: "split",
+        isSplitOpen: true,
+        splitUrl: url,
+        splitTitle: getTitleFromUrl(url),
+        splitFaviconUrl: undefined
+      };
+    });
+  }, []);
+
+  const updateActiveUrl = useCallback(
+    (url: string, pane: BrowserPane = "main") => {
+      if (pane === "split") {
+        updateSplitUrl(url);
+        return;
+      }
+
+      updateMainUrl(url);
+    },
+    [updateMainUrl, updateSplitUrl]
+  );
+
+  const updateMainTitle = useCallback((title: string) => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       return;
@@ -346,7 +416,37 @@ export function useBrowserStore() {
     });
   }, []);
 
-  const updateActiveFavicon = useCallback((faviconUrl: string) => {
+  const updateSplitTitle = useCallback((title: string) => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      return;
+    }
+
+    setSplitState((current) => {
+      if (!current.isSplitOpen || current.splitTitle === trimmedTitle) {
+        return current;
+      }
+
+      return {
+        ...current,
+        splitTitle: trimmedTitle
+      };
+    });
+  }, []);
+
+  const updateActiveTitle = useCallback(
+    (title: string, pane: BrowserPane = "main") => {
+      if (pane === "split") {
+        updateSplitTitle(title);
+        return;
+      }
+
+      updateMainTitle(title);
+    },
+    [updateMainTitle, updateSplitTitle]
+  );
+
+  const updateMainFavicon = useCallback((faviconUrl: string) => {
     if (!isSafeFaviconUrl(faviconUrl)) {
       return;
     }
@@ -380,6 +480,56 @@ export function useBrowserStore() {
     });
   }, []);
 
+  const updateSplitFavicon = useCallback((faviconUrl: string) => {
+    if (!isSafeFaviconUrl(faviconUrl)) {
+      return;
+    }
+
+    setSplitState((current) => {
+      if (!current.isSplitOpen || current.splitFaviconUrl === faviconUrl) {
+        return current;
+      }
+
+      return {
+        ...current,
+        splitFaviconUrl: faviconUrl
+      };
+    });
+  }, []);
+
+  const updateActiveFavicon = useCallback(
+    (faviconUrl: string, pane: BrowserPane = "main") => {
+      if (pane === "split") {
+        updateSplitFavicon(faviconUrl);
+        return;
+      }
+
+      updateMainFavicon(faviconUrl);
+    },
+    [updateMainFavicon, updateSplitFavicon]
+  );
+
+  const selectPane = useCallback((pane: BrowserPane) => {
+    setSplitState((current) => {
+      if (pane === "split" && !current.isSplitOpen) {
+        return current;
+      }
+
+      if (current.activePane === pane) {
+        return current;
+      }
+
+      return {
+        ...current,
+        activePane: pane
+      };
+    });
+  }, []);
+
+  const closeSplitView = useCallback(() => {
+    setSplitState(DEFAULT_SPLIT_STATE);
+  }, []);
+
   const showStartPage = useCallback(() => {
     setState((current) => ({
       ...current,
@@ -397,14 +547,24 @@ export function useBrowserStore() {
         };
       })
     }));
+    setSplitState(DEFAULT_SPLIT_STATE);
   }, []);
 
   return {
     state,
     selectedSpace,
     activeTab,
+    activePane: splitState.activePane,
+    isSplitOpen: splitState.isSplitOpen,
+    splitUrl: splitState.splitUrl,
+    splitTitle: splitState.splitTitle,
+    splitFaviconUrl: splitState.splitFaviconUrl,
     selectSpace,
+    selectPane,
     openUrl,
+    openMainUrl,
+    openSplitUrl,
+    closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
     updateActiveFavicon,

@@ -8,14 +8,15 @@ export type CommandBarItem = {
   subtitle: string;
   icon: IconName;
   keywords?: string[];
-  run: () => void;
+  run: (query: string) => void | { keepOpen?: boolean };
 };
 
 type CommandBarProps = {
   isOpen: boolean;
+  mode: "default" | "split";
   commands: CommandBarItem[];
   onClose: () => void;
-  onNavigateInput: (input: string) => void;
+  onNavigateInput: (input: string, target: "active" | "split") => void;
 };
 
 type CommandResult = CommandBarItem & {
@@ -37,6 +38,7 @@ function normalize(value: string): string {
 
 export default function CommandBar({
   isOpen,
+  mode,
   commands,
   onClose,
   onNavigateInput
@@ -67,14 +69,32 @@ export default function CommandBar({
       subtitle: looksLikeUrl(query) ? resolvedUrl : "Google Search",
       icon: "search",
       kind: "navigation",
-      run: () => onNavigateInput(query)
+      run: () => onNavigateInput(query, "active")
     };
+    const splitNavigationResult: CommandResult = {
+      id: "navigate-split-input",
+      title: looksLikeUrl(query)
+        ? `Open ${query.trim()} in Split View`
+        : `Search Split View for "${query.trim()}"`,
+      subtitle: looksLikeUrl(query) ? resolvedUrl : "Right pane",
+      icon: "square",
+      kind: "navigation",
+      run: () => onNavigateInput(query, "split")
+    };
+
+    if (mode === "split") {
+      return [
+        splitNavigationResult,
+        ...matchedCommands.map((command) => ({ ...command, kind: "command" as const }))
+      ];
+    }
 
     return [
       ...matchedCommands.map((command) => ({ ...command, kind: "command" as const })),
-      navigationResult
+      navigationResult,
+      splitNavigationResult
     ];
-  }, [commands, onNavigateInput, query]);
+  }, [commands, mode, onNavigateInput, query]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -98,8 +118,10 @@ export default function CommandBar({
       return;
     }
 
-    result.run();
-    onClose();
+    const outcome = result.run(query);
+    if (!outcome?.keepOpen) {
+      onClose();
+    }
   };
 
   if (!isOpen) {
@@ -120,7 +142,11 @@ export default function CommandBar({
           <input
             ref={inputRef}
             value={query}
-            placeholder="Search, open, or run a command…"
+            placeholder={
+              mode === "split"
+                ? "Search or open in the right split pane…"
+                : "Search, open, or run a command…"
+            }
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -171,8 +197,10 @@ export default function CommandBar({
               aria-selected={index === selectedIndex}
               onMouseEnter={() => setSelectedIndex(index)}
               onClick={() => {
-                result.run();
-                onClose();
+                const outcome = result.run(query);
+                if (!outcome?.keepOpen) {
+                  onClose();
+                }
               }}
             >
               <span className="command-result-icon">

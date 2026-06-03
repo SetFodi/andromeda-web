@@ -7,15 +7,25 @@ type ContentBounds = {
   height: number;
 };
 
+type BrowserPane = "main" | "split";
+
+type ContentLayout = {
+  main: ContentBounds;
+  split?: ContentBounds | null;
+};
+
 type NavigationPayload = {
+  pane: BrowserPane;
   url: string;
 };
 
 type TitlePayload = {
+  pane: BrowserPane;
   title: string;
 };
 
 type FaviconPayload = {
+  pane: BrowserPane;
   faviconUrl: string;
 };
 
@@ -41,10 +51,29 @@ function sanitizeBounds(bounds: ContentBounds): ContentBounds {
   };
 }
 
+function sanitizePane(pane?: BrowserPane): BrowserPane {
+  return pane === "split" ? "split" : "main";
+}
+
+function sanitizeLayout(layout: ContentBounds | ContentLayout): ContentLayout {
+  if ("main" in layout) {
+    return {
+      main: sanitizeBounds(layout.main),
+      split: layout.split ? sanitizeBounds(layout.split) : null
+    };
+  }
+
+  return {
+    main: sanitizeBounds(layout)
+  };
+}
+
 function isNavigationPayload(payload: unknown): payload is NavigationPayload {
   return Boolean(
     payload &&
       typeof payload === "object" &&
+      ((payload as NavigationPayload).pane === "main" ||
+        (payload as NavigationPayload).pane === "split") &&
       typeof (payload as NavigationPayload).url === "string"
   );
 }
@@ -53,6 +82,7 @@ function isTitlePayload(payload: unknown): payload is TitlePayload {
   return Boolean(
     payload &&
       typeof payload === "object" &&
+      ((payload as TitlePayload).pane === "main" || (payload as TitlePayload).pane === "split") &&
       typeof (payload as TitlePayload).title === "string"
   );
 }
@@ -61,20 +91,27 @@ function isFaviconPayload(payload: unknown): payload is FaviconPayload {
   return Boolean(
     payload &&
       typeof payload === "object" &&
+      ((payload as FaviconPayload).pane === "main" ||
+        (payload as FaviconPayload).pane === "split") &&
       typeof (payload as FaviconPayload).faviconUrl === "string"
   );
 }
 
 contextBridge.exposeInMainWorld("andromeda", {
-  navigate: (url: string) => ipcRenderer.invoke("browser:navigate", { url }),
-  goBack: () => ipcRenderer.invoke("browser:goBack"),
-  goForward: () => ipcRenderer.invoke("browser:goForward"),
-  reload: () => ipcRenderer.invoke("browser:reload"),
+  navigate: (url: string, pane?: BrowserPane) =>
+    ipcRenderer.invoke("browser:navigate", { pane: sanitizePane(pane), url }),
+  goBack: (pane?: BrowserPane) => ipcRenderer.invoke("browser:goBack", { pane: sanitizePane(pane) }),
+  goForward: (pane?: BrowserPane) =>
+    ipcRenderer.invoke("browser:goForward", { pane: sanitizePane(pane) }),
+  reload: (pane?: BrowserPane) => ipcRenderer.invoke("browser:reload", { pane: sanitizePane(pane) }),
   showStartPage: () => ipcRenderer.invoke("browser:showStartPage"),
+  closeSplitView: () => ipcRenderer.invoke("browser:closeSplitView"),
+  setActivePane: (pane: BrowserPane) =>
+    ipcRenderer.invoke("browser:setActivePane", { pane: sanitizePane(pane) }),
   setCommandBarOpen: (isOpen: boolean) =>
     ipcRenderer.invoke("browser:setCommandBarOpen", { isOpen }),
-  resizeContentView: (bounds: ContentBounds) =>
-    ipcRenderer.invoke("browser:resizeContentView", sanitizeBounds(bounds)),
+  resizeContentView: (layout: ContentBounds | ContentLayout) =>
+    ipcRenderer.invoke("browser:resizeContentView", sanitizeLayout(layout)),
   closeWindow: () => ipcRenderer.invoke("window:close"),
   minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
   toggleMaximizeWindow: () => ipcRenderer.invoke("window:toggleMaximize"),
@@ -107,6 +144,21 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:faviconUpdated", listener);
     return () => ipcRenderer.removeListener("browser:faviconUpdated", listener);
+  },
+  onPaneFocused: (callback: (payload: { pane: BrowserPane }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        ((payload as { pane?: unknown }).pane === "main" ||
+          (payload as { pane?: unknown }).pane === "split")
+      ) {
+        callback({ pane: (payload as { pane: BrowserPane }).pane });
+      }
+    };
+
+    ipcRenderer.on("browser:paneFocused", listener);
+    return () => ipcRenderer.removeListener("browser:paneFocused", listener);
   },
   onOpenCommandBar: (callback: () => void) => {
     const listener = () => {

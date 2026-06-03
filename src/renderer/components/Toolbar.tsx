@@ -14,6 +14,7 @@ type ToolbarProps = {
   onForward: () => void;
   onReload: () => void;
   onNewTab: () => void;
+  onOpenSplitView: () => void;
   onCloseWindow: () => void;
   onMinimizeWindow: () => void;
   onToggleMaximizeWindow: () => void;
@@ -32,6 +33,7 @@ function Toolbar({
   onForward,
   onReload,
   onNewTab,
+  onOpenSplitView,
   onCloseWindow,
   onMinimizeWindow,
   onToggleMaximizeWindow
@@ -110,7 +112,12 @@ function Toolbar({
         <button className="toolbar-icon" type="button" aria-label="Security">
           <Icon name="shield" size={18} />
         </button>
-        <button className="toolbar-icon" type="button" aria-label="Layout">
+        <button
+          className="toolbar-icon"
+          type="button"
+          aria-label="Open split view"
+          onClick={onOpenSplitView}
+        >
           <Icon name="square" size={17} />
         </button>
         <button className="profile-badge" type="button" aria-label="Profile">

@@ -3,13 +3,16 @@ import CommandBar, { CommandBarItem } from "./components/CommandBar";
 import Sidebar from "./components/Sidebar";
 import StartPage from "./components/StartPage";
 import Toolbar from "./components/Toolbar";
-import { BrowserTab, useBrowserStore, SpaceId } from "./state/browserStore";
+import { BrowserPane, BrowserTab, useBrowserStore, SpaceId } from "./state/browserStore";
 import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
 
 const PINNED_URLS = {
   github: "https://github.com",
   linear: "https://linear.app"
 };
+
+const SPLIT_HEADER_HEIGHT = 34;
+const SPLIT_GAP = 10;
 
 type PinnedTarget = "github" | "linear" | "docs";
 
@@ -41,17 +44,28 @@ function getActivePinnedTarget(tab: BrowserTab): PinnedTarget | null {
 export default function App() {
   const contentRef = useRef<HTMLDivElement>(null);
   const addressInputRef = useRef<HTMLInputElement>(null);
-  const lastContentBoundsRef = useRef<ContentBounds | null>(null);
-  const lastContentRequestRef = useRef<string | null>(null);
+  const lastContentLayoutKeyRef = useRef<string | null>(null);
+  const lastMainRequestRef = useRef<string | null>(null);
+  const lastSplitRequestRef = useRef<string | null>(null);
   const lastCommandBarOpenRef = useRef(false);
   const resizeFrameRef = useRef<number | null>(null);
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
+  const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
   const {
     state,
     activeTab,
+    activePane,
+    isSplitOpen,
+    splitUrl,
+    splitTitle,
+    splitFaviconUrl,
     selectSpace,
+    selectPane,
     openUrl,
+    openMainUrl,
+    openSplitUrl,
+    closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
     updateActiveFavicon,
@@ -59,8 +73,83 @@ export default function App() {
   } = useBrowserStore();
 
   const showReactStartPage = activeTab.isStartPage;
-  const activePinnedTarget = useMemo(() => getActivePinnedTarget(activeTab), [activeTab]);
+  const activePinnedTarget = useMemo(() => {
+    if (activePane === "split") {
+      return getActivePinnedTarget({
+        id: "split",
+        title: splitTitle,
+        url: splitUrl,
+        isStartPage: false,
+        faviconUrl: splitFaviconUrl
+      });
+    }
+
+    return getActivePinnedTarget(activeTab);
+  }, [activePane, activeTab, splitFaviconUrl, splitTitle, splitUrl]);
   const currentPageIcon = activePinnedTarget ?? "search";
+  const currentPageTitle = activePane === "split" ? splitTitle : activeTab.title;
+  const currentPageFaviconUrl = activePane === "split" ? splitFaviconUrl : activeTab.faviconUrl;
+
+  const getContentLayout = useCallback((splitOpen: boolean): ContentBounds | ContentLayout | null => {
+    const content = contentRef.current;
+    if (!content) {
+      return null;
+    }
+
+    const rect = content.getBoundingClientRect();
+    const mainBounds: ContentBounds = {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height)
+    };
+
+    if (!splitOpen) {
+      return mainBounds;
+    }
+
+    const width = Math.round(rect.width);
+    const leftWidth = Math.floor((width - SPLIT_GAP) / 2);
+    const rightWidth = Math.max(0, width - leftWidth - SPLIT_GAP);
+    const y = Math.round(rect.y + SPLIT_HEADER_HEIGHT);
+    const height = Math.max(0, Math.round(rect.height - SPLIT_HEADER_HEIGHT));
+
+    return {
+      main: {
+        x: Math.round(rect.x),
+        y,
+        width: leftWidth,
+        height
+      },
+      split: {
+        x: Math.round(rect.x + leftWidth + SPLIT_GAP),
+        y,
+        width: rightWidth,
+        height
+      }
+    };
+  }, []);
+
+  const sendContentLayout = useCallback((layout: ContentBounds | ContentLayout | null, force = false) => {
+    if (!layout) {
+      return;
+    }
+
+    const layoutKey = JSON.stringify(layout);
+    if (!force && lastContentLayoutKeyRef.current === layoutKey) {
+      return;
+    }
+
+    lastContentLayoutKeyRef.current = layoutKey;
+    void window.andromeda.resizeContentView(layout);
+  }, []);
+
+  const flushContentLayout = useCallback(
+    (splitOpen = isSplitOpen, force = false) => {
+      sendContentLayout(getContentLayout(splitOpen), force);
+    },
+    [getContentLayout, isSplitOpen, sendContentLayout]
+  );
 
   const resizeContentView = useCallback(() => {
     if (resizeFrameRef.current !== null) {
@@ -69,35 +158,9 @@ export default function App() {
 
     resizeFrameRef.current = requestAnimationFrame(() => {
       resizeFrameRef.current = null;
-
-      const content = contentRef.current;
-      if (!content) {
-        return;
-      }
-
-      const rect = content.getBoundingClientRect();
-      const bounds: ContentBounds = {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height)
-      };
-      const previousBounds = lastContentBoundsRef.current;
-
-      if (
-        previousBounds &&
-        previousBounds.x === bounds.x &&
-        previousBounds.y === bounds.y &&
-        previousBounds.width === bounds.width &&
-        previousBounds.height === bounds.height
-      ) {
-        return;
-      }
-
-      lastContentBoundsRef.current = bounds;
-      void window.andromeda.resizeContentView(bounds);
+      flushContentLayout();
     });
-  }, []);
+  }, [flushContentLayout]);
 
   useEffect(() => {
     resizeContentView();
@@ -120,43 +183,82 @@ export default function App() {
 
   useEffect(() => {
     const contentRequestKey = `${activeTab.id}:${showReactStartPage ? "start" : "url"}`;
-    if (lastContentRequestRef.current === contentRequestKey) {
+    if (lastMainRequestRef.current === contentRequestKey) {
       return;
     }
 
-    lastContentRequestRef.current = contentRequestKey;
+    lastMainRequestRef.current = contentRequestKey;
 
     // Navigation is keyed by active tab identity so browser-originated URL updates do not bounce back into IPC.
     if (showReactStartPage) {
-      setAddressValue("");
+      if (activePane === "main") {
+        setAddressValue("");
+      }
       void window.andromeda.showStartPage();
       return;
     }
 
     if (activeTab.url) {
-      setAddressValue(getUrlDisplayValue(activeTab.url));
-      void window.andromeda.navigate(activeTab.url);
+      if (activePane === "main") {
+        setAddressValue(getUrlDisplayValue(activeTab.url));
+      }
+      void window.andromeda.navigate(activeTab.url, "main");
     }
-  }, [activeTab.id, activeTab.url, showReactStartPage]);
+  }, [activePane, activeTab.id, activeTab.url, showReactStartPage]);
 
   useEffect(() => {
-    return window.andromeda.onDidNavigate(({ url }) => {
-      setAddressValue(getUrlDisplayValue(url));
-      updateActiveUrl(url);
+    if (!isSplitOpen || !splitUrl) {
+      lastSplitRequestRef.current = null;
+      return;
+    }
+
+    const contentRequestKey = `split:${splitUrl}`;
+    if (lastSplitRequestRef.current === contentRequestKey) {
+      return;
+    }
+
+    lastSplitRequestRef.current = contentRequestKey;
+    void window.andromeda.navigate(splitUrl, "split");
+  }, [isSplitOpen, splitUrl]);
+
+  useEffect(() => {
+    return window.andromeda.onDidNavigate(({ pane, url }) => {
+      if (pane === activePane) {
+        setAddressValue(getUrlDisplayValue(url));
+      }
+      if (pane === "split") {
+        lastSplitRequestRef.current = `split:${url}`;
+      }
+      updateActiveUrl(url, pane);
     });
-  }, [updateActiveUrl]);
+  }, [activePane, updateActiveUrl]);
 
   useEffect(() => {
-    return window.andromeda.onTitleUpdated(({ title }) => {
-      updateActiveTitle(title);
+    return window.andromeda.onTitleUpdated(({ pane, title }) => {
+      updateActiveTitle(title, pane);
     });
   }, [updateActiveTitle]);
 
   useEffect(() => {
-    return window.andromeda.onFaviconUpdated(({ faviconUrl }) => {
-      updateActiveFavicon(faviconUrl);
+    return window.andromeda.onFaviconUpdated(({ pane, faviconUrl }) => {
+      updateActiveFavicon(faviconUrl, pane);
     });
   }, [updateActiveFavicon]);
+
+  useEffect(() => {
+    return window.andromeda.onPaneFocused(({ pane }) => {
+      selectPane(pane);
+    });
+  }, [selectPane]);
+
+  useEffect(() => {
+    if (activePane === "split") {
+      setAddressValue(splitUrl ? getUrlDisplayValue(splitUrl) : "");
+      return;
+    }
+
+    setAddressValue(showReactStartPage || !activeTab.url ? "" : getUrlDisplayValue(activeTab.url));
+  }, [activePane, activeTab.url, showReactStartPage, splitUrl]);
 
   useEffect(() => {
     return window.andromeda.onOpenCommandBar(() => {
@@ -175,10 +277,33 @@ export default function App() {
 
   const navigateTo = useCallback(
     (url: string) => {
+      flushContentLayout();
       openUrl(url);
       setAddressValue(getUrlDisplayValue(url));
     },
-    [openUrl]
+    [flushContentLayout, openUrl]
+  );
+
+  const openSplitCommandBar = useCallback(() => {
+    setCommandBarMode("split");
+    setCommandBarOpen(true);
+  }, []);
+
+  const navigateSplitTo = useCallback(
+    (url: string) => {
+      if (showReactStartPage) {
+        flushContentLayout(false);
+        openMainUrl(url);
+        setAddressValue(getUrlDisplayValue(url));
+        return undefined;
+      }
+
+      flushContentLayout(true);
+      openSplitUrl(url);
+      setAddressValue(getUrlDisplayValue(url));
+      return undefined;
+    },
+    [flushContentLayout, openMainUrl, openSplitUrl, showReactStartPage]
   );
 
   const handleSubmitAddress = useCallback(() => {
@@ -199,16 +324,16 @@ export default function App() {
   );
 
   const handleBack = useCallback(() => {
-    void window.andromeda.goBack();
-  }, []);
+    void window.andromeda.goBack(activePane);
+  }, [activePane]);
 
   const handleForward = useCallback(() => {
-    void window.andromeda.goForward();
-  }, []);
+    void window.andromeda.goForward(activePane);
+  }, [activePane]);
 
   const handleReload = useCallback(() => {
-    void window.andromeda.reload();
-  }, []);
+    void window.andromeda.reload(activePane);
+  }, [activePane]);
 
   const handleCloseWindow = useCallback(() => {
     void window.andromeda.closeWindow();
@@ -229,6 +354,22 @@ export default function App() {
 
   const handleImportChrome = useCallback(() => undefined, []);
 
+  const handleSelectPane = useCallback(
+    (pane: BrowserPane) => {
+      selectPane(pane);
+      void window.andromeda.setActivePane(pane);
+    },
+    [selectPane]
+  );
+
+  const handleCloseSplitView = useCallback(() => {
+    flushContentLayout(false, true);
+    closeSplitView();
+    void window.andromeda.closeSplitView();
+    lastSplitRequestRef.current = null;
+    handleSelectPane("main");
+  }, [closeSplitView, flushContentLayout, handleSelectPane]);
+
   const handleOpenPinned = useCallback(
     (target: "github" | "linear" | "docs") => {
       if (target === "docs") {
@@ -242,22 +383,73 @@ export default function App() {
   );
 
   const openCommandBar = useCallback(() => {
+    setCommandBarMode("default");
     setCommandBarOpen(true);
   }, []);
 
   const closeCommandBar = useCallback(() => {
     setCommandBarOpen(false);
+    setCommandBarMode("default");
   }, []);
 
   const handleCommandInputNavigation = useCallback(
-    (input: string) => {
-      navigateTo(resolveNavigationInput(input));
+    (input: string, target: "active" | "split") => {
+      const url = resolveNavigationInput(input);
+      if (target === "split") {
+        return navigateSplitTo(url);
+      }
+
+      navigateTo(url);
+      return undefined;
     },
-    [navigateTo]
+    [navigateSplitTo, navigateTo]
   );
 
   const commandBarItems = useMemo<CommandBarItem[]>(
     () => [
+      {
+        id: "open-split-view",
+        title: "Open Split View",
+        subtitle: showReactStartPage ? "Choose a page for the right pane" : "Open a right pane",
+        icon: "square",
+        keywords: ["split", "side by side", "right pane"],
+        run: () => {
+          openSplitCommandBar();
+          return { keepOpen: true };
+        }
+      },
+      {
+        id: "open-github-split",
+        title: "Open GitHub in Split View",
+        subtitle: "https://github.com",
+        icon: "github",
+        keywords: ["github.com", "split", "right pane"],
+        run: () => navigateSplitTo(PINNED_URLS.github)
+      },
+      {
+        id: "open-linear-split",
+        title: "Open Linear in Split View",
+        subtitle: "https://linear.app",
+        icon: "linear",
+        keywords: ["linear.app", "split", "right pane"],
+        run: () => navigateSplitTo(PINNED_URLS.linear)
+      },
+      {
+        id: "search-split",
+        title: "Search in Split View",
+        subtitle: "Use the typed query in the right pane",
+        icon: "search",
+        keywords: ["search", "split", "right pane"],
+        run: (query) => {
+          const trimmedQuery = query.trim();
+          if (!trimmedQuery) {
+            openSplitCommandBar();
+            return { keepOpen: true };
+          }
+
+          return navigateSplitTo(resolveNavigationInput(trimmedQuery));
+        }
+      },
       {
         id: "new-tab",
         title: "New Tab",
@@ -320,7 +512,7 @@ export default function App() {
         subtitle: "Refresh the current page",
         icon: "reload",
         keywords: ["refresh"],
-        run: () => void window.andromeda.reload()
+        run: () => void window.andromeda.reload(activePane)
       },
       {
         id: "go-back",
@@ -328,7 +520,7 @@ export default function App() {
         subtitle: "Navigate back",
         icon: "arrowLeft",
         keywords: ["history", "previous"],
-        run: () => void window.andromeda.goBack()
+        run: () => void window.andromeda.goBack(activePane)
       },
       {
         id: "go-forward",
@@ -336,10 +528,18 @@ export default function App() {
         subtitle: "Navigate forward",
         icon: "arrowRight",
         keywords: ["history", "next"],
-        run: () => void window.andromeda.goForward()
+        run: () => void window.andromeda.goForward(activePane)
       }
     ],
-    [handleSelectSpace, handleShowStartPage, navigateTo]
+    [
+      activePane,
+      handleSelectSpace,
+      handleShowStartPage,
+      navigateSplitTo,
+      navigateTo,
+      openSplitCommandBar,
+      showReactStartPage
+    ]
   );
 
   useEffect(() => {
@@ -370,13 +570,13 @@ export default function App() {
 
       if (key === "r") {
         event.preventDefault();
-        void window.andromeda.reload();
+        void window.andromeda.reload(activePane);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closeCommandBar, isCommandBarOpen, openCommandBar]);
+  }, [activePane, closeCommandBar, isCommandBarOpen, openCommandBar]);
 
   return (
     <div className="window-frame">
@@ -384,16 +584,17 @@ export default function App() {
         <Toolbar
           addressValue={addressValue}
           inputRef={addressInputRef}
-          currentPageTitle={activeTab.title}
-          currentPageFaviconUrl={activeTab.faviconUrl}
+          currentPageTitle={currentPageTitle}
+          currentPageFaviconUrl={currentPageFaviconUrl}
           currentPageIcon={currentPageIcon}
-          isStartPage={showReactStartPage}
+          isStartPage={activePane === "main" && showReactStartPage}
           onAddressChange={setAddressValue}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
           onForward={handleForward}
           onReload={handleReload}
           onNewTab={handleShowStartPage}
+          onOpenSplitView={openSplitCommandBar}
           onCloseWindow={handleCloseWindow}
           onMinimizeWindow={handleMinimizeWindow}
           onToggleMaximizeWindow={handleToggleMaximizeWindow}
@@ -408,6 +609,38 @@ export default function App() {
         />
 
         <div ref={contentRef} className="content-view-host">
+          {isSplitOpen ? (
+            <div className="split-view-frame" aria-label="Split view">
+              <button
+                className={activePane === "main" ? "split-pane-label is-active" : "split-pane-label"}
+                type="button"
+                onClick={() => handleSelectPane("main")}
+              >
+                <span>{activeTab.title}</span>
+              </button>
+              <div className="split-divider" aria-hidden="true" />
+              <div className="split-pane-label-wrap">
+                <button
+                  className={activePane === "split" ? "split-pane-label is-active" : "split-pane-label"}
+                  type="button"
+                  onClick={() => handleSelectPane("split")}
+                >
+                  <span>{splitTitle}</span>
+                </button>
+                <button
+                  className="split-close"
+                  type="button"
+                  aria-label="Close split view"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleCloseSplitView();
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ) : null}
           {showReactStartPage ? (
             <StartPage
               onStartBrowsing={handleStartBrowsing}
@@ -417,6 +650,7 @@ export default function App() {
         </div>
         <CommandBar
           isOpen={isCommandBarOpen}
+          mode={commandBarMode}
           commands={commandBarItems}
           onClose={closeCommandBar}
           onNavigateInput={handleCommandInputNavigation}

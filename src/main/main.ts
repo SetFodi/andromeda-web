@@ -1,6 +1,6 @@
 import path from "node:path";
 import { app, BrowserWindow } from "electron";
-import { BrowserViewManager } from "./browserViewManager";
+import { WebContentsViewManager } from "./webContentsViewManager";
 import { registerIpc } from "./ipc";
 
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -33,7 +33,7 @@ function createMainWindow(): BrowserWindow {
     }
   });
 
-  const manager = new BrowserViewManager(window);
+  const manager = new WebContentsViewManager(window);
   registerIpc(manager, window);
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
