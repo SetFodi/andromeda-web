@@ -5,6 +5,7 @@ import Icon, { IconName } from "./Icon";
 type SidebarProps = {
   spaces: BrowserSpace[];
   selectedSpaceId: SpaceId;
+  activePinnedId: "github" | "linear" | "docs" | null;
   onSelectSpace: (spaceId: SpaceId) => void;
   onNewTab: () => void;
   onOpenPinned: (target: "github" | "linear" | "docs") => void;
@@ -29,6 +30,7 @@ const pinnedItems: Array<{
 function Sidebar({
   spaces,
   selectedSpaceId,
+  activePinnedId,
   onSelectSpace,
   onNewTab,
   onOpenPinned
@@ -76,8 +78,9 @@ function Sidebar({
           {pinnedItems.map((item) => (
             <button
               key={item.id}
-              className="pinned-item"
+              className={item.id === activePinnedId ? "pinned-item is-selected" : "pinned-item"}
               type="button"
+              aria-current={item.id === activePinnedId ? "page" : undefined}
               onClick={() => onOpenPinned(item.id)}
             >
               <Icon name={item.icon} size={18} />

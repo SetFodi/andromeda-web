@@ -7,6 +7,7 @@ export type BrowserTab = {
   title: string;
   url: string | null;
   isStartPage: boolean;
+  faviconUrl?: string;
 };
 
 export type BrowserSpace = {
@@ -90,6 +91,19 @@ function getTitleFromUrl(url: string): string {
   }
 }
 
+function isSafeFaviconUrl(value: unknown): value is string {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function sanitizeState(value: unknown): BrowserState {
   if (!value || typeof value !== "object") {
     return DEFAULT_STATE;
@@ -116,9 +130,14 @@ function sanitizeState(value: unknown): BrowserState {
             typeof tab.id === "string" &&
             typeof tab.title === "string" &&
             (typeof tab.url === "string" || tab.url === null) &&
-            typeof tab.isStartPage === "boolean"
+            typeof tab.isStartPage === "boolean" &&
+            (tab.faviconUrl === undefined || isSafeFaviconUrl(tab.faviconUrl))
         );
       })
+      .map((tab) => ({
+        ...tab,
+        faviconUrl: isSafeFaviconUrl(tab.faviconUrl) ? tab.faviconUrl : undefined
+      }))
       .slice(-8);
 
     if (tabs.length === 0) {
@@ -277,7 +296,8 @@ export function useBrowserStore() {
             ...tab,
             title: getTitleFromUrl(url),
             url,
-            isStartPage: false
+            isStartPage: false,
+            faviconUrl: undefined
           };
         });
 
@@ -305,7 +325,7 @@ export function useBrowserStore() {
         }
 
         const tabs = space.tabs.map((tab) => {
-          if (tab.id !== space.activeTabId || tab.title === trimmedTitle) {
+          if (tab.id !== space.activeTabId || tab.isStartPage || tab.title === trimmedTitle) {
             return tab;
           }
 
@@ -313,6 +333,40 @@ export function useBrowserStore() {
           return {
             ...tab,
             title: trimmedTitle
+          };
+        });
+
+        return {
+          ...space,
+          tabs
+        };
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
+
+  const updateActiveFavicon = useCallback((faviconUrl: string) => {
+    if (!isSafeFaviconUrl(faviconUrl)) {
+      return;
+    }
+
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== current.selectedSpaceId) {
+          return space;
+        }
+
+        const tabs = space.tabs.map((tab) => {
+          if (tab.id !== space.activeTabId || tab.isStartPage || tab.faviconUrl === faviconUrl) {
+            return tab;
+          }
+
+          didChange = true;
+          return {
+            ...tab,
+            faviconUrl
           };
         });
 
@@ -353,6 +407,7 @@ export function useBrowserStore() {
     openUrl,
     updateActiveUrl,
     updateActiveTitle,
+    updateActiveFavicon,
     showStartPage
   };
 }

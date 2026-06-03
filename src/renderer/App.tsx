@@ -3,13 +3,40 @@ import CommandBar, { CommandBarItem } from "./components/CommandBar";
 import Sidebar from "./components/Sidebar";
 import StartPage from "./components/StartPage";
 import Toolbar from "./components/Toolbar";
-import { useBrowserStore, SpaceId } from "./state/browserStore";
+import { BrowserTab, useBrowserStore, SpaceId } from "./state/browserStore";
 import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
 
 const PINNED_URLS = {
   github: "https://github.com",
   linear: "https://linear.app"
 };
+
+type PinnedTarget = "github" | "linear" | "docs";
+
+function getActivePinnedTarget(tab: BrowserTab): PinnedTarget | null {
+  if (tab.isStartPage) {
+    return "docs";
+  }
+
+  if (!tab.url) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(tab.url).hostname.replace(/^www\./, "");
+    if (hostname === "github.com" || hostname.endsWith(".github.com")) {
+      return "github";
+    }
+
+    if (hostname === "linear.app" || hostname.endsWith(".linear.app")) {
+      return "linear";
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 export default function App() {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -27,10 +54,13 @@ export default function App() {
     openUrl,
     updateActiveUrl,
     updateActiveTitle,
+    updateActiveFavicon,
     showStartPage
   } = useBrowserStore();
 
   const showReactStartPage = activeTab.isStartPage;
+  const activePinnedTarget = useMemo(() => getActivePinnedTarget(activeTab), [activeTab]);
+  const currentPageIcon = activePinnedTarget ?? "search";
 
   const resizeContentView = useCallback(() => {
     if (resizeFrameRef.current !== null) {
@@ -121,6 +151,12 @@ export default function App() {
       updateActiveTitle(title);
     });
   }, [updateActiveTitle]);
+
+  useEffect(() => {
+    return window.andromeda.onFaviconUpdated(({ faviconUrl }) => {
+      updateActiveFavicon(faviconUrl);
+    });
+  }, [updateActiveFavicon]);
 
   useEffect(() => {
     return window.andromeda.onOpenCommandBar(() => {
@@ -348,6 +384,10 @@ export default function App() {
         <Toolbar
           addressValue={addressValue}
           inputRef={addressInputRef}
+          currentPageTitle={activeTab.title}
+          currentPageFaviconUrl={activeTab.faviconUrl}
+          currentPageIcon={currentPageIcon}
+          isStartPage={showReactStartPage}
           onAddressChange={setAddressValue}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
@@ -361,6 +401,7 @@ export default function App() {
         <Sidebar
           spaces={state.spaces}
           selectedSpaceId={state.selectedSpaceId}
+          activePinnedId={activePinnedTarget}
           onSelectSpace={handleSelectSpace}
           onNewTab={handleShowStartPage}
           onOpenPinned={handleOpenPinned}

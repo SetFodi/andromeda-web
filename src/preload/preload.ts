@@ -15,6 +15,10 @@ type TitlePayload = {
   title: string;
 };
 
+type FaviconPayload = {
+  faviconUrl: string;
+};
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -53,6 +57,14 @@ function isTitlePayload(payload: unknown): payload is TitlePayload {
   );
 }
 
+function isFaviconPayload(payload: unknown): payload is FaviconPayload {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      typeof (payload as FaviconPayload).faviconUrl === "string"
+  );
+}
+
 contextBridge.exposeInMainWorld("andromeda", {
   navigate: (url: string) => ipcRenderer.invoke("browser:navigate", { url }),
   goBack: () => ipcRenderer.invoke("browser:goBack"),
@@ -85,6 +97,16 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:titleUpdated", listener);
     return () => ipcRenderer.removeListener("browser:titleUpdated", listener);
+  },
+  onFaviconUpdated: (callback: (payload: FaviconPayload) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (isFaviconPayload(payload)) {
+        callback(payload);
+      }
+    };
+
+    ipcRenderer.on("browser:faviconUpdated", listener);
+    return () => ipcRenderer.removeListener("browser:faviconUpdated", listener);
   },
   onOpenCommandBar: (callback: () => void) => {
     const listener = () => {

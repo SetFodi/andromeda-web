@@ -15,6 +15,10 @@ type TitlePayload = {
   title: string;
 };
 
+type FaviconPayload = {
+  faviconUrl: string;
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string) => Promise<void>;
@@ -29,6 +33,7 @@ interface Window {
     toggleMaximizeWindow: () => Promise<void>;
     onDidNavigate: (callback: (payload: NavigationPayload) => void) => () => void;
     onTitleUpdated: (callback: (payload: TitlePayload) => void) => () => void;
+    onFaviconUpdated: (callback: (payload: FaviconPayload) => void) => () => void;
     onOpenCommandBar: (callback: () => void) => () => void;
   };
 }

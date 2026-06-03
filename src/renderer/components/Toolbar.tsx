@@ -1,9 +1,13 @@
-import { memo, type RefObject } from "react";
-import Icon from "./Icon";
+import { memo, useEffect, useState, type RefObject } from "react";
+import Icon, { IconName } from "./Icon";
 
 type ToolbarProps = {
   addressValue: string;
   inputRef: RefObject<HTMLInputElement | null>;
+  currentPageTitle: string;
+  currentPageFaviconUrl?: string;
+  currentPageIcon: IconName;
+  isStartPage: boolean;
   onAddressChange: (value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -18,6 +22,10 @@ type ToolbarProps = {
 function Toolbar({
   addressValue,
   inputRef,
+  currentPageTitle,
+  currentPageFaviconUrl,
+  currentPageIcon,
+  isStartPage,
   onAddressChange,
   onSubmit,
   onBack,
@@ -28,6 +36,16 @@ function Toolbar({
   onMinimizeWindow,
   onToggleMaximizeWindow
 }: ToolbarProps) {
+  const pageLabel = currentPageTitle.trim() || (isStartPage ? "Start" : "Browsing");
+  const [failedFaviconUrl, setFailedFaviconUrl] = useState<string | null>(null);
+  const showFavicon = Boolean(
+    currentPageFaviconUrl && !isStartPage && currentPageFaviconUrl !== failedFaviconUrl
+  );
+
+  useEffect(() => {
+    setFailedFaviconUrl(null);
+  }, [currentPageFaviconUrl]);
+
   return (
     <header className="toolbar">
       <div className="traffic-lights" aria-label="Window controls">
@@ -59,7 +77,21 @@ function Toolbar({
           onSubmit();
         }}
       >
-        <Icon className="address-search" name="search" size={17} />
+        <span className="page-identity" title={pageLabel}>
+          {showFavicon ? (
+            <img
+              alt=""
+              src={currentPageFaviconUrl}
+              onError={() => {
+                setFailedFaviconUrl(currentPageFaviconUrl ?? null);
+              }}
+            />
+          ) : (
+            <Icon name={currentPageIcon} size={15} />
+          )}
+          <span>{pageLabel}</span>
+        </span>
+        <span className="address-divider" />
         <input
           ref={inputRef}
           value={addressValue}

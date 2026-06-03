@@ -32,6 +32,19 @@ function isLoadableUrl(value: string): boolean {
   }
 }
 
+function getFaviconUrl(favicons: string[]): string | null {
+  return (
+    favicons.find((favicon) => {
+      try {
+        const url = new URL(favicon);
+        return url.protocol === "http:" || url.protocol === "https:";
+      } catch {
+        return false;
+      }
+    }) ?? null
+  );
+}
+
 export class BrowserViewManager {
   private view: WebContentsView | null = null;
   private isViewAttached = false;
@@ -161,6 +174,13 @@ export class BrowserViewManager {
 
     view.webContents.on("page-title-updated", (_event, title) => {
       this.window.webContents.send("browser:titleUpdated", { title });
+    });
+
+    view.webContents.on("page-favicon-updated", (_event, favicons) => {
+      const faviconUrl = getFaviconUrl(favicons);
+      if (faviconUrl) {
+        this.window.webContents.send("browser:faviconUpdated", { faviconUrl });
+      }
     });
 
     this.window.contentView.addChildView(view);
