@@ -439,12 +439,20 @@
   cursor: grab;
 }
 
+.tab-row.is-static {
+  cursor: default;
+}
+
 .tab-row:hover {
   background: rgba(16, 35, 51, 0.036);
 }
 
-.tab-row:active {
+.tab-row:active:not(.is-static) {
   cursor: grabbing;
+}
+
+.tab-row.is-dragging {
+  opacity: 0.58;
 }
 
 .tab-row.is-selected {

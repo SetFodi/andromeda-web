@@ -70,6 +70,7 @@ export default function App() {
     openSplitUrl,
     selectTab,
     closeTab,
+    reorderTabs,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
@@ -343,6 +344,13 @@ export default function App() {
     [closeTab]
   );
 
+  const handleReorderSidebarTabs = useCallback(
+    (spaceId: SpaceId, sourceTabId: string, targetTabId: string) => {
+      reorderTabs(spaceId, sourceTabId, targetTabId);
+    },
+    [reorderTabs]
+  );
+
   const handleBack = useCallback(() => {
     void window.andromeda.goBack(activePane);
   }, [activePane]);
@@ -397,7 +405,7 @@ export default function App() {
         return;
       }
 
-      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.effectAllowed = "copyMove";
       event.dataTransfer.setData(TAB_DRAG_DATA_TYPE, tab.url);
       event.dataTransfer.setData("text/uri-list", tab.url);
       event.dataTransfer.setData("text/plain", tab.title);
@@ -688,8 +696,10 @@ export default function App() {
           onSelectSpace={handleSelectSpace}
           onSelectTab={handleSelectSidebarTab}
           onCloseTab={handleCloseSidebarTab}
+          onReorderTabs={handleReorderSidebarTabs}
           onTabDragStart={handleSidebarTabDragStart}
           onTabDragEnd={handleSidebarTabDragEnd}
+          draggedTabId={draggedTab?.id ?? null}
           onNewTab={handleShowStartPage}
           onOpenPinned={handleOpenPinned}
         />

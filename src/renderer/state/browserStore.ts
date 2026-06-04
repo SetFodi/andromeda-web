@@ -95,6 +95,19 @@ function createLocalStartTab(space: BrowserSpace): BrowserTab {
   };
 }
 
+function moveTab(tabs: BrowserTab[], sourceTabId: string, targetTabId: string): BrowserTab[] | null {
+  const sourceIndex = tabs.findIndex((tab) => tab.id === sourceTabId);
+  const targetIndex = tabs.findIndex((tab) => tab.id === targetTabId);
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+    return null;
+  }
+
+  const nextTabs = [...tabs];
+  const [movedTab] = nextTabs.splice(sourceIndex, 1);
+  nextTabs.splice(targetIndex, 0, movedTab);
+  return nextTabs;
+}
+
 function isSpaceId(value: unknown): value is SpaceId {
   return value === "dev" || value === "work" || value === "personal";
 }
@@ -418,6 +431,30 @@ export function useBrowserStore() {
     });
   }, [state.selectedSpaceId, state.spaces]);
 
+  const reorderTabs = useCallback((spaceId: SpaceId, sourceTabId: string, targetTabId: string) => {
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== spaceId) {
+          return space;
+        }
+
+        const tabs = moveTab(space.tabs, sourceTabId, targetTabId);
+        if (!tabs) {
+          return space;
+        }
+
+        didChange = true;
+        return {
+          ...space,
+          tabs
+        };
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
+
   const updateMainUrl = useCallback((url: string) => {
     setState((current) => {
       let didChange = false;
@@ -674,6 +711,7 @@ export function useBrowserStore() {
     openSplitUrl,
     selectTab,
     closeTab,
+    reorderTabs,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,

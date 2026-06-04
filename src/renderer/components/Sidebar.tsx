@@ -10,8 +10,10 @@ type SidebarProps = {
   onSelectSpace: (spaceId: SpaceId) => void;
   onSelectTab: (spaceId: SpaceId, tabId: string) => void;
   onCloseTab: (spaceId: SpaceId, tabId: string) => void;
+  onReorderTabs: (spaceId: SpaceId, sourceTabId: string, targetTabId: string) => void;
   onTabDragStart: (event: DragEvent<HTMLElement>, tab: BrowserTab) => void;
   onTabDragEnd: () => void;
+  draggedTabId: string | null;
   onNewTab: () => void;
   onOpenPinned: (target: "github" | "linear" | "docs") => void;
 };
@@ -51,8 +53,10 @@ function Sidebar({
   onSelectSpace,
   onSelectTab,
   onCloseTab,
+  onReorderTabs,
   onTabDragStart,
   onTabDragEnd,
+  draggedTabId,
   onNewTab,
   onOpenPinned
 }: SidebarProps) {
@@ -123,14 +127,39 @@ function Sidebar({
             {selectedSpace.tabs.map((tab) => {
               const isActive = tab.id === selectedSpace.activeTabId;
               const canDrag = Boolean(tab.url && !tab.isStartPage);
+              const rowClassName = [
+                "tab-row",
+                isActive ? "is-selected" : "",
+                draggedTabId === tab.id ? "is-dragging" : "",
+                canDrag ? "" : "is-static"
+              ]
+                .filter(Boolean)
+                .join(" ");
 
               return (
                 <div
                   key={tab.id}
-                  className={isActive ? "tab-row is-selected" : "tab-row"}
+                  className={rowClassName}
                   draggable={canDrag}
                   onDragStart={(event) => onTabDragStart(event, tab)}
                   onDragEnd={onTabDragEnd}
+                  onDragOver={(event) => {
+                    if (!draggedTabId || draggedTabId === tab.id) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event) => {
+                    if (!draggedTabId || draggedTabId === tab.id) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onReorderTabs(selectedSpace.id, draggedTabId, tab.id);
+                  }}
                 >
                   <button
                     className="tab-item"
@@ -151,17 +180,19 @@ function Sidebar({
                       <small>{getTabSubtitle(tab)}</small>
                     </span>
                   </button>
-                  <button
-                    className="tab-close"
-                    type="button"
-                    aria-label={`Close ${tab.title}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onCloseTab(selectedSpace.id, tab.id);
-                    }}
-                  >
-                    ×
-                  </button>
+                  {selectedSpace.tabs.length > 1 ? (
+                    <button
+                      className="tab-close"
+                      type="button"
+                      aria-label={`Close ${tab.title}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCloseTab(selectedSpace.id, tab.id);
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
