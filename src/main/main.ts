@@ -2,6 +2,7 @@ import path from "node:path";
 import { app, BrowserWindow } from "electron";
 import { WebContentsViewManager } from "./webContentsViewManager";
 import { registerIpc } from "./ipc";
+import { buildAppMenu } from "./menu";
 
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -35,6 +36,7 @@ function createMainWindow(): BrowserWindow {
 
   const manager = new WebContentsViewManager(window);
   registerIpc(manager, window);
+  buildAppMenu(window);
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.once("ready-to-show", () => window.show());

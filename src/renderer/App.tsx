@@ -4,9 +4,14 @@ import Sidebar from "./components/Sidebar";
 import StartPage from "./components/StartPage";
 import Toolbar from "./components/Toolbar";
 import { BrowserPane, BrowserTab, useBrowserStore, SpaceId } from "./state/browserStore";
+import { useTheme } from "./state/useTheme";
 import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
+import type { RecentSite } from "./components/StartPage";
+import type { IconName } from "./components/Icon";
 
-const PINNED_URLS = {
+const GREETING_NAME = "Alex";
+
+const QUICK_URLS = {
   github: "https://github.com",
   linear: "https://linear.app"
 };
@@ -15,7 +20,6 @@ const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
 const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
 
-type PinnedTarget = "github" | "linear" | "docs";
 type PaneNavigationState = {
   canGoBack: boolean;
   canGoForward: boolean;
@@ -28,17 +32,21 @@ const DEFAULT_NAVIGATION_STATE: PaneNavigationState = {
   isLoading: false
 };
 
-function getActivePinnedTarget(tab: BrowserTab): PinnedTarget | null {
-  if (tab.isStartPage) {
+function getDisplayOrderTabs(space: { tabs: BrowserTab[] }): BrowserTab[] {
+  return [...space.tabs.filter((tab) => tab.pinned), ...space.tabs.filter((tab) => !tab.pinned)];
+}
+
+function getPageFallbackIcon(url: string | null, isStartPage: boolean): IconName {
+  if (isStartPage) {
     return "docs";
   }
 
-  if (!tab.url) {
-    return null;
+  if (!url) {
+    return "search";
   }
 
   try {
-    const hostname = new URL(tab.url).hostname.replace(/^www\./, "");
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
     if (hostname === "github.com" || hostname.endsWith(".github.com")) {
       return "github";
     }
@@ -47,13 +55,14 @@ function getActivePinnedTarget(tab: BrowserTab): PinnedTarget | null {
       return "linear";
     }
   } catch {
-    return null;
+    return "search";
   }
 
-  return null;
+  return "globe";
 }
 
 export default function App() {
+  const { theme, toggleTheme } = useTheme();
   const contentRef = useRef<HTMLDivElement>(null);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const lastContentLayoutKeyRef = useRef<string | null>(null);
@@ -74,6 +83,7 @@ export default function App() {
   });
   const {
     state,
+    selectedSpace,
     activeTab,
     activePane,
     isSplitOpen,
@@ -81,12 +91,16 @@ export default function App() {
     splitTitle,
     splitFaviconUrl,
     selectSpace,
+    createSpace,
+    renameSpace,
+    deleteSpace,
     selectPane,
     openUrl,
     openMainUrl,
     openSplitUrl,
     selectTab,
     closeTab,
+    togglePinTab,
     reorderTabs,
     closeSplitView,
     updateActiveUrl,
@@ -96,20 +110,43 @@ export default function App() {
   } = useBrowserStore();
 
   const showReactStartPage = activeTab.isStartPage;
-  const activePinnedTarget = useMemo(() => {
-    if (activePane === "split") {
-      return getActivePinnedTarget({
-        id: "split",
-        title: splitTitle,
-        url: splitUrl,
-        isStartPage: false,
-        faviconUrl: splitFaviconUrl
-      });
+  const recentSites = useMemo<RecentSite[]>(() => {
+    const seen = new Set<string>();
+    const sites: RecentSite[] = [];
+
+    for (const space of state.spaces) {
+      for (let index = space.tabs.length - 1; index >= 0; index -= 1) {
+        const tab = space.tabs[index];
+        if (tab.isStartPage || !tab.url) {
+          continue;
+        }
+
+        let key: string;
+        try {
+          const parsed = new URL(tab.url);
+          key = `${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`;
+        } catch {
+          key = tab.url;
+        }
+
+        if (seen.has(key)) {
+          continue;
+        }
+
+        seen.add(key);
+        sites.push({ id: tab.id, title: tab.title, url: tab.url });
+      }
     }
 
-    return getActivePinnedTarget(activeTab);
-  }, [activePane, activeTab, splitFaviconUrl, splitTitle, splitUrl]);
-  const currentPageIcon = activePinnedTarget ?? "search";
+    return sites.slice(0, 6);
+  }, [state.spaces]);
+  const currentPageIcon = useMemo<IconName>(() => {
+    if (activePane === "split") {
+      return getPageFallbackIcon(splitUrl, false);
+    }
+
+    return getPageFallbackIcon(activeTab.url, activeTab.isStartPage);
+  }, [activePane, activeTab.isStartPage, activeTab.url, splitUrl]);
   const currentPageTitle = activePane === "split" ? splitTitle : activeTab.title;
   const currentPageFaviconUrl = activePane === "split" ? splitFaviconUrl : activeTab.faviconUrl;
   const activeNavigationState =
@@ -437,11 +474,6 @@ export default function App() {
     void window.andromeda.toggleMaximizeWindow();
   }, []);
 
-  const handleStartBrowsing = useCallback(() => {
-    addressInputRef.current?.focus();
-    addressInputRef.current?.select();
-  }, []);
-
   const handleImportChrome = useCallback(() => undefined, []);
 
   const handleSelectPane = useCallback(
@@ -547,18 +579,6 @@ export default function App() {
     ]
   );
 
-  const handleOpenPinned = useCallback(
-    (target: "github" | "linear" | "docs") => {
-      if (target === "docs") {
-        handleShowStartPage();
-        return;
-      }
-
-      navigateTo(PINNED_URLS[target]);
-    },
-    [handleShowStartPage, navigateTo]
-  );
-
   const openCommandBar = useCallback(() => {
     setCommandBarMode("default");
     setCommandBarOpen(true);
@@ -601,7 +621,7 @@ export default function App() {
         subtitle: "https://github.com",
         icon: "github",
         keywords: ["github.com", "split", "right pane"],
-        run: () => navigateSplitTo(PINNED_URLS.github)
+        run: () => navigateSplitTo(QUICK_URLS.github)
       },
       {
         id: "open-linear-split",
@@ -609,7 +629,7 @@ export default function App() {
         subtitle: "https://linear.app",
         icon: "linear",
         keywords: ["linear.app", "split", "right pane"],
-        run: () => navigateSplitTo(PINNED_URLS.linear)
+        run: () => navigateSplitTo(QUICK_URLS.linear)
       },
       {
         id: "search-split",
@@ -641,7 +661,7 @@ export default function App() {
         subtitle: "https://github.com",
         icon: "github",
         keywords: ["github.com", "code", "repo"],
-        run: () => navigateTo(PINNED_URLS.github)
+        run: () => navigateTo(QUICK_URLS.github)
       },
       {
         id: "open-linear",
@@ -649,40 +669,28 @@ export default function App() {
         subtitle: "https://linear.app",
         icon: "linear",
         keywords: ["linear.app", "issues", "work"],
-        run: () => navigateTo(PINNED_URLS.linear)
+        run: () => navigateTo(QUICK_URLS.linear)
       },
       {
-        id: "open-docs",
-        title: "Open Docs",
-        subtitle: "Return to local start page",
-        icon: "docs",
-        keywords: ["documentation", "start page", "home"],
-        run: handleShowStartPage
+        id: "new-space",
+        title: "Create New Space",
+        subtitle: "Add a fresh workspace",
+        icon: "plus",
+        keywords: ["space", "workspace", "add", "create"],
+        run: () => {
+          createSpace();
+        }
       },
-      {
-        id: "switch-dev",
-        title: "Switch to Dev",
-        subtitle: "Use the Dev space",
-        icon: "code",
-        keywords: ["space", "development"],
-        run: () => handleSelectSpace("dev")
-      },
-      {
-        id: "switch-work",
-        title: "Switch to Work",
-        subtitle: "Use the Work space",
-        icon: "briefcase",
-        keywords: ["space", "tasks"],
-        run: () => handleSelectSpace("work")
-      },
-      {
-        id: "switch-personal",
-        title: "Switch to Personal",
-        subtitle: "Use the Personal space",
-        icon: "user",
-        keywords: ["space"],
-        run: () => handleSelectSpace("personal")
-      },
+      ...state.spaces
+        .filter((space) => space.id !== state.selectedSpaceId)
+        .map<CommandBarItem>((space) => ({
+          id: `switch-space-${space.id}`,
+          title: `Switch to ${space.name}`,
+          subtitle: `${space.tabs.length} ${space.tabs.length === 1 ? "tab" : "tabs"}`,
+          icon: space.icon,
+          keywords: ["space", "switch", space.name.toLowerCase()],
+          run: () => handleSelectSpace(space.id)
+        })),
       {
         id: "reload-page",
         title: "Reload Page",
@@ -710,50 +718,127 @@ export default function App() {
     ],
     [
       activePane,
+      createSpace,
       handleSelectSpace,
       handleShowStartPage,
       navigateSplitTo,
       navigateTo,
       openSplitCommandBar,
-      showReactStartPage
+      showReactStartPage,
+      state.selectedSpaceId,
+      state.spaces
     ]
   );
+
+  // Keyboard shortcuts (Cmd+T, Cmd+W, Cmd+1..9, etc.) are delivered from the
+  // native application menu in the main process so they fire even while a web
+  // page has focus. This dispatcher applies them to the React state.
+  const handleShortcut = useCallback(
+    (action: string) => {
+      if (action.startsWith("select-tab-")) {
+        const index = Number.parseInt(action.slice("select-tab-".length), 10) - 1;
+        const target = getDisplayOrderTabs(selectedSpace)[index];
+        if (target) {
+          selectTab(selectedSpace.id, target.id);
+        }
+        return;
+      }
+
+      switch (action) {
+        case "new-tab":
+          handleShowStartPage();
+          break;
+        case "new-space":
+          createSpace();
+          break;
+        case "close-tab":
+          if (isSplitOpen && activePane === "split") {
+            handleCloseSplitView();
+          } else {
+            closeTab(selectedSpace.id, selectedSpace.activeTabId);
+          }
+          break;
+        case "command-bar":
+          openCommandBar();
+          break;
+        case "focus-address":
+          addressInputRef.current?.focus();
+          addressInputRef.current?.select();
+          break;
+        case "reload":
+          void window.andromeda.reload(activePane);
+          break;
+        case "back":
+          void window.andromeda.goBack(activePane);
+          break;
+        case "forward":
+          void window.andromeda.goForward(activePane);
+          break;
+        case "toggle-split":
+          if (isSplitOpen) {
+            handleCloseSplitView();
+          } else {
+            openSplitCommandBar();
+          }
+          break;
+        case "select-last-tab": {
+          const displayTabs = getDisplayOrderTabs(selectedSpace);
+          const target = displayTabs[displayTabs.length - 1];
+          if (target) {
+            selectTab(selectedSpace.id, target.id);
+          }
+          break;
+        }
+        case "next-tab":
+        case "previous-tab": {
+          const displayTabs = getDisplayOrderTabs(selectedSpace);
+          if (displayTabs.length === 0) {
+            break;
+          }
+          const currentIndex = displayTabs.findIndex((tab) => tab.id === selectedSpace.activeTabId);
+          const delta = action === "next-tab" ? 1 : -1;
+          const nextIndex = (currentIndex + delta + displayTabs.length) % displayTabs.length;
+          selectTab(selectedSpace.id, displayTabs[nextIndex].id);
+          break;
+        }
+        default:
+          break;
+      }
+    },
+    [
+      activePane,
+      closeTab,
+      createSpace,
+      handleCloseSplitView,
+      handleShowStartPage,
+      isSplitOpen,
+      openCommandBar,
+      openSplitCommandBar,
+      selectTab,
+      selectedSpace
+    ]
+  );
+
+  const handleShortcutRef = useRef(handleShortcut);
+  useEffect(() => {
+    handleShortcutRef.current = handleShortcut;
+  }, [handleShortcut]);
+
+  useEffect(() => {
+    return window.andromeda.onShortcut((action) => handleShortcutRef.current(action));
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isCommandBarOpen) {
         event.preventDefault();
         closeCommandBar();
-        return;
-      }
-
-      if (!event.metaKey) {
-        return;
-      }
-
-      const key = event.key.toLowerCase();
-
-      if (key === "k" || key === "t") {
-        event.preventDefault();
-        openCommandBar();
-        return;
-      }
-
-      if (key === "l") {
-        event.preventDefault();
-        addressInputRef.current?.focus();
-        addressInputRef.current?.select();
-      }
-
-      if (key === "r") {
-        event.preventDefault();
-        void window.andromeda.reload(activePane);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activePane, closeCommandBar, isCommandBarOpen, openCommandBar]);
+  }, [closeCommandBar, isCommandBarOpen]);
 
   return (
     <div className="window-frame">
@@ -768,6 +853,7 @@ export default function App() {
           canGoBack={activeNavigationState.canGoBack}
           canGoForward={activeNavigationState.canGoForward}
           isLoading={activeNavigationState.isLoading}
+          theme={theme}
           onAddressChange={setAddressValue}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
@@ -775,6 +861,7 @@ export default function App() {
           onReload={handleReload}
           onNewTab={handleShowStartPage}
           onOpenSplitView={openSplitCommandBar}
+          onToggleTheme={toggleTheme}
           onCloseWindow={handleCloseWindow}
           onMinimizeWindow={handleMinimizeWindow}
           onToggleMaximizeWindow={handleToggleMaximizeWindow}
@@ -782,16 +869,18 @@ export default function App() {
         <Sidebar
           spaces={state.spaces}
           selectedSpaceId={state.selectedSpaceId}
-          activePinnedId={activePinnedTarget}
           onSelectSpace={handleSelectSpace}
+          onCreateSpace={createSpace}
+          onRenameSpace={renameSpace}
+          onDeleteSpace={deleteSpace}
           onSelectTab={handleSelectSidebarTab}
           onCloseTab={handleCloseSidebarTab}
+          onTogglePinTab={togglePinTab}
           onReorderTabs={handleReorderSidebarTabs}
           onTabDragStart={handleSidebarTabDragStart}
           onTabDragEnd={handleSidebarTabDragEnd}
           draggedTabId={draggedTab?.id ?? null}
           onNewTab={handleShowStartPage}
-          onOpenPinned={handleOpenPinned}
         />
 
         <div
@@ -860,8 +949,11 @@ export default function App() {
           ) : null}
           {showReactStartPage ? (
             <StartPage
-              onStartBrowsing={handleStartBrowsing}
+              greetingName={GREETING_NAME}
+              onOpenCommand={openCommandBar}
+              onOpenLink={navigateTo}
               onImportChrome={handleImportChrome}
+              recentSites={recentSites}
             />
           ) : null}
         </div>

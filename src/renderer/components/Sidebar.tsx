@@ -1,38 +1,24 @@
-import { memo, useEffect, useState } from "react";
-import type { DragEvent } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import type { CSSProperties, DragEvent } from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
 
 type SidebarProps = {
   spaces: BrowserSpace[];
   selectedSpaceId: SpaceId;
-  activePinnedId: "github" | "linear" | "docs" | null;
   onSelectSpace: (spaceId: SpaceId) => void;
+  onCreateSpace: () => SpaceId;
+  onRenameSpace: (spaceId: SpaceId, name: string) => void;
+  onDeleteSpace: (spaceId: SpaceId) => void;
   onSelectTab: (spaceId: SpaceId, tabId: string) => void;
   onCloseTab: (spaceId: SpaceId, tabId: string) => void;
+  onTogglePinTab: (spaceId: SpaceId, tabId: string) => void;
   onReorderTabs: (spaceId: SpaceId, sourceTabId: string, targetTabId: string) => void;
   onTabDragStart: (event: DragEvent<HTMLElement>, tab: BrowserTab) => void;
   onTabDragEnd: () => void;
   draggedTabId: string | null;
   onNewTab: () => void;
-  onOpenPinned: (target: "github" | "linear" | "docs") => void;
 };
-
-const spaceIcons: Record<SpaceId, IconName> = {
-  dev: "code",
-  work: "briefcase",
-  personal: "user"
-};
-
-const pinnedItems: Array<{
-  id: "github" | "linear" | "docs";
-  label: string;
-  icon: IconName;
-}> = [
-  { id: "github", label: "GitHub", icon: "github" },
-  { id: "linear", label: "Linear", icon: "linear" },
-  { id: "docs", label: "Docs", icon: "docs" }
-];
 
 function getTabSubtitle(tab: BrowserTab): string {
   if (tab.isStartPage || !tab.url) {
@@ -56,7 +42,7 @@ function getTabFallbackIcon(tab: BrowserTab): IconName {
     return "linear";
   }
 
-  return "search";
+  return "globe";
 }
 
 function getTabHostname(tab: BrowserTab): string | null {
@@ -73,13 +59,8 @@ function getTabHostname(tab: BrowserTab): string | null {
 
 function TabFavicon({ tab }: { tab: BrowserTab }) {
   const [failedFaviconUrl, setFailedFaviconUrl] = useState<string | null>(null);
-  const fallbackIcon = getTabFallbackIcon(tab);
-  const shouldUseBuiltInIcon = fallbackIcon !== "search";
   const showFavicon = Boolean(
-    tab.faviconUrl &&
-      !tab.isStartPage &&
-      !shouldUseBuiltInIcon &&
-      tab.faviconUrl !== failedFaviconUrl
+    tab.faviconUrl && !tab.isStartPage && tab.faviconUrl !== failedFaviconUrl
   );
 
   useEffect(() => {
@@ -92,12 +73,10 @@ function TabFavicon({ tab }: { tab: BrowserTab }) {
         <img
           alt=""
           src={tab.faviconUrl}
-          onError={() => {
-            setFailedFaviconUrl(tab.faviconUrl ?? null);
-          }}
+          onError={() => setFailedFaviconUrl(tab.faviconUrl ?? null)}
         />
       ) : (
-        <Icon name={fallbackIcon} size={15} />
+        <Icon name={getTabFallbackIcon(tab)} size={15} />
       )}
     </span>
   );
@@ -106,18 +85,135 @@ function TabFavicon({ tab }: { tab: BrowserTab }) {
 function Sidebar({
   spaces,
   selectedSpaceId,
-  activePinnedId,
   onSelectSpace,
+  onCreateSpace,
+  onRenameSpace,
+  onDeleteSpace,
   onSelectTab,
   onCloseTab,
+  onTogglePinTab,
   onReorderTabs,
   onTabDragStart,
   onTabDragEnd,
   draggedTabId,
-  onNewTab,
-  onOpenPinned
+  onNewTab
 }: SidebarProps) {
   const selectedSpace = spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0];
+  const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingSpaceId) {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [editingSpaceId]);
+
+  const beginRename = (space: BrowserSpace) => {
+    setDraftName(space.name);
+    setEditingSpaceId(space.id);
+  };
+
+  const commitRename = () => {
+    if (editingSpaceId) {
+      onRenameSpace(editingSpaceId, draftName);
+    }
+    setEditingSpaceId(null);
+  };
+
+  const handleCreateSpace = () => {
+    const newSpaceId = onCreateSpace();
+    setDraftName("New Space");
+    setEditingSpaceId(newSpaceId);
+  };
+
+  const pinnedTabs = selectedSpace.tabs.filter((tab) => tab.pinned);
+  const regularTabs = selectedSpace.tabs.filter((tab) => !tab.pinned);
+
+  const renderTab = (tab: BrowserTab) => {
+    const isActive = tab.id === selectedSpace.activeTabId;
+    const canDrag = Boolean(tab.url && !tab.isStartPage);
+    const canClose = selectedSpace.tabs.length > 1;
+    const rowClassName = [
+      "tab-row",
+      isActive ? "is-selected" : "",
+      draggedTabId === tab.id ? "is-dragging" : "",
+      canDrag ? "" : "is-static"
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return (
+      <div
+        key={tab.id}
+        className={rowClassName}
+        draggable={canDrag}
+        onDragStart={(event) => onTabDragStart(event, tab)}
+        onDragEnd={onTabDragEnd}
+        onDragOver={(event) => {
+          if (!draggedTabId || draggedTabId === tab.id) {
+            return;
+          }
+
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(event) => {
+          if (!draggedTabId || draggedTabId === tab.id) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          onReorderTabs(selectedSpace.id, draggedTabId, tab.id);
+        }}
+      >
+        <button
+          className="tab-item"
+          type="button"
+          title={tab.title}
+          aria-current={isActive ? "page" : undefined}
+          onClick={() => onSelectTab(selectedSpace.id, tab.id)}
+        >
+          <TabFavicon tab={tab} />
+          <span className="tab-copy">
+            <span>{tab.title}</span>
+            <small>{getTabSubtitle(tab)}</small>
+          </span>
+        </button>
+        <span className="tab-actions">
+          {!tab.isStartPage ? (
+            <button
+              className="tab-action-btn"
+              type="button"
+              aria-label={tab.pinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
+              title={tab.pinned ? "Unpin" : "Pin"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onTogglePinTab(selectedSpace.id, tab.id);
+              }}
+            >
+              <Icon name={tab.pinned ? "pinOff" : "pin"} size={14} />
+            </button>
+          ) : null}
+          {canClose ? (
+            <button
+              className="tab-action-btn tab-close"
+              type="button"
+              aria-label={`Close ${tab.title}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onCloseTab(selectedSpace.id, tab.id);
+              }}
+            >
+              <Icon name="close" size={14} />
+            </button>
+          ) : null}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <aside className="sidebar">
@@ -130,118 +226,81 @@ function Sidebar({
         <section className="sidebar-section spaces-section">
           <div className="section-header">
             <span>Spaces</span>
-            <button className="small-round-button" type="button" aria-label="New tab" onClick={onNewTab}>
-              <Icon name="plus" size={17} />
+            <button
+              className="small-round-button"
+              type="button"
+              aria-label="Create space"
+              title="New space"
+              onClick={handleCreateSpace}
+            >
+              <Icon name="plus" size={16} />
             </button>
           </div>
 
           <div className="space-list">
-            {spaces.map((space) => (
-              <button
-                key={space.id}
-                className={space.id === selectedSpaceId ? "space-item is-selected" : "space-item"}
-                type="button"
-                onClick={() => onSelectSpace(space.id)}
-              >
-                <span className={`space-icon ${space.id}`}>
-                  <Icon name={spaceIcons[space.id]} size={17} />
-                </span>
-                <span className="space-name">{space.name}</span>
-                {space.id === selectedSpaceId ? <span className="selected-dot" /> : null}
-                <span className="space-count">{space.tabs.length}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="sidebar-section pinned-section">
-          <div className="section-header">
-            <span>Pinned</span>
-          </div>
-
-          <div className="pinned-list">
-            {pinnedItems.map((item) => (
-              <button
-                key={item.id}
-                className={item.id === activePinnedId ? "pinned-item is-selected" : "pinned-item"}
-                type="button"
-                aria-current={item.id === activePinnedId ? "page" : undefined}
-                onClick={() => onOpenPinned(item.id)}
-              >
-                <Icon name={item.icon} size={18} />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="sidebar-section tabs-section">
-          <div className="section-header">
-            <span>{selectedSpace.name} tabs</span>
-          </div>
-
-          <div className="tab-list">
-            {selectedSpace.tabs.map((tab) => {
-              const isActive = tab.id === selectedSpace.activeTabId;
-              const canDrag = Boolean(tab.url && !tab.isStartPage);
-              const rowClassName = [
-                "tab-row",
-                isActive ? "is-selected" : "",
-                draggedTabId === tab.id ? "is-dragging" : "",
-                canDrag ? "" : "is-static"
-              ]
-                .filter(Boolean)
-                .join(" ");
+            {spaces.map((space) => {
+              const isSelected = space.id === selectedSpaceId;
+              const isEditing = space.id === editingSpaceId;
 
               return (
                 <div
-                  key={tab.id}
-                  className={rowClassName}
-                  draggable={canDrag}
-                  onDragStart={(event) => onTabDragStart(event, tab)}
-                  onDragEnd={onTabDragEnd}
-                  onDragOver={(event) => {
-                    if (!draggedTabId || draggedTabId === tab.id) {
+                  key={space.id}
+                  className={isSelected ? "space-item is-selected" : "space-item"}
+                  onClick={() => !isEditing && onSelectSpace(space.id)}
+                  onDoubleClick={() => beginRename(space)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (isEditing) {
                       return;
                     }
-
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                  }}
-                  onDrop={(event) => {
-                    if (!draggedTabId || draggedTabId === tab.id) {
-                      return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectSpace(space.id);
                     }
-
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onReorderTabs(selectedSpace.id, draggedTabId, tab.id);
                   }}
                 >
-                  <button
-                    className="tab-item"
-                    type="button"
-                    title={tab.title}
-                    aria-current={isActive ? "page" : undefined}
-                    onClick={() => onSelectTab(selectedSpace.id, tab.id)}
+                  <span
+                    className="space-icon"
+                    style={{ "--tile-hue": space.accent } as CSSProperties}
                   >
-                    <TabFavicon tab={tab} />
-                    <span className="tab-copy">
-                      <span>{tab.title}</span>
-                      <small>{getTabSubtitle(tab)}</small>
-                    </span>
-                  </button>
-                  {selectedSpace.tabs.length > 1 ? (
+                    <Icon name={space.icon} size={16} />
+                  </span>
+                  {isEditing ? (
+                    <input
+                      ref={renameInputRef}
+                      className="space-rename"
+                      value={draftName}
+                      spellCheck={false}
+                      onChange={(event) => setDraftName(event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      onBlur={commitRename}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          commitRename();
+                        } else if (event.key === "Escape") {
+                          event.preventDefault();
+                          setEditingSpaceId(null);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="space-name">{space.name}</span>
+                  )}
+                  <span className="space-count">{space.tabs.length}</span>
+                  {spaces.length > 1 ? (
                     <button
-                      className="tab-close"
+                      className="space-delete"
                       type="button"
-                      aria-label={`Close ${tab.title}`}
+                      aria-label={`Delete ${space.name}`}
+                      title="Delete space"
                       onClick={(event) => {
                         event.stopPropagation();
-                        onCloseTab(selectedSpace.id, tab.id);
+                        onDeleteSpace(space.id);
                       }}
                     >
-                      ×
+                      <Icon name="close" size={13} />
                     </button>
                   ) : null}
                 </div>
@@ -249,18 +308,36 @@ function Sidebar({
             })}
           </div>
         </section>
-      </div>
 
-      <button className="morning-card" type="button" aria-label="Daily focus">
-        <span className="morning-icon">
-          <Icon name="sun" size={22} />
-        </span>
-        <span className="morning-copy">
-          <span>Good morning, Alex</span>
-          <small>Have a focused day.</small>
-        </span>
-        <Icon className="morning-chevron" name="chevronRight" size={16} />
-      </button>
+        <section className="sidebar-section tabs-section">
+          <div className="section-header">
+            <span>Tabs</span>
+            <button
+              className="small-round-button"
+              type="button"
+              aria-label="New tab"
+              title="New tab"
+              onClick={onNewTab}
+            >
+              <Icon name="plus" size={16} />
+            </button>
+          </div>
+
+          {pinnedTabs.length > 0 ? (
+            <>
+              <div className="tab-group-label">
+                <Icon name="pin" size={11} />
+                <span>Pinned</span>
+              </div>
+              <div className="tab-list">{pinnedTabs.map(renderTab)}</div>
+            </>
+          ) : null}
+
+          {regularTabs.length > 0 ? (
+            <div className="tab-list">{regularTabs.map(renderTab)}</div>
+          ) : null}
+        </section>
+      </div>
     </aside>
   );
 }

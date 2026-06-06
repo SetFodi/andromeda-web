@@ -1,31 +1,162 @@
 :root {
-  color: #102333;
-  background: transparent;
-  font-family:
-    ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    "SF Pro Text",
-    "Segoe UI",
-    sans-serif;
-  font-synthesis: none;
-  text-rendering: geometricPrecision;
-  -webkit-font-smoothing: antialiased;
-  --cream-50: #fffaf5;
-  --cream-100: #fbf7f1;
-  --cream-150: #f8f1e9;
-  --cream-200: #efe7dc;
-  --cream-300: #ded2c4;
-  --ink: #102333;
-  --ink-soft: #4f6070;
-  --muted: #7f8992;
-  --coral: #ff826b;
-  --coral-soft: #ffe9e0;
-  --peach: #f7e8dd;
-  --blue: #3f73ee;
-  --green: #43a66a;
-  --sidebar-width: 278px;
-  --shadow: 0 30px 78px rgba(16, 35, 51, 0.16), 0 9px 28px rgba(16, 35, 51, 0.1);
+  /* ---- Type ---------------------------------------------------------- */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-serif: ui-serif, "New York", "Iowan Old Style", "Hoefler Text", Georgia, serif;
+  --font-rounded: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+
+  /* ---- Radii --------------------------------------------------------- */
+  --r-xs: 7px;
+  --r-sm: 9px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-2xl: 28px;
+  --r-full: 999px;
+
+  /* ---- Motion -------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 130ms;
+  --dur-med: 220ms;
+  --dur-slow: 460ms;
+
+  /* ---- Layout -------------------------------------------------------- */
+  --sidebar-width: 286px;
+  --toolbar-height: 56px;
+
+  /* ---- Accent (shared across themes) --------------------------------- */
+  --accent: #ff7a5c;
+  --accent-strong: #f15c3a;
+  --accent-bright: #ff9277;
+
+  /* Per-space hues */
+  --hue-dev: #4f7df4;
+  --hue-work: #ff7a5c;
+  --hue-personal: #41a96c;
+}
+
+/* ====================================================================== */
+/* LIGHT THEME                                                            */
+/* ====================================================================== */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base: #fbf7f1;
+  --bg-shell:
+    radial-gradient(120% 80% at 78% -8%, rgba(255, 122, 92, 0.13), transparent 46%),
+    radial-gradient(90% 70% at 8% 6%, rgba(255, 255, 255, 0.7), transparent 50%),
+    radial-gradient(120% 120% at 50% 120%, rgba(255, 178, 120, 0.08), transparent 55%),
+    linear-gradient(155deg, #fdfaf5 0%, #faf5ed 48%, #f6efe4 100%);
+
+  --surface-glass: rgba(255, 252, 247, 0.66);
+  --surface-glass-strong: rgba(255, 252, 247, 0.82);
+  --surface-raised: rgba(255, 253, 249, 0.78);
+  --surface-solid: #fffdf9;
+  --surface-sunken: rgba(28, 42, 56, 0.035);
+
+  --hover: rgba(24, 40, 56, 0.05);
+  --hover-strong: rgba(24, 40, 56, 0.08);
+  --selected: rgba(255, 122, 92, 0.1);
+  --selected-wash: linear-gradient(90deg, rgba(255, 122, 92, 0.14), rgba(255, 250, 244, 0.32));
+
+  --text: #16273a;
+  --text-soft: #50657a;
+  --text-muted: rgba(80, 101, 122, 0.66);
+  --text-faint: rgba(80, 101, 122, 0.42);
+  --text-inverse: #fffaf4;
+
+  --border: rgba(45, 34, 25, 0.085);
+  --border-soft: rgba(45, 34, 25, 0.05);
+  --border-strong: rgba(45, 34, 25, 0.14);
+
+  --accent-soft: rgba(255, 122, 92, 0.12);
+  --accent-glow: rgba(255, 122, 92, 0.24);
+  --accent-on-surface: #e65636;
+
+  --field: rgba(255, 252, 247, 0.6);
+  --field-border: rgba(45, 34, 25, 0.09);
+
+  --texture-opacity: 0.05;
+  --texture-blend: multiply;
+  --texture-color: rgba(16, 35, 51, 0.5);
+
+  --shadow-sm: 0 1px 2px rgba(16, 35, 51, 0.05), 0 1px 1px rgba(16, 35, 51, 0.03);
+  --shadow-md: 0 6px 18px rgba(16, 35, 51, 0.07), 0 2px 6px rgba(16, 35, 51, 0.04);
+  --shadow-lg: 0 18px 44px rgba(16, 35, 51, 0.1), 0 6px 16px rgba(16, 35, 51, 0.06);
+  --shadow-xl: 0 34px 80px rgba(16, 35, 51, 0.18), 0 12px 30px rgba(16, 35, 51, 0.1);
+  --shadow-window: 0 40px 90px rgba(16, 35, 51, 0.2), 0 12px 34px rgba(16, 35, 51, 0.12);
+  --shadow-accent: 0 12px 28px rgba(255, 122, 92, 0.26);
+  --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  --scrollbar: rgba(80, 101, 122, 0.26);
+}
+
+/* ====================================================================== */
+/* DARK THEME                                                             */
+/* ====================================================================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-base: #18161c;
+  --bg-shell:
+    radial-gradient(120% 80% at 80% -10%, rgba(255, 122, 92, 0.16), transparent 44%),
+    radial-gradient(90% 70% at 4% 2%, rgba(120, 150, 220, 0.08), transparent 48%),
+    radial-gradient(130% 120% at 50% 120%, rgba(255, 140, 90, 0.06), transparent 52%),
+    linear-gradient(160deg, #1d1a22 0%, #18161c 52%, #131218 100%);
+
+  --surface-glass: rgba(40, 38, 46, 0.58);
+  --surface-glass-strong: rgba(44, 42, 50, 0.78);
+  --surface-raised: rgba(48, 45, 54, 0.7);
+  --surface-solid: #232029;
+  --surface-sunken: rgba(0, 0, 0, 0.22);
+
+  --hover: rgba(255, 248, 240, 0.06);
+  --hover-strong: rgba(255, 248, 240, 0.1);
+  --selected: rgba(255, 122, 92, 0.18);
+  --selected-wash: linear-gradient(90deg, rgba(255, 122, 92, 0.22), rgba(255, 122, 92, 0.04));
+
+  --text: #f3ece2;
+  --text-soft: #b8aea2;
+  --text-muted: rgba(184, 174, 162, 0.66);
+  --text-faint: rgba(184, 174, 162, 0.4);
+  --text-inverse: #1a1620;
+
+  --border: rgba(255, 248, 240, 0.09);
+  --border-soft: rgba(255, 248, 240, 0.055);
+  --border-strong: rgba(255, 248, 240, 0.16);
+
+  --accent-soft: rgba(255, 122, 92, 0.18);
+  --accent-glow: rgba(255, 122, 92, 0.34);
+  --accent-on-surface: #ff9277;
+
+  --field: rgba(255, 248, 240, 0.05);
+  --field-border: rgba(255, 248, 240, 0.1);
+
+  --texture-opacity: 0.04;
+  --texture-blend: screen;
+  --texture-color: rgba(255, 220, 200, 0.6);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.36);
+  --shadow-xl: 0 34px 80px rgba(0, 0, 0, 0.6), 0 12px 30px rgba(0, 0, 0, 0.4);
+  --shadow-window: 0 40px 100px rgba(0, 0, 0, 0.66), 0 12px 34px rgba(0, 0, 0, 0.46);
+  --shadow-accent: 0 12px 30px rgba(255, 122, 92, 0.32);
+  --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  --scrollbar: rgba(255, 248, 240, 0.2);
+}
+
+/* ---- Legacy aliases (keep older selectors resolving) ------------------ */
+:root {
+  --cream-50: var(--surface-solid);
+  --cream-100: var(--bg-base);
+  --ink: var(--text);
+  --ink-soft: var(--text-soft);
+  --muted: var(--text-muted);
+  --coral: var(--accent);
+  --shadow: var(--shadow-window);
 }
 
 * {
@@ -41,6 +172,16 @@ body,
   overflow: hidden;
 }
 
+html {
+  color: var(--text);
+  background: transparent;
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   min-width: 1080px;
   min-height: 700px;
@@ -54,4 +195,40 @@ input {
 
 button {
   color: inherit;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* Themed scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--r-full);
+  background-clip: padding-box;
+  background-color: var(--scrollbar);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { IconName } from "../components/Icon";
 
-export type SpaceId = "dev" | "work" | "personal";
+export type SpaceId = string;
 export type BrowserPane = "main" | "split";
 
 export type BrowserTab = {
@@ -9,12 +10,14 @@ export type BrowserTab = {
   url: string | null;
   isStartPage: boolean;
   faviconUrl?: string;
+  pinned?: boolean;
 };
 
 export type BrowserSpace = {
-  id: SpaceId;
+  id: string;
   name: string;
-  count: number;
+  icon: IconName;
+  accent: string;
   tabs: BrowserTab[];
   activeTabId: string;
 };
@@ -32,34 +35,47 @@ type SplitState = {
   splitFaviconUrl?: string;
 };
 
-const STORAGE_KEY = "andromeda.browserState.v2";
+const STORAGE_KEY = "andromeda.browserState.v3";
+const MAX_TABS_PER_SPACE = 14;
 
-const DEFAULT_STATE: BrowserState = {
-  selectedSpaceId: "personal",
-  spaces: [
-    {
-      id: "dev",
-      name: "Dev",
-      count: 1,
-      activeTabId: "dev-start",
-      tabs: [{ id: "dev-start", title: "Start", url: null, isStartPage: true }]
-    },
-    {
-      id: "work",
-      name: "Work",
-      count: 1,
-      activeTabId: "work-start",
-      tabs: [{ id: "work-start", title: "Start", url: null, isStartPage: true }]
-    },
-    {
-      id: "personal",
-      name: "Personal",
-      count: 1,
-      activeTabId: "personal-start",
-      tabs: [{ id: "personal-start", title: "Start", url: null, isStartPage: true }]
-    }
-  ]
-};
+export const SPACE_PRESETS: Array<{ icon: IconName; accent: string }> = [
+  { icon: "globe", accent: "#4f7df4" },
+  { icon: "code", accent: "#7c5cff" },
+  { icon: "briefcase", accent: "#ff7a5c" },
+  { icon: "user", accent: "#41a96c" },
+  { icon: "sparkle", accent: "#e0567f" },
+  { icon: "grid", accent: "#d98a2b" }
+];
+
+const SPACE_ICON_NAMES: IconName[] = SPACE_PRESETS.map((preset) => preset.icon);
+
+function randomId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createStartTab(): BrowserTab {
+  return { id: randomId("tab"), title: "Start", url: null, isStartPage: true };
+}
+
+function createDefaultSpace(): BrowserSpace {
+  const startTab = createStartTab();
+  return {
+    id: randomId("space"),
+    name: "Home",
+    icon: "globe",
+    accent: "#4f7df4",
+    tabs: [startTab],
+    activeTabId: startTab.id
+  };
+}
+
+function createDefaultState(): BrowserState {
+  const space = createDefaultSpace();
+  return {
+    selectedSpaceId: space.id,
+    spaces: [space]
+  };
+}
 
 const DEFAULT_SPLIT_STATE: SplitState = {
   activePane: "main",
@@ -83,30 +99,7 @@ function resetSplitState(current: SplitState): SplitState {
 }
 
 function createTab(url: string | null, title: string, isStartPage = false): BrowserTab {
-  return {
-    id: `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title,
-    url,
-    isStartPage
-  };
-}
-
-function createLocalStartTab(space: BrowserSpace): BrowserTab {
-  const baseId = `${space.id}-start`;
-  let id = baseId;
-  let suffix = 1;
-
-  while (space.tabs.some((tab) => tab.id === id)) {
-    id = `${space.id}-launch-start-${suffix}`;
-    suffix += 1;
-  }
-
-  return {
-    id,
-    title: "Start",
-    url: null,
-    isStartPage: true
-  };
+  return { id: randomId("tab"), title, url, isStartPage };
 }
 
 function moveTab(tabs: BrowserTab[], sourceTabId: string, targetTabId: string): BrowserTab[] | null {
@@ -120,10 +113,6 @@ function moveTab(tabs: BrowserTab[], sourceTabId: string, targetTabId: string): 
   const [movedTab] = nextTabs.splice(sourceIndex, 1);
   nextTabs.splice(targetIndex, 0, movedTab);
   return nextTabs;
-}
-
-function isSpaceId(value: unknown): value is SpaceId {
-  return value === "dev" || value === "work" || value === "personal";
 }
 
 function getTitleFromUrl(url: string): string {
@@ -147,9 +136,8 @@ function getReusableUrlKey(url: string): string {
 function findReusableTab(tabs: BrowserTab[], url: string): BrowserTab | null {
   const targetUrlKey = getReusableUrlKey(url);
   return (
-    tabs.find((tab) => {
-      return Boolean(!tab.isStartPage && tab.url && getReusableUrlKey(tab.url) === targetUrlKey);
-    }) ?? null
+    tabs.find((tab) => Boolean(!tab.isStartPage && tab.url && getReusableUrlKey(tab.url) === targetUrlKey)) ??
+    null
   );
 }
 
@@ -157,38 +145,24 @@ function getReusableStartTab(tabs: BrowserTab[]): BrowserTab | null {
   return tabs.find((tab) => tab.isStartPage && tab.url === null) ?? null;
 }
 
-function getTabDedupeKey(tab: BrowserTab): string {
-  if (tab.isStartPage && tab.url === null) {
-    return "local-start";
+// Trims the oldest non-pinned, non-local-start tabs once a space grows past the cap.
+function capSpaceTabs(tabs: BrowserTab[]): BrowserTab[] {
+  if (tabs.length <= MAX_TABS_PER_SPACE) {
+    return tabs;
   }
 
-  if (tab.url) {
-    return `url:${getReusableUrlKey(tab.url)}`;
+  let excess = tabs.length - MAX_TABS_PER_SPACE;
+  const result: BrowserTab[] = [];
+  for (const tab of tabs) {
+    const isDroppable = !tab.pinned && !(tab.isStartPage && tab.url === null);
+    if (excess > 0 && isDroppable) {
+      excess -= 1;
+      continue;
+    }
+    result.push(tab);
   }
 
-  return `tab:${tab.id}`;
-}
-
-function dedupeTabs(tabs: BrowserTab[], preferredTabId?: string): BrowserTab[] {
-  const keyIndexes = new Map<string, number>();
-  const dedupedTabs: BrowserTab[] = [];
-
-  tabs.forEach((tab) => {
-    const key = getTabDedupeKey(tab);
-    const existingIndex = keyIndexes.get(key);
-    if (existingIndex === undefined) {
-      keyIndexes.set(key, dedupedTabs.length);
-      dedupedTabs.push(tab);
-      return;
-    }
-
-    const existingTab = dedupedTabs[existingIndex];
-    if (tab.id === preferredTabId || existingTab.id !== preferredTabId) {
-      dedupedTabs[existingIndex] = tab;
-    }
-  });
-
-  return dedupedTabs;
+  return result;
 }
 
 function isSafeFaviconUrl(value: unknown): value is string {
@@ -204,67 +178,87 @@ function isSafeFaviconUrl(value: unknown): value is string {
   }
 }
 
+function sanitizeTab(value: unknown): BrowserTab | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const tab = value as Partial<BrowserTab>;
+  if (
+    typeof tab.id !== "string" ||
+    typeof tab.title !== "string" ||
+    (typeof tab.url !== "string" && tab.url !== null) ||
+    typeof tab.isStartPage !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    id: tab.id,
+    title: tab.title,
+    url: tab.url ?? null,
+    isStartPage: tab.isStartPage,
+    faviconUrl: isSafeFaviconUrl(tab.faviconUrl) ? tab.faviconUrl : undefined,
+    pinned: tab.pinned === true ? true : undefined
+  };
+}
+
+function sanitizeSpace(value: unknown): BrowserSpace | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const space = value as Partial<BrowserSpace>;
+  if (typeof space.id !== "string" || typeof space.name !== "string" || !Array.isArray(space.tabs)) {
+    return null;
+  }
+
+  const tabs = space.tabs
+    .map(sanitizeTab)
+    .filter((tab): tab is BrowserTab => tab !== null);
+
+  const cappedTabs = capSpaceTabs(tabs.length > 0 ? tabs : [createStartTab()]);
+  const icon = SPACE_ICON_NAMES.includes(space.icon as IconName) ? (space.icon as IconName) : "globe";
+  const accent =
+    typeof space.accent === "string" && /^#[0-9a-fA-F]{6}$/.test(space.accent)
+      ? space.accent
+      : "#4f7df4";
+  const activeTabId =
+    typeof space.activeTabId === "string" && cappedTabs.some((tab) => tab.id === space.activeTabId)
+      ? space.activeTabId
+      : cappedTabs[0].id;
+
+  return {
+    id: space.id,
+    name: space.name.trim() || "Space",
+    icon,
+    accent,
+    tabs: cappedTabs,
+    activeTabId
+  };
+}
+
 function sanitizeState(value: unknown): BrowserState {
   if (!value || typeof value !== "object") {
-    return DEFAULT_STATE;
+    return createDefaultState();
   }
 
   const candidate = value as Partial<BrowserState>;
-  const selectedSpaceId = isSpaceId(candidate.selectedSpaceId)
-    ? candidate.selectedSpaceId
-    : DEFAULT_STATE.selectedSpaceId;
+  const spaces = Array.isArray(candidate.spaces)
+    ? candidate.spaces.map(sanitizeSpace).filter((space): space is BrowserSpace => space !== null)
+    : [];
 
-  const spaces = DEFAULT_STATE.spaces.map((defaultSpace) => {
-    const persisted = Array.isArray(candidate.spaces)
-      ? candidate.spaces.find((space) => space?.id === defaultSpace.id)
-      : null;
+  if (spaces.length === 0) {
+    return createDefaultState();
+  }
 
-    if (!persisted || !Array.isArray(persisted.tabs)) {
-      return defaultSpace;
-    }
+  const selectedSpaceId =
+    typeof candidate.selectedSpaceId === "string" &&
+    spaces.some((space) => space.id === candidate.selectedSpaceId)
+      ? candidate.selectedSpaceId
+      : spaces[0].id;
 
-    const safeTabs = persisted.tabs
-      .filter((tab): tab is BrowserTab => {
-        return Boolean(
-          tab &&
-            typeof tab.id === "string" &&
-            typeof tab.title === "string" &&
-            (typeof tab.url === "string" || tab.url === null) &&
-            typeof tab.isStartPage === "boolean" &&
-            (tab.faviconUrl === undefined || isSafeFaviconUrl(tab.faviconUrl))
-        );
-      })
-      .map((tab) => ({
-        ...tab,
-        faviconUrl: isSafeFaviconUrl(tab.faviconUrl) ? tab.faviconUrl : undefined
-      }));
-    const tabs = dedupeTabs(
-      safeTabs,
-      typeof persisted.activeTabId === "string" ? persisted.activeTabId : undefined
-    ).slice(-8);
-
-    if (tabs.length === 0) {
-      return defaultSpace;
-    }
-
-    const activeTabId =
-      typeof persisted.activeTabId === "string" &&
-      tabs.some((tab) => tab.id === persisted.activeTabId)
-        ? persisted.activeTabId
-        : tabs[0].id;
-
-    return {
-      ...defaultSpace,
-      count: tabs.length,
-      tabs,
-      activeTabId
-    };
-  });
-
-  return {
-    selectedSpaceId,
-    spaces
-  };
+  return { selectedSpaceId, spaces };
 }
 
 function selectLaunchStartPage(state: BrowserState): BrowserState {
@@ -281,18 +275,14 @@ function selectLaunchStartPage(state: BrowserState): BrowserState {
       }
 
       didChange = true;
-      return {
-        ...space,
-        activeTabId: localStartTab.id
-      };
+      return { ...space, activeTabId: localStartTab.id };
     }
 
     didChange = true;
-    const startTab = createLocalStartTab(space);
+    const startTab = createStartTab();
     return {
       ...space,
-      count: space.tabs.length + 1,
-      tabs: [startTab, ...space.tabs],
+      tabs: capSpaceTabs([startTab, ...space.tabs]),
       activeTabId: startTab.id
     };
   });
@@ -303,22 +293,16 @@ function selectLaunchStartPage(state: BrowserState): BrowserState {
 function loadStateSnapshot(): { state: BrowserState; persistedValue: string | null } {
   try {
     const rawValue = localStorage.getItem(STORAGE_KEY);
-    const state = rawValue ? sanitizeState(JSON.parse(rawValue)) : DEFAULT_STATE;
+    const state = rawValue ? sanitizeState(JSON.parse(rawValue)) : createDefaultState();
     const launchState = selectLaunchStartPage(state);
     const serializedLaunchState = JSON.stringify(launchState);
     if (rawValue !== serializedLaunchState) {
       localStorage.setItem(STORAGE_KEY, serializedLaunchState);
     }
 
-    return {
-      state: launchState,
-      persistedValue: serializedLaunchState
-    };
+    return { state: launchState, persistedValue: serializedLaunchState };
   } catch {
-    return {
-      state: DEFAULT_STATE,
-      persistedValue: null
-    };
+    return { state: createDefaultState(), persistedValue: null };
   }
 }
 
@@ -348,34 +332,109 @@ export function useBrowserStore() {
 
   const activeTab = useMemo(() => {
     return (
-      selectedSpace.tabs.find((tab) => tab.id === selectedSpace.activeTabId) ??
-      selectedSpace.tabs[0]
+      selectedSpace.tabs.find((tab) => tab.id === selectedSpace.activeTabId) ?? selectedSpace.tabs[0]
     );
   }, [selectedSpace]);
 
-  const selectSpace = useCallback((spaceId: SpaceId) => {
-    const nextSpace = state.spaces.find((space) => space.id === spaceId);
-    const nextActiveTab = nextSpace?.tabs.find((tab) => tab.id === nextSpace.activeTabId);
+  const selectSpace = useCallback(
+    (spaceId: SpaceId) => {
+      const nextSpace = state.spaces.find((space) => space.id === spaceId);
+      const nextActiveTab = nextSpace?.tabs.find((tab) => tab.id === nextSpace.activeTabId);
+
+      setState((current) => {
+        if (current.selectedSpaceId === spaceId) {
+          return current;
+        }
+
+        return { ...current, selectedSpaceId: spaceId };
+      });
+
+      setSplitState((current) => {
+        if (nextActiveTab?.isStartPage) {
+          return resetSplitState(current);
+        }
+
+        return current.activePane === "main" ? current : { ...current, activePane: "main" };
+      });
+    },
+    [state.spaces]
+  );
+
+  const createSpace = useCallback(() => {
+    const startTab = createStartTab();
+    const newSpaceId = randomId("space");
 
     setState((current) => {
-      if (current.selectedSpaceId === spaceId) {
-        return current;
+      const preset = SPACE_PRESETS[current.spaces.length % SPACE_PRESETS.length];
+      const usedNames = new Set(current.spaces.map((space) => space.name));
+      let name = "New Space";
+      let suffix = 2;
+      while (usedNames.has(name)) {
+        name = `New Space ${suffix}`;
+        suffix += 1;
       }
 
+      const newSpace: BrowserSpace = {
+        id: newSpaceId,
+        name,
+        icon: preset.icon,
+        accent: preset.accent,
+        tabs: [startTab],
+        activeTabId: startTab.id
+      };
+
       return {
-        ...current,
-        selectedSpaceId: spaceId
+        selectedSpaceId: newSpaceId,
+        spaces: [...current.spaces, newSpace]
       };
     });
 
-    setSplitState((current) => {
-      if (nextActiveTab?.isStartPage) {
-        return resetSplitState(current);
+    setSplitState(resetSplitState);
+    return newSpaceId;
+  }, []);
+
+  const renameSpace = useCallback((spaceId: SpaceId, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== spaceId || space.name === trimmed) {
+          return space;
+        }
+
+        didChange = true;
+        return { ...space, name: trimmed };
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
+
+  const deleteSpace = useCallback((spaceId: SpaceId) => {
+    setState((current) => {
+      if (current.spaces.length <= 1) {
+        return current;
       }
 
-      return current.activePane === "main" ? current : { ...current, activePane: "main" };
+      const removedIndex = current.spaces.findIndex((space) => space.id === spaceId);
+      if (removedIndex < 0) {
+        return current;
+      }
+
+      const spaces = current.spaces.filter((space) => space.id !== spaceId);
+      const selectedSpaceId =
+        current.selectedSpaceId === spaceId
+          ? spaces[Math.max(0, removedIndex - 1)].id
+          : current.selectedSpaceId;
+
+      return { selectedSpaceId, spaces };
     });
-  }, [state.spaces]);
+    setSplitState(resetSplitState);
+  }, []);
 
   const openMainUrl = useCallback((url: string) => {
     setState((current) => {
@@ -392,29 +451,18 @@ export function useBrowserStore() {
           }
 
           didChange = true;
-          return {
-            ...space,
-            activeTabId: reusableTab.id
-          };
+          return { ...space, activeTabId: reusableTab.id };
         }
 
         didChange = true;
         const tab = createTab(url, getTitleFromUrl(url));
-        const tabs = [...space.tabs.slice(-7), tab];
-
-        return {
-          ...space,
-          count: tabs.length,
-          tabs,
-          activeTabId: tab.id
-        };
+        const tabs = capSpaceTabs([...space.tabs, tab]);
+        return { ...space, tabs, activeTabId: tab.id };
       });
 
       return didChange ? { ...current, spaces } : current;
     });
-    setSplitState((current) => {
-      return current.activePane === "main" ? current : { ...current, activePane: "main" };
-    });
+    setSplitState((current) => (current.activePane === "main" ? current : { ...current, activePane: "main" }));
   }, []);
 
   const openSplitUrl = useCallback((url: string) => {
@@ -444,93 +492,111 @@ export function useBrowserStore() {
     [openMainUrl, openSplitUrl, splitState.activePane, splitState.isSplitOpen]
   );
 
-  const selectTab = useCallback((spaceId: SpaceId, tabId: string) => {
-    const targetSpace = state.spaces.find((space) => space.id === spaceId);
-    const targetTab = targetSpace?.tabs.find((tab) => tab.id === tabId);
-    if (!targetSpace || !targetTab) {
-      return;
-    }
-
-    setState((current) => {
-      const currentTargetSpace = current.spaces.find((space) => space.id === spaceId);
-      if (current.selectedSpaceId === spaceId && currentTargetSpace?.activeTabId === tabId) {
-        return current;
+  const selectTab = useCallback(
+    (spaceId: SpaceId, tabId: string) => {
+      const targetSpace = state.spaces.find((space) => space.id === spaceId);
+      const targetTab = targetSpace?.tabs.find((tab) => tab.id === tabId);
+      if (!targetSpace || !targetTab) {
+        return;
       }
 
-      return {
-        ...current,
-        selectedSpaceId: spaceId,
-        spaces: current.spaces.map((space) => {
-          if (space.id !== spaceId) {
+      setState((current) => {
+        const currentTargetSpace = current.spaces.find((space) => space.id === spaceId);
+        if (current.selectedSpaceId === spaceId && currentTargetSpace?.activeTabId === tabId) {
+          return current;
+        }
+
+        return {
+          ...current,
+          selectedSpaceId: spaceId,
+          spaces: current.spaces.map((space) =>
+            space.id === spaceId ? { ...space, activeTabId: tabId } : space
+          )
+        };
+      });
+
+      setSplitState((current) => {
+        if (targetTab.isStartPage) {
+          return resetSplitState(current);
+        }
+
+        return current.activePane === "main" ? current : { ...current, activePane: "main" };
+      });
+    },
+    [state.spaces]
+  );
+
+  const closeTab = useCallback(
+    (spaceId: SpaceId, tabId: string) => {
+      const targetSpace = state.spaces.find((space) => space.id === spaceId);
+      if (!targetSpace?.tabs.some((tab) => tab.id === tabId)) {
+        return;
+      }
+
+      const closingIndex = targetSpace.tabs.findIndex((tab) => tab.id === tabId);
+      const remainingTabs = targetSpace.tabs.filter((tab) => tab.id !== tabId);
+      const fallbackTabs = remainingTabs.length > 0 ? remainingTabs : [createStartTab()];
+      const fallbackIndex = Math.max(0, Math.min(closingIndex, fallbackTabs.length - 1));
+      const fallbackActiveTab =
+        targetSpace.activeTabId === tabId
+          ? fallbackTabs[fallbackIndex]
+          : fallbackTabs.find((tab) => tab.id === targetSpace.activeTabId) ?? fallbackTabs[0];
+
+      setState((current) => {
+        let didChange = false;
+        const spaces = current.spaces.map((space) => {
+          if (space.id !== spaceId || !space.tabs.some((tab) => tab.id === tabId)) {
             return space;
           }
 
-          return {
-            ...space,
-            activeTabId: tabId
-          };
-        })
-      };
-    });
+          const index = space.tabs.findIndex((tab) => tab.id === tabId);
+          const remaining = space.tabs.filter((tab) => tab.id !== tabId);
+          const tabs = remaining.length > 0 ? remaining : [createStartTab()];
+          const nextIndex = Math.max(0, Math.min(index, tabs.length - 1));
+          const activeTabId = space.activeTabId === tabId ? tabs[nextIndex].id : space.activeTabId;
+          const resolvedActive = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 
-    setSplitState((current) => {
-      if (targetTab.isStartPage) {
-        return resetSplitState(current);
-      }
+          didChange = true;
+          return { ...space, tabs, activeTabId: resolvedActive.id };
+        });
 
-      return current.activePane === "main" ? current : { ...current, activePane: "main" };
-    });
-  }, [state.spaces]);
+        return didChange ? { ...current, spaces } : current;
+      });
 
-  const closeTab = useCallback((spaceId: SpaceId, tabId: string) => {
-    const targetSpace = state.spaces.find((space) => space.id === spaceId);
-    if (!targetSpace?.tabs.some((tab) => tab.id === tabId)) {
-      return;
-    }
+      setSplitState((current) => {
+        if (spaceId === state.selectedSpaceId && fallbackActiveTab.isStartPage) {
+          return resetSplitState(current);
+        }
 
-    const closingIndex = targetSpace.tabs.findIndex((tab) => tab.id === tabId);
-    const remainingTabs = targetSpace.tabs.filter((tab) => tab.id !== tabId);
-    const fallbackTabs = remainingTabs.length > 0 ? remainingTabs : [createLocalStartTab(targetSpace)];
-    const fallbackIndex = Math.max(0, Math.min(closingIndex, fallbackTabs.length - 1));
-    const fallbackActiveTab =
-      targetSpace.activeTabId === tabId
-        ? fallbackTabs[fallbackIndex]
-        : fallbackTabs.find((tab) => tab.id === targetSpace.activeTabId) ?? fallbackTabs[0];
+        return current.activePane === "main" ? current : { ...current, activePane: "main" };
+      });
+    },
+    [state.selectedSpaceId, state.spaces]
+  );
 
+  const togglePinTab = useCallback((spaceId: SpaceId, tabId: string) => {
     setState((current) => {
       let didChange = false;
       const spaces = current.spaces.map((space) => {
-        if (space.id !== spaceId || !space.tabs.some((tab) => tab.id === tabId)) {
+        if (space.id !== spaceId) {
           return space;
         }
 
-        const closingIndex = space.tabs.findIndex((tab) => tab.id === tabId);
-        const remainingTabs = space.tabs.filter((tab) => tab.id !== tabId);
-        const tabs = remainingTabs.length > 0 ? remainingTabs : [createLocalStartTab(space)];
-        const fallbackIndex = Math.max(0, Math.min(closingIndex, tabs.length - 1));
-        const activeTabId = space.activeTabId === tabId ? tabs[fallbackIndex].id : space.activeTabId;
-        const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+        const tabs = space.tabs.map((tab) => {
+          if (tab.id !== tabId || tab.isStartPage) {
+            return tab;
+          }
 
-        didChange = true;
-        return {
-          ...space,
-          count: tabs.length,
-          tabs,
-          activeTabId: activeTab.id
-        };
+          didChange = true;
+          return { ...tab, pinned: tab.pinned ? undefined : true };
+        });
+
+        return didChange ? { ...space, tabs } : space;
       });
 
       return didChange ? { ...current, spaces } : current;
     });
-
-    setSplitState((current) => {
-      if (spaceId === state.selectedSpaceId && fallbackActiveTab.isStartPage) {
-        return resetSplitState(current);
-      }
-
-      return current.activePane === "main" ? current : { ...current, activePane: "main" };
-    });
-  }, [state.selectedSpaceId, state.spaces]);
+  }, []);
 
   const reorderTabs = useCallback((spaceId: SpaceId, sourceTabId: string, targetTabId: string) => {
     setState((current) => {
@@ -546,10 +612,7 @@ export function useBrowserStore() {
         }
 
         didChange = true;
-        return {
-          ...space,
-          tabs
-        };
+        return { ...space, tabs };
       });
 
       return didChange ? { ...current, spaces } : current;
@@ -574,20 +637,10 @@ export function useBrowserStore() {
           }
 
           didChange = true;
-          return {
-            ...tab,
-            title: getTitleFromUrl(url),
-            url,
-            isStartPage: false,
-            faviconUrl: undefined
-          };
+          return { ...tab, title: getTitleFromUrl(url), url, isStartPage: false, faviconUrl: undefined };
         });
 
-        return {
-          ...space,
-          count: tabs.length,
-          tabs
-        };
+        return { ...space, tabs };
       });
 
       return didChange ? { ...current, spaces } : current;
@@ -642,17 +695,10 @@ export function useBrowserStore() {
           }
 
           didChange = true;
-          return {
-            ...tab,
-            title: trimmedTitle
-          };
+          return { ...tab, title: trimmedTitle };
         });
 
-        return {
-          ...space,
-          count: tabs.length,
-          tabs
-        };
+        return { ...space, tabs };
       });
 
       return didChange ? { ...current, spaces } : current;
@@ -670,10 +716,7 @@ export function useBrowserStore() {
         return current;
       }
 
-      return {
-        ...current,
-        splitTitle: trimmedTitle
-      };
+      return { ...current, splitTitle: trimmedTitle };
     });
   }, []);
 
@@ -707,17 +750,10 @@ export function useBrowserStore() {
           }
 
           didChange = true;
-          return {
-            ...tab,
-            faviconUrl
-          };
+          return { ...tab, faviconUrl };
         });
 
-        return {
-          ...space,
-          count: tabs.length,
-          tabs
-        };
+        return { ...space, tabs };
       });
 
       return didChange ? { ...current, spaces } : current;
@@ -734,10 +770,7 @@ export function useBrowserStore() {
         return current;
       }
 
-      return {
-        ...current,
-        splitFaviconUrl: faviconUrl
-      };
+      return { ...current, splitFaviconUrl: faviconUrl };
     });
   }, []);
 
@@ -763,10 +796,7 @@ export function useBrowserStore() {
         return current;
       }
 
-      return {
-        ...current,
-        activePane: pane
-      };
+      return { ...current, activePane: pane };
     });
   }, []);
 
@@ -789,22 +819,13 @@ export function useBrowserStore() {
           }
 
           didChange = true;
-          return {
-            ...space,
-            activeTabId: startTab.id
-          };
+          return { ...space, activeTabId: startTab.id };
         }
 
         didChange = true;
         const tab = createTab(null, "Start", true);
-        const tabs = [...space.tabs.slice(-7), tab];
-
-        return {
-          ...space,
-          count: tabs.length,
-          tabs,
-          activeTabId: tab.id
-        };
+        const tabs = capSpaceTabs([...space.tabs, tab]);
+        return { ...space, tabs, activeTabId: tab.id };
       });
 
       return didChange ? { ...current, spaces } : current;
@@ -822,12 +843,16 @@ export function useBrowserStore() {
     splitTitle: splitState.splitTitle,
     splitFaviconUrl: splitState.splitFaviconUrl,
     selectSpace,
+    createSpace,
+    renameSpace,
+    deleteSpace,
     selectPane,
     openUrl,
     openMainUrl,
     openSplitUrl,
     selectTab,
     closeTab,
+    togglePinTab,
     reorderTabs,
     closeSplitView,
     updateActiveUrl,

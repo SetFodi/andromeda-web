@@ -56,5 +56,6 @@ interface Window {
     onNavigationStateUpdated: (callback: (payload: NavigationStatePayload) => void) => () => void;
     onPaneFocused: (callback: (payload: { pane: BrowserPane }) => void) => () => void;
     onOpenCommandBar: (callback: () => void) => () => void;
+    onShortcut: (callback: (action: string) => void) => () => void;
   };
 }

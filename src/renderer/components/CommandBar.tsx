@@ -214,6 +214,22 @@ export default function CommandBar({
             </button>
           ))}
         </div>
+
+        <footer className="command-foot">
+          <span className="command-foot-hint">
+            <kbd>↑</kbd>
+            <kbd>↓</kbd>
+            navigate
+          </span>
+          <span className="command-foot-hint">
+            <kbd>↵</kbd>
+            open
+          </span>
+          <span className="command-foot-hint">
+            <kbd>esc</kbd>
+            dismiss
+          </span>
+        </footer>
       </section>
     </div>
   );

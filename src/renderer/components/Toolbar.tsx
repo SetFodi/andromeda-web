@@ -11,6 +11,7 @@ type ToolbarProps = {
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
+  theme: "light" | "dark";
   onAddressChange: (value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -18,6 +19,7 @@ type ToolbarProps = {
   onReload: () => void;
   onNewTab: () => void;
   onOpenSplitView: () => void;
+  onToggleTheme: () => void;
   onCloseWindow: () => void;
   onMinimizeWindow: () => void;
   onToggleMaximizeWindow: () => void;
@@ -33,6 +35,7 @@ function Toolbar({
   canGoBack,
   canGoForward,
   isLoading,
+  theme,
   onAddressChange,
   onSubmit,
   onBack,
@@ -40,6 +43,7 @@ function Toolbar({
   onReload,
   onNewTab,
   onOpenSplitView,
+  onToggleTheme,
   onCloseWindow,
   onMinimizeWindow,
   onToggleMaximizeWindow
@@ -131,10 +135,7 @@ function Toolbar({
 
       <div className="toolbar-actions" aria-label="Browser actions">
         <button className="toolbar-icon" type="button" aria-label="New tab" onClick={onNewTab}>
-          <Icon name="sparkle" size={17} />
-        </button>
-        <button className="toolbar-icon" type="button" aria-label="Security">
-          <Icon name="shield" size={18} />
+          <Icon name="plus" size={18} />
         </button>
         <button
           className="toolbar-icon"
@@ -142,7 +143,19 @@ function Toolbar({
           aria-label="Open split view"
           onClick={onOpenSplitView}
         >
-          <Icon name="square" size={17} />
+          <Icon name="split" size={17} />
+        </button>
+        <button className="toolbar-icon" type="button" aria-label="Security">
+          <Icon name="shield" size={18} />
+        </button>
+        <span className="toolbar-sep" aria-hidden="true" />
+        <button
+          className="toolbar-icon theme-toggle"
+          type="button"
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          onClick={onToggleTheme}
+        >
+          <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
         </button>
         <button className="profile-badge" type="button" aria-label="Profile">
           A

@@ -196,5 +196,19 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:openCommandBar", listener);
     return () => ipcRenderer.removeListener("browser:openCommandBar", listener);
+  },
+  onShortcut: (callback: (action: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { action?: unknown }).action === "string"
+      ) {
+        callback((payload as { action: string }).action);
+      }
+    };
+
+    ipcRenderer.on("browser:shortcut", listener);
+    return () => ipcRenderer.removeListener("browser:shortcut", listener);
   }
 });
