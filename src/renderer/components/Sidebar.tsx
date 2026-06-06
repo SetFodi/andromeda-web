@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import type { DragEvent } from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
@@ -39,11 +39,68 @@ function getTabSubtitle(tab: BrowserTab): string {
     return "Local start page";
   }
 
+  return getTabHostname(tab) ?? tab.url;
+}
+
+function getTabFallbackIcon(tab: BrowserTab): IconName {
+  if (tab.isStartPage) {
+    return "docs";
+  }
+
+  const hostname = getTabHostname(tab);
+  if (hostname === "github.com" || hostname?.endsWith(".github.com")) {
+    return "github";
+  }
+
+  if (hostname === "linear.app" || hostname?.endsWith(".linear.app")) {
+    return "linear";
+  }
+
+  return "search";
+}
+
+function getTabHostname(tab: BrowserTab): string | null {
+  if (!tab.url) {
+    return null;
+  }
+
   try {
     return new URL(tab.url).hostname.replace(/^www\./, "");
   } catch {
-    return tab.url;
+    return null;
   }
+}
+
+function TabFavicon({ tab }: { tab: BrowserTab }) {
+  const [failedFaviconUrl, setFailedFaviconUrl] = useState<string | null>(null);
+  const fallbackIcon = getTabFallbackIcon(tab);
+  const shouldUseBuiltInIcon = fallbackIcon !== "search";
+  const showFavicon = Boolean(
+    tab.faviconUrl &&
+      !tab.isStartPage &&
+      !shouldUseBuiltInIcon &&
+      tab.faviconUrl !== failedFaviconUrl
+  );
+
+  useEffect(() => {
+    setFailedFaviconUrl(null);
+  }, [tab.faviconUrl]);
+
+  return (
+    <span className="tab-favicon">
+      {showFavicon ? (
+        <img
+          alt=""
+          src={tab.faviconUrl}
+          onError={() => {
+            setFailedFaviconUrl(tab.faviconUrl ?? null);
+          }}
+        />
+      ) : (
+        <Icon name={fallbackIcon} size={15} />
+      )}
+    </span>
+  );
 }
 
 function Sidebar({
@@ -168,13 +225,7 @@ function Sidebar({
                     aria-current={isActive ? "page" : undefined}
                     onClick={() => onSelectTab(selectedSpace.id, tab.id)}
                   >
-                    <span className="tab-favicon">
-                      {tab.faviconUrl && !tab.isStartPage ? (
-                        <img alt="" src={tab.faviconUrl} />
-                      ) : (
-                        <Icon name={tab.isStartPage ? "docs" : "search"} size={15} />
-                      )}
-                    </span>
+                    <TabFavicon tab={tab} />
                     <span className="tab-copy">
                       <span>{tab.title}</span>
                       <small>{getTabSubtitle(tab)}</small>

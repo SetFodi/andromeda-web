@@ -14,6 +14,13 @@ export type ContentLayout = {
   split?: ContentBounds | null;
 };
 
+type NavigationState = {
+  pane: BrowserPane;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+};
+
 type PaneState = {
   view: WebContentsView | null;
   isAttached: boolean;
@@ -65,6 +72,10 @@ export class WebContentsViewManager {
     split: this.createPaneState()
   };
   private activePane: BrowserPane = "main";
+  private lastNavigationStates: Record<BrowserPane, NavigationState | null> = {
+    main: null,
+    split: null
+  };
 
   constructor(private readonly window: BrowserWindow) {}
 
@@ -214,10 +225,24 @@ export class WebContentsViewManager {
 
     view.webContents.on("did-navigate", (_event, url) => {
       this.sendNavigationUpdate(url, pane);
+      this.sendNavigationState(pane);
     });
 
     view.webContents.on("did-navigate-in-page", (_event, url) => {
       this.sendNavigationUpdate(url, pane);
+      this.sendNavigationState(pane);
+    });
+
+    view.webContents.on("did-start-loading", () => {
+      this.sendNavigationState(pane);
+    });
+
+    view.webContents.on("did-stop-loading", () => {
+      this.sendNavigationState(pane);
+    });
+
+    view.webContents.on("did-fail-load", () => {
+      this.sendNavigationState(pane);
     });
 
     view.webContents.on("page-title-updated", (_event, title) => {
@@ -234,6 +259,7 @@ export class WebContentsViewManager {
     this.window.contentView.addChildView(view);
     paneState.isAttached = true;
     paneState.view = view;
+    this.sendNavigationState(pane);
     return view;
   }
 
@@ -275,11 +301,38 @@ export class WebContentsViewManager {
     paneState.view = null;
     paneState.isAttached = false;
     paneState.appliedBounds = null;
+    this.sendNavigationState(pane);
   }
 
   private sendNavigationUpdate(url: string, pane: BrowserPane): void {
     if (isLoadableUrl(url)) {
       this.window.webContents.send("browser:didNavigate", { pane, url });
     }
+  }
+
+  private getNavigationState(pane: BrowserPane): NavigationState {
+    const view = this.panes[pane].view;
+    return {
+      pane,
+      canGoBack: Boolean(view?.webContents.navigationHistory.canGoBack()),
+      canGoForward: Boolean(view?.webContents.navigationHistory.canGoForward()),
+      isLoading: Boolean(view?.webContents.isLoading())
+    };
+  }
+
+  private sendNavigationState(pane: BrowserPane): void {
+    const navigationState = this.getNavigationState(pane);
+    const lastState = this.lastNavigationStates[pane];
+    if (
+      lastState &&
+      lastState.canGoBack === navigationState.canGoBack &&
+      lastState.canGoForward === navigationState.canGoForward &&
+      lastState.isLoading === navigationState.isLoading
+    ) {
+      return;
+    }
+
+    this.lastNavigationStates[pane] = navigationState;
+    this.window.webContents.send("browser:navigationStateUpdated", navigationState);
   }
 }

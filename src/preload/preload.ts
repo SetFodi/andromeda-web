@@ -29,6 +29,13 @@ type FaviconPayload = {
   faviconUrl: string;
 };
 
+type NavigationStatePayload = {
+  pane: BrowserPane;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+};
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -97,6 +104,18 @@ function isFaviconPayload(payload: unknown): payload is FaviconPayload {
   );
 }
 
+function isNavigationStatePayload(payload: unknown): payload is NavigationStatePayload {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      ((payload as NavigationStatePayload).pane === "main" ||
+        (payload as NavigationStatePayload).pane === "split") &&
+      typeof (payload as NavigationStatePayload).canGoBack === "boolean" &&
+      typeof (payload as NavigationStatePayload).canGoForward === "boolean" &&
+      typeof (payload as NavigationStatePayload).isLoading === "boolean"
+  );
+}
+
 contextBridge.exposeInMainWorld("andromeda", {
   navigate: (url: string, pane?: BrowserPane) =>
     ipcRenderer.invoke("browser:navigate", { pane: sanitizePane(pane), url }),
@@ -144,6 +163,16 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:faviconUpdated", listener);
     return () => ipcRenderer.removeListener("browser:faviconUpdated", listener);
+  },
+  onNavigationStateUpdated: (callback: (payload: NavigationStatePayload) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (isNavigationStatePayload(payload)) {
+        callback(payload);
+      }
+    };
+
+    ipcRenderer.on("browser:navigationStateUpdated", listener);
+    return () => ipcRenderer.removeListener("browser:navigationStateUpdated", listener);
   },
   onPaneFocused: (callback: (payload: { pane: BrowserPane }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {

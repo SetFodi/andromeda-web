@@ -29,6 +29,13 @@ type FaviconPayload = {
   faviconUrl: string;
 };
 
+type NavigationStatePayload = {
+  pane: BrowserPane;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string, pane?: BrowserPane) => Promise<void>;
@@ -46,6 +53,7 @@ interface Window {
     onDidNavigate: (callback: (payload: NavigationPayload) => void) => () => void;
     onTitleUpdated: (callback: (payload: TitlePayload) => void) => () => void;
     onFaviconUpdated: (callback: (payload: FaviconPayload) => void) => () => void;
+    onNavigationStateUpdated: (callback: (payload: NavigationStatePayload) => void) => () => void;
     onPaneFocused: (callback: (payload: { pane: BrowserPane }) => void) => () => void;
     onOpenCommandBar: (callback: () => void) => () => void;
   };

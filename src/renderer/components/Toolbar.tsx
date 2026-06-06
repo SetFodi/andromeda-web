@@ -8,6 +8,9 @@ type ToolbarProps = {
   currentPageFaviconUrl?: string;
   currentPageIcon: IconName;
   isStartPage: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
   onAddressChange: (value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -27,6 +30,9 @@ function Toolbar({
   currentPageFaviconUrl,
   currentPageIcon,
   isStartPage,
+  canGoBack,
+  canGoForward,
+  isLoading,
   onAddressChange,
   onSubmit,
   onBack,
@@ -61,19 +67,37 @@ function Toolbar({
       </button>
 
       <div className="navigation-controls" aria-label="Navigation controls">
-        <button className="toolbar-icon" type="button" aria-label="Back" onClick={onBack}>
+        <button
+          className="toolbar-icon"
+          type="button"
+          aria-label="Back"
+          disabled={!canGoBack}
+          onClick={onBack}
+        >
           <Icon name="arrowLeft" size={18} />
         </button>
-        <button className="toolbar-icon" type="button" aria-label="Forward" onClick={onForward}>
+        <button
+          className="toolbar-icon"
+          type="button"
+          aria-label="Forward"
+          disabled={!canGoForward}
+          onClick={onForward}
+        >
           <Icon name="arrowRight" size={18} />
         </button>
-        <button className="toolbar-icon" type="button" aria-label="Reload" onClick={onReload}>
+        <button
+          className={isLoading ? "toolbar-icon is-loading" : "toolbar-icon"}
+          type="button"
+          aria-label="Reload"
+          disabled={isStartPage}
+          onClick={onReload}
+        >
           <Icon name="reload" size={16} />
         </button>
       </div>
 
       <form
-        className="address-form"
+        className={isLoading ? "address-form is-loading" : "address-form"}
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit();

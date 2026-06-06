@@ -16,6 +16,17 @@ const SPLIT_GAP = 10;
 const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
 
 type PinnedTarget = "github" | "linear" | "docs";
+type PaneNavigationState = {
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+};
+
+const DEFAULT_NAVIGATION_STATE: PaneNavigationState = {
+  canGoBack: false,
+  canGoForward: false,
+  isLoading: false
+};
 
 function getActivePinnedTarget(tab: BrowserTab): PinnedTarget | null {
   if (tab.isStartPage) {
@@ -49,12 +60,18 @@ export default function App() {
   const lastMainRequestRef = useRef<string | null>(null);
   const lastSplitRequestRef = useRef<string | null>(null);
   const lastCommandBarOpenRef = useRef(false);
+  const didCompleteLaunchResetRef = useRef(false);
   const resizeFrameRef = useRef<number | null>(null);
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
   const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
   const [draggedTab, setDraggedTab] = useState<BrowserTab | null>(null);
   const [isSplitDropTargetActive, setSplitDropTargetActive] = useState(false);
+  const [splitDropSide, setSplitDropSide] = useState<BrowserPane | null>(null);
+  const [navigationStates, setNavigationStates] = useState<Record<BrowserPane, PaneNavigationState>>({
+    main: DEFAULT_NAVIGATION_STATE,
+    split: DEFAULT_NAVIGATION_STATE
+  });
   const {
     state,
     activeTab,
@@ -95,6 +112,10 @@ export default function App() {
   const currentPageIcon = activePinnedTarget ?? "search";
   const currentPageTitle = activePane === "split" ? splitTitle : activeTab.title;
   const currentPageFaviconUrl = activePane === "split" ? splitFaviconUrl : activeTab.faviconUrl;
+  const activeNavigationState =
+    activePane === "main" && showReactStartPage
+      ? DEFAULT_NAVIGATION_STATE
+      : navigationStates[activePane];
 
   const getContentLayout = useCallback((splitOpen: boolean): ContentBounds | ContentLayout | null => {
     const content = contentRef.current;
@@ -188,6 +209,16 @@ export default function App() {
   }, [resizeContentView]);
 
   useEffect(() => {
+    if (!didCompleteLaunchResetRef.current) {
+      didCompleteLaunchResetRef.current = true;
+      if (!showReactStartPage) {
+        setAddressValue("");
+        showStartPage();
+        void window.andromeda.showStartPage();
+        return;
+      }
+    }
+
     const contentRequestKey = `${activeTab.id}:${showReactStartPage ? "start" : "url"}`;
     if (lastMainRequestRef.current === contentRequestKey) {
       return;
@@ -211,7 +242,14 @@ export default function App() {
       flushContentLayout();
       void window.andromeda.navigate(activeTab.url, "main");
     }
-  }, [activePane, activeTab.id, activeTab.url, flushContentLayout, showReactStartPage]);
+  }, [
+    activePane,
+    activeTab.id,
+    activeTab.url,
+    flushContentLayout,
+    showReactStartPage,
+    showStartPage
+  ]);
 
   useEffect(() => {
     if (!isSplitOpen || !splitUrl) {
@@ -251,6 +289,30 @@ export default function App() {
       updateActiveFavicon(faviconUrl, pane);
     });
   }, [updateActiveFavicon]);
+
+  useEffect(() => {
+    return window.andromeda.onNavigationStateUpdated((navigationState) => {
+      setNavigationStates((current) => {
+        const currentPaneState = current[navigationState.pane];
+        if (
+          currentPaneState.canGoBack === navigationState.canGoBack &&
+          currentPaneState.canGoForward === navigationState.canGoForward &&
+          currentPaneState.isLoading === navigationState.isLoading
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [navigationState.pane]: {
+            canGoBack: navigationState.canGoBack,
+            canGoForward: navigationState.canGoForward,
+            isLoading: navigationState.isLoading
+          }
+        };
+      });
+    });
+  }, []);
 
   useEffect(() => {
     return window.andromeda.onPaneFocused(({ pane }) => {
@@ -411,6 +473,7 @@ export default function App() {
       event.dataTransfer.setData("text/plain", tab.title);
       setDraggedTab(tab);
       setSplitDropTargetActive(false);
+      setSplitDropSide(null);
       void window.andromeda.setCommandBarOpen(true);
     },
     []
@@ -419,6 +482,7 @@ export default function App() {
   const handleSidebarTabDragEnd = useCallback(() => {
     setDraggedTab(null);
     setSplitDropTargetActive(false);
+    setSplitDropSide(null);
     void window.andromeda.setCommandBarOpen(isCommandBarOpen);
   }, [isCommandBarOpen]);
 
@@ -430,9 +494,13 @@ export default function App() {
 
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
+      const rect = event.currentTarget.getBoundingClientRect();
+      const nextDropSide: BrowserPane =
+        isSplitOpen && event.clientX < rect.left + rect.width / 2 ? "main" : "split";
       setSplitDropTargetActive(true);
+      setSplitDropSide((current) => (current === nextDropSide ? current : nextDropSide));
     },
-    [draggedTab]
+    [draggedTab, isSplitOpen]
   );
 
   const handleContentDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -442,6 +510,7 @@ export default function App() {
     }
 
     setSplitDropTargetActive(false);
+    setSplitDropSide(null);
   }, []);
 
   const handleContentDrop = useCallback(
@@ -452,12 +521,30 @@ export default function App() {
 
       event.preventDefault();
       const url = event.dataTransfer.getData(TAB_DRAG_DATA_TYPE) || draggedTab.url;
+      const targetPane = isSplitOpen ? splitDropSide ?? "split" : "split";
       setDraggedTab(null);
       setSplitDropTargetActive(false);
-      navigateSplitTo(url);
+      setSplitDropSide(null);
+      if (isSplitOpen && targetPane === "main") {
+        flushContentLayout(true);
+        openMainUrl(url);
+        setAddressValue(getUrlDisplayValue(url));
+        handleSelectPane("main");
+      } else {
+        navigateSplitTo(url);
+      }
       void window.andromeda.setCommandBarOpen(isCommandBarOpen);
     },
-    [draggedTab, isCommandBarOpen, navigateSplitTo]
+    [
+      draggedTab,
+      flushContentLayout,
+      handleSelectPane,
+      isCommandBarOpen,
+      isSplitOpen,
+      navigateSplitTo,
+      openMainUrl,
+      splitDropSide
+    ]
   );
 
   const handleOpenPinned = useCallback(
@@ -678,6 +765,9 @@ export default function App() {
           currentPageFaviconUrl={currentPageFaviconUrl}
           currentPageIcon={currentPageIcon}
           isStartPage={activePane === "main" && showReactStartPage}
+          canGoBack={activeNavigationState.canGoBack}
+          canGoForward={activeNavigationState.canGoForward}
+          isLoading={activeNavigationState.isLoading}
           onAddressChange={setAddressValue}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
@@ -714,9 +804,24 @@ export default function App() {
           onDrop={handleContentDrop}
         >
           {draggedTab?.url ? (
-            <div className="split-drop-layer" aria-hidden="true">
+            <div
+              className={[
+                "split-drop-layer",
+                splitDropSide === "main" ? "is-main-target" : "",
+                splitDropSide === "split" ? "is-split-target" : ""
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-hidden="true"
+            >
               <div className="split-drop-card">
-                <span>Split View</span>
+                <span>
+                  {showReactStartPage
+                    ? "Open Page"
+                    : splitDropSide === "main"
+                      ? "Left Pane"
+                      : "Right Pane"}
+                </span>
                 <small>{draggedTab.title}</small>
               </div>
             </div>

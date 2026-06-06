@@ -68,6 +68,20 @@ const DEFAULT_SPLIT_STATE: SplitState = {
   splitTitle: "Split View"
 };
 
+function resetSplitState(current: SplitState): SplitState {
+  if (
+    current.activePane === DEFAULT_SPLIT_STATE.activePane &&
+    current.isSplitOpen === DEFAULT_SPLIT_STATE.isSplitOpen &&
+    current.splitUrl === DEFAULT_SPLIT_STATE.splitUrl &&
+    current.splitTitle === DEFAULT_SPLIT_STATE.splitTitle &&
+    current.splitFaviconUrl === DEFAULT_SPLIT_STATE.splitFaviconUrl
+  ) {
+    return current;
+  }
+
+  return DEFAULT_SPLIT_STATE;
+}
+
 function createTab(url: string | null, title: string, isStartPage = false): BrowserTab {
   return {
     id: `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -120,6 +134,63 @@ function getTitleFromUrl(url: string): string {
   }
 }
 
+function getReusableUrlKey(url: string): string {
+  try {
+    const parsedUrl = new URL(url);
+    const pathname = parsedUrl.pathname.replace(/\/+$/, "") || "/";
+    return `${parsedUrl.protocol}//${parsedUrl.host}${pathname}${parsedUrl.search}`;
+  } catch {
+    return url.trim();
+  }
+}
+
+function findReusableTab(tabs: BrowserTab[], url: string): BrowserTab | null {
+  const targetUrlKey = getReusableUrlKey(url);
+  return (
+    tabs.find((tab) => {
+      return Boolean(!tab.isStartPage && tab.url && getReusableUrlKey(tab.url) === targetUrlKey);
+    }) ?? null
+  );
+}
+
+function getReusableStartTab(tabs: BrowserTab[]): BrowserTab | null {
+  return tabs.find((tab) => tab.isStartPage && tab.url === null) ?? null;
+}
+
+function getTabDedupeKey(tab: BrowserTab): string {
+  if (tab.isStartPage && tab.url === null) {
+    return "local-start";
+  }
+
+  if (tab.url) {
+    return `url:${getReusableUrlKey(tab.url)}`;
+  }
+
+  return `tab:${tab.id}`;
+}
+
+function dedupeTabs(tabs: BrowserTab[], preferredTabId?: string): BrowserTab[] {
+  const keyIndexes = new Map<string, number>();
+  const dedupedTabs: BrowserTab[] = [];
+
+  tabs.forEach((tab) => {
+    const key = getTabDedupeKey(tab);
+    const existingIndex = keyIndexes.get(key);
+    if (existingIndex === undefined) {
+      keyIndexes.set(key, dedupedTabs.length);
+      dedupedTabs.push(tab);
+      return;
+    }
+
+    const existingTab = dedupedTabs[existingIndex];
+    if (tab.id === preferredTabId || existingTab.id !== preferredTabId) {
+      dedupedTabs[existingIndex] = tab;
+    }
+  });
+
+  return dedupedTabs;
+}
+
 function isSafeFaviconUrl(value: unknown): value is string {
   if (typeof value !== "string") {
     return false;
@@ -152,7 +223,7 @@ function sanitizeState(value: unknown): BrowserState {
       return defaultSpace;
     }
 
-    const tabs = persisted.tabs
+    const safeTabs = persisted.tabs
       .filter((tab): tab is BrowserTab => {
         return Boolean(
           tab &&
@@ -166,8 +237,11 @@ function sanitizeState(value: unknown): BrowserState {
       .map((tab) => ({
         ...tab,
         faviconUrl: isSafeFaviconUrl(tab.faviconUrl) ? tab.faviconUrl : undefined
-      }))
-      .slice(-8);
+      }));
+    const tabs = dedupeTabs(
+      safeTabs,
+      typeof persisted.activeTabId === "string" ? persisted.activeTabId : undefined
+    ).slice(-8);
 
     if (tabs.length === 0) {
       return defaultSpace;
@@ -230,10 +304,15 @@ function loadStateSnapshot(): { state: BrowserState; persistedValue: string | nu
   try {
     const rawValue = localStorage.getItem(STORAGE_KEY);
     const state = rawValue ? sanitizeState(JSON.parse(rawValue)) : DEFAULT_STATE;
+    const launchState = selectLaunchStartPage(state);
+    const serializedLaunchState = JSON.stringify(launchState);
+    if (rawValue !== serializedLaunchState) {
+      localStorage.setItem(STORAGE_KEY, serializedLaunchState);
+    }
 
     return {
-      state: selectLaunchStartPage(state),
-      persistedValue: rawValue
+      state: launchState,
+      persistedValue: serializedLaunchState
     };
   } catch {
     return {
@@ -291,7 +370,7 @@ export function useBrowserStore() {
 
     setSplitState((current) => {
       if (nextActiveTab?.isStartPage) {
-        return DEFAULT_SPLIT_STATE;
+        return resetSplitState(current);
       }
 
       return current.activePane === "main" ? current : { ...current, activePane: "main" };
@@ -300,34 +379,56 @@ export function useBrowserStore() {
 
   const openMainUrl = useCallback((url: string) => {
     setState((current) => {
-      return {
-        ...current,
-        spaces: current.spaces.map((space) => {
-          if (space.id !== current.selectedSpaceId) {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== current.selectedSpaceId) {
+          return space;
+        }
+
+        const reusableTab = findReusableTab(space.tabs, url);
+        if (reusableTab) {
+          if (space.activeTabId === reusableTab.id) {
             return space;
           }
 
-          const tab = createTab(url, getTitleFromUrl(url));
-          const tabs = [...space.tabs.slice(-7), tab];
-
+          didChange = true;
           return {
             ...space,
-            count: tabs.length,
-            tabs,
-            activeTabId: tab.id
+            activeTabId: reusableTab.id
           };
-        })
-      };
+        }
+
+        didChange = true;
+        const tab = createTab(url, getTitleFromUrl(url));
+        const tabs = [...space.tabs.slice(-7), tab];
+
+        return {
+          ...space,
+          count: tabs.length,
+          tabs,
+          activeTabId: tab.id
+        };
+      });
+
+      return didChange ? { ...current, spaces } : current;
     });
-    setSplitState((current) => ({ ...current, activePane: "main" }));
+    setSplitState((current) => {
+      return current.activePane === "main" ? current : { ...current, activePane: "main" };
+    });
   }, []);
 
   const openSplitUrl = useCallback((url: string) => {
-    setSplitState({
-      activePane: "split",
-      isSplitOpen: true,
-      splitUrl: url,
-      splitTitle: getTitleFromUrl(url)
+    setSplitState((current) => {
+      if (current.isSplitOpen && current.splitUrl === url) {
+        return current.activePane === "split" ? current : { ...current, activePane: "split" };
+      }
+
+      return {
+        activePane: "split",
+        isSplitOpen: true,
+        splitUrl: url,
+        splitTitle: getTitleFromUrl(url)
+      };
     });
   }, []);
 
@@ -374,7 +475,7 @@ export function useBrowserStore() {
 
     setSplitState((current) => {
       if (targetTab.isStartPage) {
-        return DEFAULT_SPLIT_STATE;
+        return resetSplitState(current);
       }
 
       return current.activePane === "main" ? current : { ...current, activePane: "main" };
@@ -390,7 +491,7 @@ export function useBrowserStore() {
     const closingIndex = targetSpace.tabs.findIndex((tab) => tab.id === tabId);
     const remainingTabs = targetSpace.tabs.filter((tab) => tab.id !== tabId);
     const fallbackTabs = remainingTabs.length > 0 ? remainingTabs : [createLocalStartTab(targetSpace)];
-    const fallbackIndex = Math.max(0, Math.min(closingIndex - 1, fallbackTabs.length - 1));
+    const fallbackIndex = Math.max(0, Math.min(closingIndex, fallbackTabs.length - 1));
     const fallbackActiveTab =
       targetSpace.activeTabId === tabId
         ? fallbackTabs[fallbackIndex]
@@ -406,7 +507,7 @@ export function useBrowserStore() {
         const closingIndex = space.tabs.findIndex((tab) => tab.id === tabId);
         const remainingTabs = space.tabs.filter((tab) => tab.id !== tabId);
         const tabs = remainingTabs.length > 0 ? remainingTabs : [createLocalStartTab(space)];
-        const fallbackIndex = Math.max(0, Math.min(closingIndex - 1, tabs.length - 1));
+        const fallbackIndex = Math.max(0, Math.min(closingIndex, tabs.length - 1));
         const activeTabId = space.activeTabId === tabId ? tabs[fallbackIndex].id : space.activeTabId;
         const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 
@@ -424,7 +525,7 @@ export function useBrowserStore() {
 
     setSplitState((current) => {
       if (spaceId === state.selectedSpaceId && fallbackActiveTab.isStartPage) {
-        return DEFAULT_SPLIT_STATE;
+        return resetSplitState(current);
       }
 
       return current.activePane === "main" ? current : { ...current, activePane: "main" };
@@ -670,17 +771,31 @@ export function useBrowserStore() {
   }, []);
 
   const closeSplitView = useCallback(() => {
-    setSplitState(DEFAULT_SPLIT_STATE);
+    setSplitState(resetSplitState);
   }, []);
 
   const showStartPage = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      spaces: current.spaces.map((space) => {
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
         if (space.id !== current.selectedSpaceId) {
           return space;
         }
 
+        const startTab = getReusableStartTab(space.tabs);
+        if (startTab) {
+          if (space.activeTabId === startTab.id) {
+            return space;
+          }
+
+          didChange = true;
+          return {
+            ...space,
+            activeTabId: startTab.id
+          };
+        }
+
+        didChange = true;
         const tab = createTab(null, "Start", true);
         const tabs = [...space.tabs.slice(-7), tab];
 
@@ -690,9 +805,11 @@ export function useBrowserStore() {
           tabs,
           activeTabId: tab.id
         };
-      })
-    }));
-    setSplitState(DEFAULT_SPLIT_STATE);
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+    setSplitState(resetSplitState);
   }, []);
 
   return {
