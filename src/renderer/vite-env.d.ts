@@ -42,9 +42,18 @@ type FoundInPagePayload = {
   matches: number;
 };
 
+type TabNavStatePayload = {
+  tabId: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string, pane?: BrowserPane) => Promise<void>;
+    showTab: (tabId: string, url: string) => Promise<void>;
+    pruneTabs: (ids: string[]) => Promise<void>;
     goBack: (pane?: BrowserPane) => Promise<void>;
     goForward: (pane?: BrowserPane) => Promise<void>;
     reload: (pane?: BrowserPane) => Promise<void>;
@@ -71,5 +80,10 @@ interface Window {
     onOpenCommandBar: (callback: () => void) => () => void;
     onShortcut: (callback: (action: string) => void) => () => void;
     onFoundInPage: (callback: (payload: FoundInPagePayload) => void) => () => void;
+    onTabNavigated: (callback: (payload: { tabId: string; url: string }) => void) => () => void;
+    onTabTitle: (callback: (payload: { tabId: string; title: string }) => void) => () => void;
+    onTabFavicon: (callback: (payload: { tabId: string; faviconUrl: string }) => void) => () => void;
+    onTabNavState: (callback: (payload: TabNavStatePayload) => void) => () => void;
+    onOpenTab: (callback: (payload: { url: string }) => void) => () => void;
   };
 }

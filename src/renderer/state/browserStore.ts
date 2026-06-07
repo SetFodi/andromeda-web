@@ -314,6 +314,7 @@ export function useBrowserStore() {
 
   const [state, setState] = useState<BrowserState>(() => initialStateRef.current!.state);
   const [splitState, setSplitState] = useState<SplitState>(DEFAULT_SPLIT_STATE);
+  const [closedTabs, setClosedTabs] = useState<Array<{ spaceId: SpaceId; tab: BrowserTab }>>([]);
   const persistedStateRef = useRef(initialStateRef.current.persistedValue ?? "");
 
   useEffect(() => {
@@ -490,6 +491,18 @@ export function useBrowserStore() {
           return { ...space, activeTabId: reusableTab.id };
         }
 
+        // Reuse the current blank start tab instead of leaving it behind.
+        const activeTab = space.tabs.find((tab) => tab.id === space.activeTabId);
+        if (activeTab && activeTab.isStartPage && activeTab.url === null) {
+          didChange = true;
+          const tabs = space.tabs.map((tab) =>
+            tab.id === activeTab.id
+              ? { ...tab, url, title: getTitleFromUrl(url), isStartPage: false, faviconUrl: undefined }
+              : tab
+          );
+          return { ...space, tabs };
+        }
+
         didChange = true;
         const tab = createTab(url, getTitleFromUrl(url));
         const tabs = capSpaceTabs([...space.tabs, tab]);
@@ -567,6 +580,11 @@ export function useBrowserStore() {
       const targetSpace = state.spaces.find((space) => space.id === spaceId);
       if (!targetSpace?.tabs.some((tab) => tab.id === tabId)) {
         return;
+      }
+
+      const closingTab = targetSpace.tabs.find((tab) => tab.id === tabId);
+      if (closingTab && closingTab.url && !closingTab.isStartPage) {
+        setClosedTabs((stack) => [...stack.slice(-9), { spaceId, tab: closingTab }]);
       }
 
       const closingIndex = targetSpace.tabs.findIndex((tab) => tab.id === tabId);
@@ -661,6 +679,71 @@ export function useBrowserStore() {
     });
   }, []);
 
+  const moveTabToSpace = useCallback((fromSpaceId: SpaceId, tabId: string, toSpaceId: SpaceId) => {
+    if (fromSpaceId === toSpaceId) {
+      return;
+    }
+
+    setState((current) => {
+      const fromSpace = current.spaces.find((space) => space.id === fromSpaceId);
+      const movingTab = fromSpace?.tabs.find((tab) => tab.id === tabId);
+      if (!fromSpace || !movingTab || !current.spaces.some((space) => space.id === toSpaceId)) {
+        return current;
+      }
+
+      const spaces = current.spaces.map((space) => {
+        if (space.id === fromSpaceId) {
+          const closingIndex = space.tabs.findIndex((tab) => tab.id === tabId);
+          const remaining = space.tabs.filter((tab) => tab.id !== tabId);
+          const tabs = remaining.length > 0 ? remaining : [createStartTab()];
+          const fallbackIndex = Math.max(0, Math.min(closingIndex, tabs.length - 1));
+          const activeTabId =
+            space.activeTabId === tabId ? tabs[fallbackIndex].id : space.activeTabId;
+          return { ...space, tabs, activeTabId };
+        }
+
+        if (space.id === toSpaceId) {
+          const tabs = capSpaceTabs([...space.tabs, movingTab]);
+          return { ...space, tabs, activeTabId: movingTab.id };
+        }
+
+        return space;
+      });
+
+      return { ...current, spaces };
+    });
+    setSplitState((current) =>
+      current.activePane === "main" ? current : { ...current, activePane: "main" }
+    );
+  }, []);
+
+  const reopenClosedTab = useCallback(() => {
+    if (closedTabs.length === 0) {
+      return;
+    }
+
+    const entry = closedTabs[closedTabs.length - 1];
+    setClosedTabs(closedTabs.slice(0, -1));
+
+    setState((current) => {
+      const targetSpaceId = current.spaces.some((space) => space.id === entry.spaceId)
+        ? entry.spaceId
+        : current.selectedSpaceId;
+      const reopened: BrowserTab = { ...entry.tab, id: randomId("tab") };
+
+      return {
+        ...current,
+        selectedSpaceId: targetSpaceId,
+        spaces: current.spaces.map((space) =>
+          space.id === targetSpaceId
+            ? { ...space, tabs: capSpaceTabs([...space.tabs, reopened]), activeTabId: reopened.id }
+            : space
+        )
+      };
+    });
+    setSplitState(resetSplitState);
+  }, [closedTabs]);
+
   const togglePinTab = useCallback((spaceId: SpaceId, tabId: string) => {
     setState((current) => {
       let didChange = false;
@@ -682,6 +765,25 @@ export function useBrowserStore() {
       });
 
       return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
+
+  const reorderSpaces = useCallback((sourceSpaceId: SpaceId, targetSpaceId: SpaceId) => {
+    if (sourceSpaceId === targetSpaceId) {
+      return;
+    }
+
+    setState((current) => {
+      const sourceIndex = current.spaces.findIndex((space) => space.id === sourceSpaceId);
+      const targetIndex = current.spaces.findIndex((space) => space.id === targetSpaceId);
+      if (sourceIndex < 0 || targetIndex < 0) {
+        return current;
+      }
+
+      const spaces = [...current.spaces];
+      const [moved] = spaces.splice(sourceIndex, 1);
+      spaces.splice(targetIndex, 0, moved);
+      return { ...current, spaces };
     });
   }, []);
 
@@ -873,6 +975,87 @@ export function useBrowserStore() {
     [updateMainFavicon, updateSplitFavicon]
   );
 
+  const updateTabUrl = useCallback((tabId: string, url: string) => {
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (!space.tabs.some((tab) => tab.id === tabId)) {
+          return space;
+        }
+
+        const tabs = space.tabs.map((tab) => {
+          if (tab.id !== tabId || (tab.url === url && !tab.isStartPage)) {
+            return tab;
+          }
+
+          didChange = true;
+          return { ...tab, url, title: getTitleFromUrl(url), isStartPage: false, faviconUrl: undefined };
+        });
+
+        return didChange ? { ...space, tabs } : space;
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
+
+  const updateTabTitle = useCallback((tabId: string, title: string) => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      return;
+    }
+
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (!space.tabs.some((tab) => tab.id === tabId)) {
+          return space;
+        }
+
+        const tabs = space.tabs.map((tab) => {
+          if (tab.id !== tabId || tab.isStartPage || tab.title === trimmedTitle) {
+            return tab;
+          }
+
+          didChange = true;
+          return { ...tab, title: trimmedTitle };
+        });
+
+        return didChange ? { ...space, tabs } : space;
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
+
+  const updateTabFavicon = useCallback((tabId: string, faviconUrl: string) => {
+    if (!isSafeFaviconUrl(faviconUrl)) {
+      return;
+    }
+
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (!space.tabs.some((tab) => tab.id === tabId)) {
+          return space;
+        }
+
+        const tabs = space.tabs.map((tab) => {
+          if (tab.id !== tabId || tab.isStartPage || tab.faviconUrl === faviconUrl) {
+            return tab;
+          }
+
+          didChange = true;
+          return { ...tab, faviconUrl };
+        });
+
+        return didChange ? { ...space, tabs } : space;
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
+
   const selectPane = useCallback((pane: BrowserPane) => {
     setSplitState((current) => {
       if (pane === "split" && !current.isSplitOpen) {
@@ -959,13 +1142,20 @@ export function useBrowserStore() {
     closeTab,
     duplicateTab,
     closeOtherTabs,
+    moveTabToSpace,
+    reopenClosedTab,
+    canReopenTab: closedTabs.length > 0,
     togglePinTab,
     reorderTabs,
+    reorderSpaces,
     openNewTab,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
     updateActiveFavicon,
+    updateTabUrl,
+    updateTabTitle,
+    updateTabFavicon,
     showStartPage
   };
 }

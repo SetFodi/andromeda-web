@@ -13,6 +13,8 @@ type ToolbarProps = {
   isLoading: boolean;
   theme: "light" | "dark";
   isSidebarCollapsed: boolean;
+  canBookmark: boolean;
+  isBookmarked: boolean;
   onAddressChange: (value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -20,6 +22,7 @@ type ToolbarProps = {
   onReload: () => void;
   onNewTab: () => void;
   onOpenSplitView: () => void;
+  onToggleBookmark: () => void;
   onToggleTheme: () => void;
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
@@ -40,6 +43,8 @@ function Toolbar({
   isLoading,
   theme,
   isSidebarCollapsed,
+  canBookmark,
+  isBookmarked,
   onAddressChange,
   onSubmit,
   onBack,
@@ -47,6 +52,7 @@ function Toolbar({
   onReload,
   onNewTab,
   onOpenSplitView,
+  onToggleBookmark,
   onToggleTheme,
   onToggleSidebar,
   onOpenSettings,
@@ -146,6 +152,16 @@ function Toolbar({
       </form>
 
       <div className="toolbar-actions" aria-label="Browser actions">
+        <button
+          className={isBookmarked ? "toolbar-icon is-active" : "toolbar-icon"}
+          type="button"
+          aria-label={isBookmarked ? "Remove from quick links" : "Add to quick links"}
+          aria-pressed={isBookmarked}
+          disabled={!canBookmark}
+          onClick={onToggleBookmark}
+        >
+          <Icon name="star" size={17} fill={isBookmarked ? "currentColor" : "none"} />
+        </button>
         <button className="toolbar-icon" type="button" aria-label="New tab" onClick={onNewTab}>
           <Icon name="plus" size={18} />
         </button>

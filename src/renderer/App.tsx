@@ -17,6 +17,7 @@ import Toolbar from "./components/Toolbar";
 import { BrowserPane, BrowserTab, useBrowserStore, SpaceId } from "./state/browserStore";
 import { useTheme } from "./state/useTheme";
 import { useSettings } from "./state/useSettings";
+import { useQuickLinks } from "./state/useQuickLinks";
 import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
 import type { RecentSite } from "./components/StartPage";
 import type { IconName } from "./components/Icon";
@@ -91,6 +92,7 @@ function loadSplitRatio(): number {
 export default function App() {
   const { theme, toggleTheme, setTheme } = useTheme();
   const { settings, updateSettings } = useSettings();
+  const { quickLinks, removeQuickLink, toggleQuickLink, isQuickLink } = useQuickLinks();
   const contentRef = useRef<HTMLDivElement>(null);
   const splitRatioRef = useRef<number>(loadSplitRatio());
   const addressInputRef = useRef<HTMLInputElement>(null);
@@ -111,10 +113,8 @@ export default function App() {
   const [draggedTab, setDraggedTab] = useState<BrowserTab | null>(null);
   const [isSplitDropTargetActive, setSplitDropTargetActive] = useState(false);
   const [splitDropSide, setSplitDropSide] = useState<BrowserPane | null>(null);
-  const [navigationStates, setNavigationStates] = useState<Record<BrowserPane, PaneNavigationState>>({
-    main: DEFAULT_NAVIGATION_STATE,
-    split: DEFAULT_NAVIGATION_STATE
-  });
+  const [splitNav, setSplitNav] = useState<PaneNavigationState>(DEFAULT_NAVIGATION_STATE);
+  const [mainTabNav, setMainTabNav] = useState<Record<string, PaneNavigationState>>({});
   const {
     state,
     selectedSpace,
@@ -137,13 +137,19 @@ export default function App() {
     closeTab,
     duplicateTab,
     closeOtherTabs,
+    moveTabToSpace,
+    reopenClosedTab,
     togglePinTab,
     reorderTabs,
+    reorderSpaces,
     openNewTab,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
     updateActiveFavicon,
+    updateTabUrl,
+    updateTabTitle,
+    updateTabFavicon,
     showStartPage
   } = useBrowserStore();
 
@@ -187,10 +193,18 @@ export default function App() {
   }, [activePane, activeTab.isStartPage, activeTab.url, splitUrl]);
   const currentPageTitle = activePane === "split" ? splitTitle : activeTab.title;
   const currentPageFaviconUrl = activePane === "split" ? splitFaviconUrl : activeTab.faviconUrl;
+  const bookmarkUrl = activePane === "split" ? splitUrl : activeTab.isStartPage ? null : activeTab.url;
+  const isBookmarked = isQuickLink(bookmarkUrl);
   const activeNavigationState =
-    activePane === "main" && showReactStartPage
-      ? DEFAULT_NAVIGATION_STATE
-      : navigationStates[activePane];
+    activePane === "split"
+      ? splitNav
+      : showReactStartPage
+        ? DEFAULT_NAVIGATION_STATE
+        : mainTabNav[activeTab.id] ?? DEFAULT_NAVIGATION_STATE;
+  const loadingTabId =
+    !showReactStartPage && mainTabNav[selectedSpace.activeTabId]?.isLoading
+      ? selectedSpace.activeTabId
+      : null;
 
   const getContentLayout = useCallback(
     (splitOpen: boolean): ContentBounds | ContentLayout | null => {
@@ -325,7 +339,7 @@ export default function App() {
         setAddressValue(getUrlDisplayValue(activeTab.url));
       }
       flushContentLayout();
-      void window.andromeda.navigate(activeTab.url, "main");
+      void window.andromeda.showTab(activeTab.id, activeTab.url);
     }
   }, [
     activePane,
@@ -336,8 +350,23 @@ export default function App() {
     showStartPage
   ]);
 
+  // Destroy native views for tabs that no longer exist (closed or evicted).
+  const allTabIdsKey = useMemo(
+    () => state.spaces.flatMap((space) => space.tabs.map((tab) => tab.id)).join(","),
+    [state.spaces]
+  );
+  useEffect(() => {
+    const ids = allTabIdsKey ? allTabIdsKey.split(",") : [];
+    void window.andromeda.pruneTabs(ids);
+  }, [allTabIdsKey]);
+
   useEffect(() => {
     if (!isSplitOpen || !splitUrl) {
+      // Split closed (via the × button, switching tabs/spaces, etc.) — tear down
+      // the native split view so it doesn't linger over the content.
+      if (lastSplitRequestRef.current !== null) {
+        void window.andromeda.closeSplitView();
+      }
       lastSplitRequestRef.current = null;
       return;
     }
@@ -377,27 +406,60 @@ export default function App() {
 
   useEffect(() => {
     return window.andromeda.onNavigationStateUpdated((navigationState) => {
-      setNavigationStates((current) => {
-        const currentPaneState = current[navigationState.pane];
-        if (
-          currentPaneState.canGoBack === navigationState.canGoBack &&
-          currentPaneState.canGoForward === navigationState.canGoForward &&
-          currentPaneState.isLoading === navigationState.isLoading
-        ) {
-          return current;
-        }
-
-        return {
-          ...current,
-          [navigationState.pane]: {
-            canGoBack: navigationState.canGoBack,
-            canGoForward: navigationState.canGoForward,
-            isLoading: navigationState.isLoading
-          }
-        };
+      if (navigationState.pane !== "split") {
+        return;
+      }
+      setSplitNav({
+        canGoBack: navigationState.canGoBack,
+        canGoForward: navigationState.canGoForward,
+        isLoading: navigationState.isLoading
       });
     });
   }, []);
+
+  useEffect(() => {
+    return window.andromeda.onTabNavigated(({ tabId, url }) => {
+      updateTabUrl(tabId, url);
+      if (activePane === "main" && tabId === activeTab.id) {
+        setAddressValue(getUrlDisplayValue(url));
+      }
+    });
+  }, [activePane, activeTab.id, updateTabUrl]);
+
+  useEffect(() => {
+    return window.andromeda.onTabTitle(({ tabId, title }) => {
+      updateTabTitle(tabId, title);
+    });
+  }, [updateTabTitle]);
+
+  useEffect(() => {
+    return window.andromeda.onTabFavicon(({ tabId, faviconUrl }) => {
+      updateTabFavicon(tabId, faviconUrl);
+    });
+  }, [updateTabFavicon]);
+
+  useEffect(() => {
+    return window.andromeda.onTabNavState(({ tabId, canGoBack, canGoForward, isLoading }) => {
+      setMainTabNav((current) => {
+        const existing = current[tabId];
+        if (
+          existing &&
+          existing.canGoBack === canGoBack &&
+          existing.canGoForward === canGoForward &&
+          existing.isLoading === isLoading
+        ) {
+          return current;
+        }
+        return { ...current, [tabId]: { canGoBack, canGoForward, isLoading } };
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.andromeda.onOpenTab(({ url }) => {
+      openMainUrl(url);
+    });
+  }, [openMainUrl]);
 
   useEffect(() => {
     return window.andromeda.onPaneFocused(({ pane }) => {
@@ -566,6 +628,13 @@ export default function App() {
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
+  const handleToggleBookmark = useCallback(() => {
+    if (!bookmarkUrl) {
+      return;
+    }
+    toggleQuickLink(bookmarkUrl, currentPageTitle);
+  }, [bookmarkUrl, currentPageTitle, toggleQuickLink]);
+
   // Detach the web views during a divider drag so the host window keeps
   // receiving mousemove events even when the cursor passes over the page.
   const handleSplitResizeStart = useCallback(
@@ -732,6 +801,17 @@ export default function App() {
     [navigateSplitTo, navigateTo]
   );
 
+  const handleOpenUrlFromCommand = useCallback(
+    (url: string, target: "active" | "split") => {
+      if (target === "split") {
+        navigateSplitTo(url);
+        return;
+      }
+      navigateTo(url);
+    },
+    [navigateSplitTo, navigateTo]
+  );
+
   const commandBarItems = useMemo<CommandBarItem[]>(
     () => [
       {
@@ -881,6 +961,9 @@ export default function App() {
         case "new-space":
           createSpace();
           break;
+        case "reopen-tab":
+          reopenClosedTab();
+          break;
         case "close-tab":
           if (isSplitOpen && activePane === "split") {
             handleCloseSplitView();
@@ -965,6 +1048,7 @@ export default function App() {
       openFind,
       openSettings,
       openSplitCommandBar,
+      reopenClosedTab,
       selectTab,
       selectedSpace,
       toggleSidebar
@@ -1010,6 +1094,8 @@ export default function App() {
           isLoading={activeNavigationState.isLoading}
           theme={theme}
           isSidebarCollapsed={isSidebarCollapsed}
+          canBookmark={Boolean(bookmarkUrl)}
+          isBookmarked={isBookmarked}
           onAddressChange={setAddressValue}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
@@ -1017,6 +1103,7 @@ export default function App() {
           onReload={handleReload}
           onNewTab={handleNewTab}
           onOpenSplitView={openSplitCommandBar}
+          onToggleBookmark={handleToggleBookmark}
           onToggleTheme={toggleTheme}
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
@@ -1032,11 +1119,14 @@ export default function App() {
           onRenameSpace={renameSpace}
           onUpdateSpace={updateSpace}
           onDeleteSpace={deleteSpace}
+          onReorderSpaces={reorderSpaces}
           onSelectTab={handleSelectSidebarTab}
           onCloseTab={handleCloseSidebarTab}
           onTogglePinTab={togglePinTab}
           onDuplicateTab={duplicateTab}
           onCloseOtherTabs={closeOtherTabs}
+          onMoveTabToSpace={moveTabToSpace}
+          loadingTabId={loadingTabId}
           onReorderTabs={handleReorderSidebarTabs}
           onTabDragStart={handleSidebarTabDragStart}
           onTabDragEnd={handleSidebarTabDragEnd}
@@ -1140,8 +1230,10 @@ export default function App() {
           {showReactStartPage ? (
             <StartPage
               greetingName={settings.name}
+              quickLinks={quickLinks}
               onOpenCommand={openCommandBar}
               onOpenLink={navigateTo}
+              onRemoveQuickLink={removeQuickLink}
               onImportChrome={handleImportChrome}
               recentSites={recentSites}
             />
@@ -1151,8 +1243,10 @@ export default function App() {
           isOpen={isCommandBarOpen}
           mode={commandBarMode}
           commands={commandBarItems}
+          historyItems={recentSites}
           onClose={closeCommandBar}
           onNavigateInput={handleCommandInputNavigation}
+          onOpenUrl={handleOpenUrlFromCommand}
         />
         <SettingsPanel
           isOpen={isSettingsOpen}

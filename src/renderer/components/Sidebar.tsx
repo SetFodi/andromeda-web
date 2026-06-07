@@ -34,11 +34,14 @@ type SidebarProps = {
   onRenameSpace: (spaceId: SpaceId, name: string) => void;
   onUpdateSpace: (spaceId: SpaceId, patch: { name?: string; icon?: IconName; accent?: string }) => void;
   onDeleteSpace: (spaceId: SpaceId) => void;
+  onReorderSpaces: (sourceSpaceId: SpaceId, targetSpaceId: SpaceId) => void;
   onSelectTab: (spaceId: SpaceId, tabId: string) => void;
   onCloseTab: (spaceId: SpaceId, tabId: string) => void;
   onTogglePinTab: (spaceId: SpaceId, tabId: string) => void;
   onDuplicateTab: (spaceId: SpaceId, tabId: string) => void;
   onCloseOtherTabs: (spaceId: SpaceId, tabId: string) => void;
+  onMoveTabToSpace: (fromSpaceId: SpaceId, tabId: string, toSpaceId: SpaceId) => void;
+  loadingTabId: string | null;
   onReorderTabs: (spaceId: SpaceId, sourceTabId: string, targetTabId: string) => void;
   onTabDragStart: (event: DragEvent<HTMLElement>, tab: BrowserTab) => void;
   onTabDragEnd: () => void;
@@ -83,7 +86,7 @@ function getTabHostname(tab: BrowserTab): string | null {
   }
 }
 
-function TabFavicon({ tab }: { tab: BrowserTab }) {
+function TabFavicon({ tab, isLoading }: { tab: BrowserTab; isLoading: boolean }) {
   const [failed, setFailed] = useState(false);
   const src = tab.isStartPage ? null : getFaviconSrc(tab.url, tab.faviconUrl);
 
@@ -92,8 +95,10 @@ function TabFavicon({ tab }: { tab: BrowserTab }) {
   }, [src]);
 
   return (
-    <span className="tab-favicon">
-      {src && !failed ? (
+    <span className={isLoading ? "tab-favicon is-loading" : "tab-favicon"}>
+      {isLoading ? (
+        <span className="tab-spinner" aria-label="Loading" />
+      ) : src && !failed ? (
         <img alt="" src={src} loading="lazy" onError={() => setFailed(true)} />
       ) : (
         <Icon name={getTabFallbackIcon(tab)} size={15} />
@@ -110,11 +115,14 @@ function Sidebar({
   onRenameSpace,
   onUpdateSpace,
   onDeleteSpace,
+  onReorderSpaces,
   onSelectTab,
   onCloseTab,
   onTogglePinTab,
   onDuplicateTab,
   onCloseOtherTabs,
+  onMoveTabToSpace,
+  loadingTabId,
   onReorderTabs,
   onTabDragStart,
   onTabDragEnd,
@@ -125,7 +133,15 @@ function Sidebar({
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [tabMenu, setTabMenu] = useState<{ tab: BrowserTab; x: number; y: number } | null>(null);
+  const [dropSpaceId, setDropSpaceId] = useState<string | null>(null);
+  const [draggedSpaceId, setDraggedSpaceId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!draggedTabId) {
+      setDropSpaceId(null);
+    }
+  }, [draggedTabId]);
 
   useEffect(() => {
     if (editingSpaceId) {
@@ -232,7 +248,7 @@ function Sidebar({
           aria-current={isActive ? "page" : undefined}
           onClick={() => onSelectTab(selectedSpace.id, tab.id)}
         >
-          <TabFavicon tab={tab} />
+          <TabFavicon tab={tab} isLoading={tab.id === loadingTabId} />
           <span className="tab-copy">
             <span>{tab.title}</span>
             <small>{getTabSubtitle(tab)}</small>
@@ -305,13 +321,61 @@ function Sidebar({
                     [
                       "space-item",
                       isSelected ? "is-selected" : "",
-                      isEditing ? "is-editing" : ""
+                      isEditing ? "is-editing" : "",
+                      dropSpaceId === space.id ? "is-drop-target" : "",
+                      draggedSpaceId === space.id ? "is-dragging" : ""
                     ]
                       .filter(Boolean)
                       .join(" ")
                   }
+                  draggable={!isEditing}
                   onClick={() => !isEditing && onSelectSpace(space.id)}
                   onDoubleClick={() => beginRename(space)}
+                  onDragStart={(event) => {
+                    if (isEditing) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("application/x-andromeda-space", space.id);
+                    setDraggedSpaceId(space.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedSpaceId(null);
+                    setDropSpaceId(null);
+                  }}
+                  onDragOver={(event) => {
+                    const isSpaceDrag = draggedSpaceId && draggedSpaceId !== space.id;
+                    const isTabDrag = draggedTabId && space.id !== selectedSpaceId;
+                    if (!isSpaceDrag && !isTabDrag) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    if (dropSpaceId !== space.id) {
+                      setDropSpaceId(space.id);
+                    }
+                  }}
+                  onDragLeave={(event) => {
+                    const next = event.relatedTarget;
+                    if (next instanceof Node && event.currentTarget.contains(next)) {
+                      return;
+                    }
+                    setDropSpaceId((current) => (current === space.id ? null : current));
+                  }}
+                  onDrop={(event) => {
+                    if (draggedSpaceId && draggedSpaceId !== space.id) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onReorderSpaces(draggedSpaceId, space.id);
+                    } else if (draggedTabId && space.id !== selectedSpaceId) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onMoveTabToSpace(selectedSpaceId, draggedTabId, space.id);
+                    }
+                    setDropSpaceId(null);
+                    setDraggedSpaceId(null);
+                  }}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(event) => {

@@ -14,22 +14,29 @@ export type ContentLayout = {
   split?: ContentBounds | null;
 };
 
-type NavigationState = {
-  pane: BrowserPane;
+type NavState = {
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
 };
 
-type PaneState = {
+type MainTab = {
+  view: WebContentsView;
+  loadedUrl: string;
+  attached: boolean;
+  lastNav: NavState | null;
+};
+
+type SplitState = {
   view: WebContentsView | null;
-  isAttached: boolean;
+  attached: boolean;
   bounds: ContentBounds;
-  appliedBounds: ContentBounds | null;
+  applied: ContentBounds | null;
+  lastNav: NavState | null;
 };
 
 const DEFAULT_BOUNDS: ContentBounds = {
-  x: 270,
+  x: 286,
   y: 56,
   width: 860,
   height: 640
@@ -66,64 +73,363 @@ function getFaviconUrl(favicons: string[]): string | null {
   );
 }
 
+/**
+ * Hosts one live WebContentsView per browser tab in the "main" region, plus a
+ * single optional "split" view. Inactive tab views stay alive but detached, so
+ * switching tabs shows a kept-alive page instead of reloading it.
+ */
 export class WebContentsViewManager {
-  private panes: Record<BrowserPane, PaneState> = {
-    main: this.createPaneState(),
-    split: this.createPaneState()
+  private mainTabs = new Map<string, MainTab>();
+  private activeMainTabId: string | null = null;
+  private mainBounds: ContentBounds = { ...DEFAULT_BOUNDS };
+  private split: SplitState = {
+    view: null,
+    attached: false,
+    bounds: { ...DEFAULT_BOUNDS },
+    applied: null,
+    lastNav: null
   };
   private activePane: BrowserPane = "main";
-  private lastNavigationStates: Record<BrowserPane, NavigationState | null> = {
-    main: null,
-    split: null
-  };
+  private overlayOpen = false;
 
   constructor(private readonly window: BrowserWindow) {}
 
-  navigate(url: string, pane: BrowserPane = "main"): void {
+  // ---- Main tabs --------------------------------------------------------
+  showTab(tabId: string, url: string): void {
+    if (!isLoadableUrl(url)) {
+      return;
+    }
+
+    // Detach every other main view so only the target tab is ever visible.
+    for (const [id, entry] of this.mainTabs) {
+      if (id !== tabId && entry.attached) {
+        this.window.contentView.removeChildView(entry.view);
+        entry.attached = false;
+      }
+    }
+
+    let entry = this.mainTabs.get(tabId);
+    if (!entry) {
+      const view = this.createMainView(tabId);
+      entry = { view, loadedUrl: url, attached: false, lastNav: null };
+      this.mainTabs.set(tabId, entry);
+      void view.webContents.loadURL(url);
+    } else if (entry.loadedUrl !== url) {
+      entry.loadedUrl = url;
+      void entry.view.webContents.loadURL(url);
+    }
+
+    this.activeMainTabId = tabId;
+    this.activePane = "main";
+    this.attachMain(tabId);
+    this.emitMainNavState(tabId);
+  }
+
+  showStartPage(): void {
+    // Detach every main view (not just the tracked active one) so the React
+    // start page is never left with a stray page floating over it.
+    for (const [, entry] of this.mainTabs) {
+      if (entry.attached) {
+        this.window.contentView.removeChildView(entry.view);
+        entry.attached = false;
+      }
+    }
+    this.activeMainTabId = null;
+    this.activePane = "main";
+  }
+
+  pruneTabs(validTabIds: string[]): void {
+    const valid = new Set(validTabIds);
+    for (const [id, entry] of this.mainTabs) {
+      if (valid.has(id)) {
+        continue;
+      }
+
+      if (entry.attached) {
+        this.window.contentView.removeChildView(entry.view);
+      }
+      entry.view.webContents.close();
+      this.mainTabs.delete(id);
+      if (this.activeMainTabId === id) {
+        this.activeMainTabId = null;
+      }
+    }
+  }
+
+  private createMainView(tabId: string): WebContentsView {
+    const view = new WebContentsView({
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    });
+
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      if (isLoadableUrl(url)) {
+        this.window.webContents.send("browser:openTab", { url });
+      }
+      return { action: "deny" };
+    });
+
+    view.webContents.on("before-input-event", (_event, input) => {
+      if (input.type === "keyDown") {
+        this.activeMainTabId = tabId;
+        this.activePane = "main";
+      }
+    });
+
+    view.webContents.on("focus", () => {
+      this.activeMainTabId = tabId;
+      this.activePane = "main";
+      this.window.webContents.send("browser:paneFocused", { pane: "main" });
+    });
+
+    const handleNavigation = (url: string) => {
+      const entry = this.mainTabs.get(tabId);
+      if (entry) {
+        entry.loadedUrl = url;
+      }
+      if (isLoadableUrl(url)) {
+        this.window.webContents.send("browser:tabNavigated", { tabId, url });
+      }
+      this.emitMainNavState(tabId);
+    };
+
+    view.webContents.on("did-navigate", (_event, url) => handleNavigation(url));
+    view.webContents.on("did-navigate-in-page", (_event, url) => handleNavigation(url));
+    view.webContents.on("did-start-loading", () => this.emitMainNavState(tabId));
+    view.webContents.on("did-stop-loading", () => this.emitMainNavState(tabId));
+    view.webContents.on("did-fail-load", () => this.emitMainNavState(tabId));
+
+    view.webContents.on("page-title-updated", (_event, title) => {
+      this.window.webContents.send("browser:tabTitle", { tabId, title });
+    });
+
+    view.webContents.on("page-favicon-updated", (_event, favicons) => {
+      const faviconUrl = getFaviconUrl(favicons);
+      if (faviconUrl) {
+        this.window.webContents.send("browser:tabFavicon", { tabId, faviconUrl });
+      }
+    });
+
+    view.webContents.on("found-in-page", (_event, result) => {
+      if (this.activeMainTabId === tabId) {
+        this.window.webContents.send("browser:foundInPage", {
+          pane: "main",
+          activeMatchOrdinal: result.activeMatchOrdinal,
+          matches: result.matches
+        });
+      }
+    });
+
+    return view;
+  }
+
+  private attachMain(tabId: string): void {
+    const entry = this.mainTabs.get(tabId);
+    if (!entry || this.overlayOpen) {
+      return;
+    }
+
+    if (!entry.attached) {
+      this.window.contentView.addChildView(entry.view);
+      entry.attached = true;
+    }
+    entry.view.setBounds(this.mainBounds);
+  }
+
+  private activeMainView(): WebContentsView | null {
+    if (!this.activeMainTabId) {
+      return null;
+    }
+    return this.mainTabs.get(this.activeMainTabId)?.view ?? null;
+  }
+
+  private emitMainNavState(tabId: string): void {
+    const entry = this.mainTabs.get(tabId);
+    if (!entry || this.activeMainTabId !== tabId) {
+      return;
+    }
+
+    const navState: NavState = {
+      canGoBack: entry.view.webContents.navigationHistory.canGoBack(),
+      canGoForward: entry.view.webContents.navigationHistory.canGoForward(),
+      isLoading: entry.view.webContents.isLoading()
+    };
+
+    if (
+      entry.lastNav &&
+      entry.lastNav.canGoBack === navState.canGoBack &&
+      entry.lastNav.canGoForward === navState.canGoForward &&
+      entry.lastNav.isLoading === navState.isLoading
+    ) {
+      return;
+    }
+
+    entry.lastNav = navState;
+    this.window.webContents.send("browser:tabNavState", { tabId, ...navState });
+  }
+
+  // ---- Split pane (single view) ----------------------------------------
+  navigate(url: string, pane: BrowserPane = "split"): void {
+    if (pane !== "split") {
+      return;
+    }
+
     if (!isLoadableUrl(url)) {
       throw new Error("Unsupported navigation URL");
     }
 
-    const view = this.ensureView(pane);
-    this.activePane = pane;
-    this.applyBounds(pane);
+    const view = this.ensureSplitView();
+    this.activePane = "split";
+    this.applySplitBounds();
     if (view.webContents.getURL() === url) {
       return;
     }
-
     void view.webContents.loadURL(url);
   }
 
-  showStartPage(): void {
-    this.closePane("split");
-    this.closePane("main");
-    this.activePane = "main";
-  }
-
   closeSplitView(): void {
-    this.closePane("split");
+    if (this.split.view) {
+      if (this.split.attached) {
+        this.window.contentView.removeChildView(this.split.view);
+      }
+      this.split.view.webContents.close();
+      this.split.view = null;
+      this.split.attached = false;
+      this.split.applied = null;
+      this.split.lastNav = null;
+    }
     this.activePane = "main";
-    this.applyBounds("main");
+    this.sendSplitNavState();
   }
 
-  resize(layout: ContentLayout): void {
-    this.updatePaneBounds("main", layout.main);
+  private ensureSplitView(): WebContentsView {
+    if (this.split.view) {
+      if (!this.split.attached && !this.overlayOpen) {
+        this.window.contentView.addChildView(this.split.view);
+        this.split.attached = true;
+        this.applySplitBounds();
+      }
+      return this.split.view;
+    }
 
-    if (layout.split) {
-      this.updatePaneBounds("split", layout.split);
+    const view = new WebContentsView({
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    });
+
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      if (isLoadableUrl(url)) {
+        this.navigate(url, "split");
+      }
+      return { action: "deny" };
+    });
+
+    view.webContents.on("before-input-event", (_event, input) => {
+      if (input.type === "keyDown") {
+        this.activePane = "split";
+      }
+    });
+
+    view.webContents.on("focus", () => {
+      this.activePane = "split";
+      this.window.webContents.send("browser:paneFocused", { pane: "split" });
+    });
+
+    view.webContents.on("did-navigate", (_event, url) => {
+      this.sendSplitNavigation(url);
+      this.sendSplitNavState();
+    });
+    view.webContents.on("did-navigate-in-page", (_event, url) => {
+      this.sendSplitNavigation(url);
+      this.sendSplitNavState();
+    });
+    view.webContents.on("did-start-loading", () => this.sendSplitNavState());
+    view.webContents.on("did-stop-loading", () => this.sendSplitNavState());
+    view.webContents.on("did-fail-load", () => this.sendSplitNavState());
+    view.webContents.on("page-title-updated", (_event, title) => {
+      this.window.webContents.send("browser:titleUpdated", { pane: "split", title });
+    });
+    view.webContents.on("page-favicon-updated", (_event, favicons) => {
+      const faviconUrl = getFaviconUrl(favicons);
+      if (faviconUrl) {
+        this.window.webContents.send("browser:faviconUpdated", { pane: "split", faviconUrl });
+      }
+    });
+    view.webContents.on("found-in-page", (_event, result) => {
+      if (this.activePane === "split") {
+        this.window.webContents.send("browser:foundInPage", {
+          pane: "split",
+          activeMatchOrdinal: result.activeMatchOrdinal,
+          matches: result.matches
+        });
+      }
+    });
+
+    this.window.contentView.addChildView(view);
+    this.split.view = view;
+    this.split.attached = true;
+    this.sendSplitNavState();
+    return view;
+  }
+
+  private applySplitBounds(): void {
+    if (!this.split.view || !this.split.attached) {
+      return;
+    }
+    if (this.split.applied && hasSameBounds(this.split.applied, this.split.bounds)) {
+      return;
+    }
+    this.split.view.setBounds(this.split.bounds);
+    this.split.applied = { ...this.split.bounds };
+  }
+
+  private sendSplitNavigation(url: string): void {
+    if (isLoadableUrl(url)) {
+      this.window.webContents.send("browser:didNavigate", { pane: "split", url });
     }
   }
 
-  setActivePane(pane: BrowserPane): void {
-    if (pane === "split" && !this.panes.split.view) {
+  private sendSplitNavState(): void {
+    const view = this.split.view;
+    const navState: NavState = {
+      canGoBack: Boolean(view?.webContents.navigationHistory.canGoBack()),
+      canGoForward: Boolean(view?.webContents.navigationHistory.canGoForward()),
+      isLoading: Boolean(view?.webContents.isLoading())
+    };
+
+    if (
+      this.split.lastNav &&
+      this.split.lastNav.canGoBack === navState.canGoBack &&
+      this.split.lastNav.canGoForward === navState.canGoForward &&
+      this.split.lastNav.isLoading === navState.isLoading
+    ) {
       return;
     }
 
+    this.split.lastNav = navState;
+    this.window.webContents.send("browser:navigationStateUpdated", { pane: "split", ...navState });
+  }
+
+  // ---- Shared pane operations ------------------------------------------
+  private paneView(pane: BrowserPane): WebContentsView | null {
+    return pane === "split" ? this.split.view : this.activeMainView();
+  }
+
+  setActivePane(pane: BrowserPane): void {
+    if (pane === "split" && !this.split.view) {
+      return;
+    }
     this.activePane = pane;
   }
 
   goBack(pane: BrowserPane = this.activePane): void {
-    const view = this.panes[pane].view;
+    const view = this.paneView(pane);
     if (view?.webContents.navigationHistory.canGoBack()) {
       this.activePane = pane;
       view.webContents.navigationHistory.goBack();
@@ -131,7 +437,7 @@ export class WebContentsViewManager {
   }
 
   goForward(pane: BrowserPane = this.activePane): void {
-    const view = this.panes[pane].view;
+    const view = this.paneView(pane);
     if (view?.webContents.navigationHistory.canGoForward()) {
       this.activePane = pane;
       view.webContents.navigationHistory.goForward();
@@ -139,7 +445,7 @@ export class WebContentsViewManager {
   }
 
   reload(pane: BrowserPane = this.activePane): void {
-    const view = this.panes[pane].view;
+    const view = this.paneView(pane);
     if (view) {
       this.activePane = pane;
       view.webContents.reload();
@@ -150,18 +456,18 @@ export class WebContentsViewManager {
     if (!text) {
       return;
     }
-
-    const view = this.panes[pane].view;
-    view?.webContents.findInPage(text, { forward: options.forward, findNext: options.findNext });
+    this.paneView(pane)?.webContents.findInPage(text, {
+      forward: options.forward,
+      findNext: options.findNext
+    });
   }
 
   stopFind(pane: BrowserPane): void {
-    const view = this.panes[pane].view;
-    view?.webContents.stopFindInPage("clearSelection");
+    this.paneView(pane)?.webContents.stopFindInPage("clearSelection");
   }
 
   adjustZoom(pane: BrowserPane, direction: "in" | "out" | "reset"): void {
-    const view = this.panes[pane].view;
+    const view = this.paneView(pane);
     if (!view) {
       return;
     }
@@ -177,195 +483,43 @@ export class WebContentsViewManager {
     webContents.setZoomLevel(next);
   }
 
+  resize(layout: ContentLayout): void {
+    this.mainBounds = layout.main;
+    const activeView = this.activeMainView();
+    if (activeView && !this.overlayOpen) {
+      activeView.setBounds(this.mainBounds);
+    }
+
+    if (layout.split) {
+      this.split.bounds = layout.split;
+      this.applySplitBounds();
+    }
+  }
+
   setCommandBarOpen(isOpen: boolean): void {
-    (["main", "split"] as BrowserPane[]).forEach((pane) => {
-      const paneState = this.panes[pane];
-      if (!paneState.view) {
-        return;
+    this.overlayOpen = isOpen;
+
+    if (isOpen) {
+      for (const [, entry] of this.mainTabs) {
+        if (entry.attached) {
+          this.window.contentView.removeChildView(entry.view);
+          entry.attached = false;
+        }
       }
-
-      if (isOpen && paneState.isAttached) {
-        this.window.contentView.removeChildView(paneState.view);
-        paneState.isAttached = false;
-        return;
+      if (this.split.view && this.split.attached) {
+        this.window.contentView.removeChildView(this.split.view);
+        this.split.attached = false;
       }
-
-      if (!isOpen && !paneState.isAttached) {
-        this.window.contentView.addChildView(paneState.view);
-        paneState.isAttached = true;
-        this.applyBounds(pane);
-      }
-    });
-  }
-
-  private createPaneState(): PaneState {
-    return {
-      view: null,
-      isAttached: false,
-      bounds: { ...DEFAULT_BOUNDS },
-      appliedBounds: null
-    };
-  }
-
-  private ensureView(pane: BrowserPane): WebContentsView {
-    const paneState = this.panes[pane];
-    if (paneState.view) {
-      if (!paneState.isAttached) {
-        this.window.contentView.addChildView(paneState.view);
-        paneState.isAttached = true;
-        this.applyBounds(pane);
-      }
-
-      return paneState.view;
-    }
-
-    const view = new WebContentsView({
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true
-      }
-    });
-
-    view.webContents.setWindowOpenHandler(({ url }) => {
-      if (isLoadableUrl(url)) {
-        this.navigate(url, pane);
-      }
-
-      return { action: "deny" };
-    });
-
-    view.webContents.on("before-input-event", (_event, input) => {
-      // Track which pane the user is interacting with. App-level shortcuts are
-      // handled by the native menu, so we no longer intercept keys here.
-      if (input.type === "keyDown") {
-        this.setActivePane(pane);
-      }
-    });
-
-    view.webContents.on("found-in-page", (_event, result) => {
-      this.window.webContents.send("browser:foundInPage", {
-        pane,
-        activeMatchOrdinal: result.activeMatchOrdinal,
-        matches: result.matches
-      });
-    });
-
-    view.webContents.on("focus", () => {
-      this.activePane = pane;
-      this.window.webContents.send("browser:paneFocused", { pane });
-    });
-
-    view.webContents.on("did-navigate", (_event, url) => {
-      this.sendNavigationUpdate(url, pane);
-      this.sendNavigationState(pane);
-    });
-
-    view.webContents.on("did-navigate-in-page", (_event, url) => {
-      this.sendNavigationUpdate(url, pane);
-      this.sendNavigationState(pane);
-    });
-
-    view.webContents.on("did-start-loading", () => {
-      this.sendNavigationState(pane);
-    });
-
-    view.webContents.on("did-stop-loading", () => {
-      this.sendNavigationState(pane);
-    });
-
-    view.webContents.on("did-fail-load", () => {
-      this.sendNavigationState(pane);
-    });
-
-    view.webContents.on("page-title-updated", (_event, title) => {
-      this.window.webContents.send("browser:titleUpdated", { pane, title });
-    });
-
-    view.webContents.on("page-favicon-updated", (_event, favicons) => {
-      const faviconUrl = getFaviconUrl(favicons);
-      if (faviconUrl) {
-        this.window.webContents.send("browser:faviconUpdated", { pane, faviconUrl });
-      }
-    });
-
-    this.window.contentView.addChildView(view);
-    paneState.isAttached = true;
-    paneState.view = view;
-    this.sendNavigationState(pane);
-    return view;
-  }
-
-  private updatePaneBounds(pane: BrowserPane, bounds: ContentBounds): void {
-    const paneState = this.panes[pane];
-    if (hasSameBounds(paneState.bounds, bounds)) {
       return;
     }
 
-    paneState.bounds = bounds;
-    this.applyBounds(pane);
-  }
-
-  private applyBounds(pane: BrowserPane): void {
-    const paneState = this.panes[pane];
-    if (!paneState.view || !paneState.isAttached) {
-      return;
+    if (this.activeMainTabId) {
+      this.attachMain(this.activeMainTabId);
     }
-
-    if (paneState.appliedBounds && hasSameBounds(paneState.appliedBounds, paneState.bounds)) {
-      return;
+    if (this.split.view && !this.split.attached) {
+      this.window.contentView.addChildView(this.split.view);
+      this.split.attached = true;
+      this.applySplitBounds();
     }
-
-    paneState.view.setBounds(paneState.bounds);
-    paneState.appliedBounds = { ...paneState.bounds };
-  }
-
-  private closePane(pane: BrowserPane): void {
-    const paneState = this.panes[pane];
-    if (!paneState.view) {
-      return;
-    }
-
-    if (paneState.isAttached) {
-      this.window.contentView.removeChildView(paneState.view);
-    }
-
-    paneState.view.webContents.close();
-    paneState.view = null;
-    paneState.isAttached = false;
-    paneState.appliedBounds = null;
-    this.sendNavigationState(pane);
-  }
-
-  private sendNavigationUpdate(url: string, pane: BrowserPane): void {
-    if (isLoadableUrl(url)) {
-      this.window.webContents.send("browser:didNavigate", { pane, url });
-    }
-  }
-
-  private getNavigationState(pane: BrowserPane): NavigationState {
-    const view = this.panes[pane].view;
-    return {
-      pane,
-      canGoBack: Boolean(view?.webContents.navigationHistory.canGoBack()),
-      canGoForward: Boolean(view?.webContents.navigationHistory.canGoForward()),
-      isLoading: Boolean(view?.webContents.isLoading())
-    };
-  }
-
-  private sendNavigationState(pane: BrowserPane): void {
-    const navigationState = this.getNavigationState(pane);
-    const lastState = this.lastNavigationStates[pane];
-    if (
-      lastState &&
-      lastState.canGoBack === navigationState.canGoBack &&
-      lastState.canGoForward === navigationState.canGoForward &&
-      lastState.isLoading === navigationState.isLoading
-    ) {
-      return;
-    }
-
-    this.lastNavigationStates[pane] = navigationState;
-    this.window.webContents.send("browser:navigationStateUpdated", navigationState);
   }
 }

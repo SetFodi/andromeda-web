@@ -114,6 +114,28 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     manager.navigate(url, pane);
   });
 
+  setHandler("browser:showTab", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const candidate = (payload ?? {}) as { tabId?: unknown; url?: unknown };
+    if (typeof candidate.tabId !== "string" || !isLoadableUrl(candidate.url)) {
+      throw new Error("Invalid tab navigation");
+    }
+
+    manager.showTab(candidate.tabId, candidate.url);
+  });
+
+  setHandler("browser:pruneTabs", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const ids = (payload as { ids?: unknown } | null)?.ids;
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) {
+      throw new Error("Invalid tab id list");
+    }
+
+    manager.pruneTabs(ids as string[]);
+  });
+
   setHandler("browser:goBack", (event, payload: unknown) => {
     assertTrustedSender(event, window);
     manager.goBack(normalizePane((payload as { pane?: unknown } | null)?.pane));

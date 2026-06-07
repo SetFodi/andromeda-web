@@ -25,6 +25,7 @@ import {
   Sparkles,
   Square,
   SquareSplitHorizontal,
+  Star,
   Sun,
   UserRound,
   X
@@ -58,6 +59,7 @@ const iconMap = {
   sparkle: Sparkles,
   split: SquareSplitHorizontal,
   square: Square,
+  star: Star,
   sun: Sun,
   user: UserRound,
   close: X

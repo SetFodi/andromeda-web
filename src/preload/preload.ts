@@ -119,6 +119,8 @@ function isNavigationStatePayload(payload: unknown): payload is NavigationStateP
 contextBridge.exposeInMainWorld("andromeda", {
   navigate: (url: string, pane?: BrowserPane) =>
     ipcRenderer.invoke("browser:navigate", { pane: sanitizePane(pane), url }),
+  showTab: (tabId: string, url: string) => ipcRenderer.invoke("browser:showTab", { tabId, url }),
+  pruneTabs: (ids: string[]) => ipcRenderer.invoke("browser:pruneTabs", { ids }),
   goBack: (pane?: BrowserPane) => ipcRenderer.invoke("browser:goBack", { pane: sanitizePane(pane) }),
   goForward: (pane?: BrowserPane) =>
     ipcRenderer.invoke("browser:goForward", { pane: sanitizePane(pane) }),
@@ -211,6 +213,94 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:openCommandBar", listener);
     return () => ipcRenderer.removeListener("browser:openCommandBar", listener);
+  },
+  onTabNavigated: (callback: (payload: { tabId: string; url: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { tabId?: unknown }).tabId === "string" &&
+        typeof (payload as { url?: unknown }).url === "string"
+      ) {
+        callback(payload as { tabId: string; url: string });
+      }
+    };
+
+    ipcRenderer.on("browser:tabNavigated", listener);
+    return () => ipcRenderer.removeListener("browser:tabNavigated", listener);
+  },
+  onTabTitle: (callback: (payload: { tabId: string; title: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { tabId?: unknown }).tabId === "string" &&
+        typeof (payload as { title?: unknown }).title === "string"
+      ) {
+        callback(payload as { tabId: string; title: string });
+      }
+    };
+
+    ipcRenderer.on("browser:tabTitle", listener);
+    return () => ipcRenderer.removeListener("browser:tabTitle", listener);
+  },
+  onTabFavicon: (callback: (payload: { tabId: string; faviconUrl: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { tabId?: unknown }).tabId === "string" &&
+        typeof (payload as { faviconUrl?: unknown }).faviconUrl === "string"
+      ) {
+        callback(payload as { tabId: string; faviconUrl: string });
+      }
+    };
+
+    ipcRenderer.on("browser:tabFavicon", listener);
+    return () => ipcRenderer.removeListener("browser:tabFavicon", listener);
+  },
+  onTabNavState: (
+    callback: (payload: {
+      tabId: string;
+      canGoBack: boolean;
+      canGoForward: boolean;
+      isLoading: boolean;
+    }) => void
+  ) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { tabId?: unknown }).tabId === "string" &&
+        typeof (payload as { canGoBack?: unknown }).canGoBack === "boolean"
+      ) {
+        callback(
+          payload as {
+            tabId: string;
+            canGoBack: boolean;
+            canGoForward: boolean;
+            isLoading: boolean;
+          }
+        );
+      }
+    };
+
+    ipcRenderer.on("browser:tabNavState", listener);
+    return () => ipcRenderer.removeListener("browser:tabNavState", listener);
+  },
+  onOpenTab: (callback: (payload: { url: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { url?: unknown }).url === "string"
+      ) {
+        callback(payload as { url: string });
+      }
+    };
+
+    ipcRenderer.on("browser:openTab", listener);
+    return () => ipcRenderer.removeListener("browser:openTab", listener);
   },
   onShortcut: (callback: (action: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {

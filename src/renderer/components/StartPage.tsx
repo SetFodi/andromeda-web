@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from "react";
 import Icon, { IconName } from "./Icon";
 import { formatClock, formatLongDate, getGreeting } from "../utils/time";
 import { getFaviconSrc } from "../utils/favicon";
+import type { QuickLink } from "../state/useQuickLinks";
 
 export type RecentSite = {
   id: string;
@@ -11,31 +12,13 @@ export type RecentSite = {
 
 type StartPageProps = {
   greetingName: string;
+  quickLinks: QuickLink[];
   onOpenCommand: () => void;
   onOpenLink: (url: string) => void;
+  onRemoveQuickLink: (id: string) => void;
   onImportChrome: () => void;
   recentSites: RecentSite[];
 };
-
-type QuickLink = {
-  id: string;
-  label: string;
-  url: string;
-  hue: string;
-  icon?: IconName;
-  monogram?: string;
-};
-
-const QUICK_LINKS: QuickLink[] = [
-  { id: "github", label: "GitHub", url: "https://github.com", hue: "#2b3440", icon: "github" },
-  { id: "linear", label: "Linear", url: "https://linear.app", hue: "#5b63d6", icon: "linear" },
-  { id: "youtube", label: "YouTube", url: "https://youtube.com", hue: "#ef3f33", monogram: "Y" },
-  { id: "figma", label: "Figma", url: "https://figma.com", hue: "#a259ff", monogram: "F" },
-  { id: "notion", label: "Notion", url: "https://notion.so", hue: "#2f2c28", monogram: "N" },
-  { id: "gmail", label: "Gmail", url: "https://mail.google.com", hue: "#ea4335", monogram: "M" },
-  { id: "reddit", label: "Reddit", url: "https://reddit.com", hue: "#ff5a1f", monogram: "R" },
-  { id: "x", label: "X", url: "https://x.com", hue: "#1d1d1f", monogram: "𝕏" }
-];
 
 function getHostname(url: string): string {
   try {
@@ -75,6 +58,25 @@ function RecentFavicon({ url }: { url: string }) {
   );
 }
 
+function QuickMark({ url, label }: { url: string; label: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = getFaviconSrc(url);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  return (
+    <span className="quick-mark">
+      {src && !failed ? (
+        <img alt="" src={src} loading="lazy" onError={() => setFailed(true)} />
+      ) : (
+        <span className="quick-mark-letter">{label.charAt(0).toUpperCase()}</span>
+      )}
+    </span>
+  );
+}
+
 function useNow(): Date {
   const [now, setNow] = useState(() => new Date());
 
@@ -88,8 +90,10 @@ function useNow(): Date {
 
 function StartPage({
   greetingName,
+  quickLinks,
   onOpenCommand,
   onOpenLink,
+  onRemoveQuickLink,
   onImportChrome,
   recentSites
 }: StartPageProps) {
@@ -135,26 +139,39 @@ function StartPage({
               <Icon name="grid" size={15} />
               <span>Quick links</span>
             </div>
-            <div className="quick-grid">
-              {QUICK_LINKS.map((link) => (
-                <button
-                  key={link.id}
-                  type="button"
-                  className="quick-tile"
-                  title={getHostname(link.url)}
-                  onClick={() => onOpenLink(link.url)}
-                >
-                  <span
-                    className="quick-mark"
-                    style={{ "--tile-hue": link.hue } as React.CSSProperties}
-                  >
-                    {link.icon ? <Icon name={link.icon} size={20} /> : link.monogram}
-                  </span>
-                  <span className="quick-label">{link.label}</span>
-                  <Icon className="quick-go" name="arrowUpRight" size={15} />
-                </button>
-              ))}
-            </div>
+            {quickLinks.length > 0 ? (
+              <div className="quick-grid">
+                {quickLinks.map((link) => (
+                  <div key={link.id} className="quick-tile" title={getHostname(link.url)}>
+                    <button
+                      type="button"
+                      className="quick-open"
+                      onClick={() => onOpenLink(link.url)}
+                    >
+                      <QuickMark url={link.url} label={link.label} />
+                      <span className="quick-label">{link.label}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="quick-remove"
+                      aria-label={`Remove ${link.label}`}
+                      title="Remove"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRemoveQuickLink(link.id);
+                      }}
+                    >
+                      <Icon name="close" size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button type="button" className="quick-empty" onClick={onOpenCommand}>
+                <Icon name="plus" size={15} />
+                Add a site with the ☆ in the toolbar, or search with ⌘K
+              </button>
+            )}
           </section>
 
           {recentSites.length > 0 ? (

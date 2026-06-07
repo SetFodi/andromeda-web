@@ -44,6 +44,11 @@ export function buildAppMenu(window: BrowserWindow): void {
       label: "File",
       submenu: [
         { label: "New Tab", accelerator: "CmdOrCtrl+T", click: () => send("new-tab") },
+        {
+          label: "Reopen Closed Tab",
+          accelerator: "CmdOrCtrl+Shift+T",
+          click: () => send("reopen-tab")
+        },
         { label: "New Space", accelerator: "CmdOrCtrl+Shift+N", click: () => send("new-space") },
         { type: "separator" },
         { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => send("close-tab") },

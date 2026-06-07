@@ -11,13 +11,29 @@ export type CommandBarItem = {
   run: (query: string) => void | { keepOpen?: boolean };
 };
 
+type HistoryItem = {
+  id: string;
+  title: string;
+  url: string;
+};
+
 type CommandBarProps = {
   isOpen: boolean;
   mode: "default" | "split";
   commands: CommandBarItem[];
+  historyItems?: HistoryItem[];
   onClose: () => void;
   onNavigateInput: (input: string, target: "active" | "split") => void;
+  onOpenUrl: (url: string, target: "active" | "split") => void;
 };
+
+function getHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 type CommandResult = CommandBarItem & {
   kind: "command" | "navigation";
@@ -40,8 +56,10 @@ export default function CommandBar({
   isOpen,
   mode,
   commands,
+  historyItems = [],
   onClose,
-  onNavigateInput
+  onNavigateInput,
+  onOpenUrl
 }: CommandBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -62,11 +80,27 @@ export default function CommandBar({
       return matchedCommands.map((command) => ({ ...command, kind: "command" }));
     }
 
+    const navigationTarget: "active" | "split" = mode === "split" ? "split" : "active";
+    const historyResults: CommandResult[] = historyItems
+      .filter((item) => {
+        const haystack = normalize(`${item.title} ${item.url}`);
+        return haystack.includes(normalizedQuery);
+      })
+      .slice(0, 4)
+      .map((item) => ({
+        id: `history-${item.id}`,
+        title: item.title || getHostname(item.url),
+        subtitle: getHostname(item.url),
+        icon: "history",
+        kind: "navigation",
+        run: () => onOpenUrl(item.url, navigationTarget)
+      }));
+
     const resolvedUrl = resolveNavigationInput(query);
     const navigationResult: CommandResult = {
       id: "navigate-input",
-      title: looksLikeUrl(query) ? `Open ${query.trim()}` : `Search Google for "${query.trim()}"`,
-      subtitle: looksLikeUrl(query) ? resolvedUrl : "Google Search",
+      title: looksLikeUrl(query) ? `Open ${query.trim()}` : `Search for "${query.trim()}"`,
+      subtitle: looksLikeUrl(query) ? resolvedUrl : "Web search",
       icon: "search",
       kind: "navigation",
       run: () => onNavigateInput(query, "active")
@@ -85,16 +119,18 @@ export default function CommandBar({
     if (mode === "split") {
       return [
         splitNavigationResult,
+        ...historyResults,
         ...matchedCommands.map((command) => ({ ...command, kind: "command" as const }))
       ];
     }
 
     return [
+      ...historyResults,
       ...matchedCommands.map((command) => ({ ...command, kind: "command" as const })),
       navigationResult,
       splitNavigationResult
     ];
-  }, [commands, mode, onNavigateInput, query]);
+  }, [commands, historyItems, mode, onNavigateInput, onOpenUrl, query]);
 
   useEffect(() => {
     if (!isOpen) {
