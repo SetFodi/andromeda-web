@@ -12,10 +12,19 @@ import "./styles/app.css";
     const prefersDark =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const theme = stored === "light" || stored === "dark" ? stored : prefersDark ? "dark" : "light";
-    document.documentElement.dataset.theme = theme;
+    const appearance =
+      stored === "glow" || stored === "day" || stored === "night"
+        ? stored
+        : stored === "light"
+          ? "day"
+          : stored === "dark" || prefersDark
+            ? "night"
+            : "day";
+    document.documentElement.dataset.theme = appearance === "day" ? "light" : "dark";
+    document.documentElement.dataset.appearance = appearance;
   } catch {
     document.documentElement.dataset.theme = "light";
+    document.documentElement.dataset.appearance = "day";
   }
 })();
 

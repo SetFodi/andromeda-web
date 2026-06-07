@@ -139,6 +139,7 @@ function Sidebar({
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [tabMenu, setTabMenu] = useState<{ tab: BrowserTab; x: number; y: number } | null>(null);
+  const [spaceMenu, setSpaceMenu] = useState<{ spaceId: SpaceId; x: number; y: number } | null>(null);
   const [dropSpaceId, setDropSpaceId] = useState<string | null>(null);
   const [draggedSpaceId, setDraggedSpaceId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -158,14 +159,18 @@ function Sidebar({
   }, [editingSpaceId]);
 
   useEffect(() => {
-    if (!tabMenu) {
+    if (!tabMenu && !spaceMenu) {
       return;
     }
 
-    const close = () => setTabMenu(null);
+    const close = () => {
+      setTabMenu(null);
+      setSpaceMenu(null);
+    };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setTabMenu(null);
+        setSpaceMenu(null);
       }
     };
 
@@ -177,19 +182,33 @@ function Sidebar({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("blur", close);
     };
-  }, [tabMenu]);
+  }, [spaceMenu, tabMenu]);
 
   const openTabMenu = (event: ReactMouseEvent, tab: BrowserTab) => {
     event.preventDefault();
+    event.stopPropagation();
     const left = Math.max(8, Math.min(event.clientX, 280 - 200));
     const top = Math.min(event.clientY, window.innerHeight - 250);
+    setSpaceMenu(null);
     setTabMenu({ tab, x: left, y: Math.max(8, top) });
   };
 
   const closeTabMenu = () => setTabMenu(null);
 
+  const openSpaceMenu = (event: ReactMouseEvent, space: BrowserSpace) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const left = Math.max(8, Math.min(event.clientX, 280 - 208));
+    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - 310));
+    setTabMenu(null);
+    setSpaceMenu({ spaceId: space.id, x: left, y: top });
+  };
+
+  const closeSpaceMenu = () => setSpaceMenu(null);
+
   const beginRename = (space: BrowserSpace) => {
     setDraftName(space.name);
+    setSpaceMenu(null);
     setEditingSpaceId(space.id);
   };
 
@@ -201,6 +220,7 @@ function Sidebar({
   };
 
   const handleCreateSpace = () => {
+    setSpaceMenu(null);
     const newSpaceId = onCreateSpace();
     setDraftName("New Space");
     setEditingSpaceId(newSpaceId);
@@ -227,6 +247,21 @@ function Sidebar({
     window.setTimeout(() => {
       swipeLockRef.current = false;
     }, 420);
+  };
+
+  const handleSidebarContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    if (
+      target.closest(".tab-row, .space-dock-item, .space-dock-add, .space-editor, .tab-context")
+    ) {
+      return;
+    }
+
+    openSpaceMenu(event, selectedSpace);
   };
 
   const renderSpaceEditor = (space: BrowserSpace) => (
@@ -293,7 +328,8 @@ function Sidebar({
             setEditingSpaceId(null);
           }}
         >
-          Delete space
+          <Icon name="trash" size={14} />
+          <span>Delete space</span>
         </button>
       ) : null}
     </div>
@@ -432,8 +468,10 @@ function Sidebar({
     );
   };
 
+  const menuSpace = spaceMenu ? spaces.find((space) => space.id === spaceMenu.spaceId) ?? null : null;
+
   return (
-    <aside className="sidebar" onWheel={handleWheel}>
+    <aside className="sidebar" onWheel={handleWheel} onContextMenu={handleSidebarContextMenu}>
       <div className="sidebar-body">
         <section className="sidebar-section new-tab-section">
           <button type="button" className="sidebar-new-tab" onClick={onNewTab}>
@@ -482,6 +520,7 @@ function Sidebar({
                 title={`${space.name} (${space.tabs.length} ${space.tabs.length === 1 ? "tab" : "tabs"})`}
                 draggable={!isEditing}
                 onClick={() => !isEditing && onSelectSpace(space.id)}
+                onContextMenu={(event) => openSpaceMenu(event, space)}
                 onDoubleClick={() => beginRename(space)}
                 onDragStart={(event) => {
                   if (isEditing) {
@@ -611,6 +650,64 @@ function Sidebar({
               >
                 <Icon name="close" size={15} />
                 <span>Close other tabs</span>
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {spaceMenu && menuSpace ? (
+        <div
+          className="tab-context space-context"
+          role="menu"
+          style={{ top: spaceMenu.y, left: spaceMenu.x }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="space-context-label">Color</div>
+          <div className="space-context-swatches" role="group" aria-label={`Set ${menuSpace.name} color`}>
+            {SPACE_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className={
+                  color.toLowerCase() === menuSpace.accent.toLowerCase()
+                    ? "space-context-swatch is-active"
+                    : "space-context-swatch"
+                }
+                style={{ "--swatch": color } as CSSProperties}
+                aria-label={`Use ${color}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onUpdateSpace(menuSpace.id, { accent: color })}
+              />
+            ))}
+          </div>
+          <div className="tab-context-sep" />
+          <button
+            type="button"
+            className="tab-context-item"
+            role="menuitem"
+            onClick={() => {
+              beginRename(menuSpace);
+              closeSpaceMenu();
+            }}
+          >
+            <Icon name="pencil" size={15} />
+            <span>Rename space</span>
+          </button>
+          {spaces.length > 1 ? (
+            <>
+              <div className="tab-context-sep" />
+              <button
+                type="button"
+                className="tab-context-item is-danger"
+                role="menuitem"
+                onClick={() => {
+                  onDeleteSpace(menuSpace.id);
+                  closeSpaceMenu();
+                }}
+              >
+                <Icon name="trash" size={15} />
+                <span>Delete space</span>
               </button>
             </>
           ) : null}

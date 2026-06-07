@@ -20,6 +20,83 @@
   transition: --accent 420ms var(--ease-out);
 }
 
+[data-theme="light"] .app-shell {
+  --bg-base: color-mix(in srgb, var(--accent) 7%, #fbf7f1);
+  --bg-shell:
+    radial-gradient(120% 80% at 78% -8%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 46%),
+    radial-gradient(90% 70% at 8% 6%, rgba(255, 255, 255, 0.7), transparent 50%),
+    radial-gradient(120% 120% at 50% 120%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--accent) 6%, #fdfaf5) 0%,
+      color-mix(in srgb, var(--accent) 8%, #faf5ed) 48%,
+      color-mix(in srgb, var(--accent) 12%, #f6efe4) 100%
+    );
+  --surface-glass: color-mix(in srgb, var(--accent) 8%, rgba(255, 252, 247, 0.72));
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 9%, rgba(255, 252, 247, 0.86));
+  --surface-raised: color-mix(in srgb, var(--accent) 9%, rgba(255, 253, 249, 0.82));
+  --surface-solid: color-mix(in srgb, var(--accent) 7%, #fffdf9);
+  --surface-sunken: color-mix(in srgb, var(--accent) 8%, rgba(28, 42, 56, 0.035));
+  --hover: color-mix(in srgb, var(--accent) 9%, rgba(24, 40, 56, 0.05));
+  --hover-strong: color-mix(in srgb, var(--accent) 13%, rgba(24, 40, 56, 0.08));
+  --selected: color-mix(in srgb, var(--accent) 19%, transparent);
+  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 9%, rgba(255, 250, 244, 0.34)));
+  --border: color-mix(in srgb, var(--accent) 10%, rgba(45, 34, 25, 0.085));
+  --border-soft: color-mix(in srgb, var(--accent) 8%, rgba(45, 34, 25, 0.05));
+  --border-strong: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.14));
+  --field: color-mix(in srgb, var(--accent) 7%, rgba(255, 252, 247, 0.66));
+  --field-border: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.09));
+}
+
+[data-theme="dark"] .app-shell {
+  --bg-base: color-mix(in srgb, var(--accent) 16%, #0e1727);
+  --bg-shell:
+    radial-gradient(125% 80% at 82% -12%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 48%),
+    radial-gradient(95% 70% at 0% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 52%),
+    radial-gradient(130% 120% at 50% 122%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 56%),
+    linear-gradient(
+      162deg,
+      color-mix(in srgb, var(--accent) 24%, #16263c) 0%,
+      color-mix(in srgb, var(--accent) 17%, #0e1727) 54%,
+      color-mix(in srgb, var(--accent) 12%, #0a1120) 100%
+    );
+  --surface-glass: color-mix(in srgb, var(--accent) 18%, rgba(28, 45, 68, 0.64));
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 20%, rgba(25, 40, 62, 0.86));
+  --surface-raised: color-mix(in srgb, var(--accent) 19%, rgba(33, 51, 76, 0.74));
+  --surface-solid: color-mix(in srgb, var(--accent) 20%, #18273c);
+  --surface-sunken: color-mix(in srgb, var(--accent) 15%, rgba(4, 10, 20, 0.46));
+  --hover: color-mix(in srgb, var(--accent) 13%, rgba(160, 196, 240, 0.07));
+  --hover-strong: color-mix(in srgb, var(--accent) 18%, rgba(160, 196, 240, 0.12));
+  --selected: color-mix(in srgb, var(--accent) 27%, transparent);
+  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 9%, transparent));
+  --border: color-mix(in srgb, var(--accent) 13%, rgba(160, 196, 240, 0.11));
+  --border-soft: color-mix(in srgb, var(--accent) 10%, rgba(160, 196, 240, 0.06));
+  --border-strong: color-mix(in srgb, var(--accent) 18%, rgba(160, 196, 240, 0.18));
+  --field: color-mix(in srgb, var(--accent) 15%, rgba(160, 196, 240, 0.055));
+  --field-border: color-mix(in srgb, var(--accent) 20%, rgba(160, 196, 240, 0.12));
+}
+
+[data-appearance="glow"] .app-shell {
+  --bg-base: color-mix(in srgb, var(--accent) 22%, #101d2f);
+  --bg-shell:
+    radial-gradient(90% 70% at 82% -10%, color-mix(in srgb, var(--accent) 42%, transparent), transparent 48%),
+    radial-gradient(92% 72% at -8% 0%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 52%),
+    radial-gradient(130% 110% at 50% 122%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 58%),
+    linear-gradient(
+      162deg,
+      color-mix(in srgb, var(--accent) 30%, #20354f) 0%,
+      color-mix(in srgb, var(--accent) 22%, #101d2f) 56%,
+      color-mix(in srgb, var(--accent) 14%, #091321) 100%
+    );
+  --surface-glass: color-mix(in srgb, var(--accent) 23%, rgba(31, 49, 73, 0.66));
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 25%, rgba(34, 52, 78, 0.88));
+  --surface-raised: color-mix(in srgb, var(--accent) 24%, rgba(37, 57, 84, 0.8));
+  --surface-solid: color-mix(in srgb, var(--accent) 25%, #1c2d44);
+  --surface-sunken: color-mix(in srgb, var(--accent) 17%, rgba(2, 8, 18, 0.4));
+  --selected: color-mix(in srgb, var(--accent) 31%, transparent);
+  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 37%, transparent), color-mix(in srgb, var(--accent) 11%, rgba(255, 255, 255, 0.025)));
+}
+
 .app-shell::after {
   position: absolute;
   inset: 0;
@@ -61,7 +138,9 @@
   height: var(--toolbar-height);
   padding: 0 16px 0 22px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-glass);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 5%, transparent)),
+    var(--surface-glass);
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
   -webkit-app-region: drag;
@@ -433,7 +512,10 @@
   flex-direction: column;
   padding: 18px 14px 14px 16px;
   border-right: 1px solid var(--border);
-  background: var(--surface-glass);
+  background:
+    radial-gradient(140% 80% at 14% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 6%, transparent)),
+    var(--surface-glass);
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   transition:
@@ -631,6 +713,10 @@
 }
 
 .space-editor-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   height: 32px;
   margin-top: 2px;
   border: 1px solid color-mix(in srgb, #ff5f57 22%, transparent);
@@ -640,6 +726,10 @@
   cursor: pointer;
   font-size: 12.5px;
   font-weight: 740;
+}
+
+.space-editor-delete svg {
+  flex: 0 0 auto;
 }
 
 .space-editor-delete:hover {
@@ -1528,17 +1618,17 @@
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  --wave-cream-a: #fffaf2;
-  --wave-cream-b: #f3e8da;
-  --wave-coral-a: #ffe6dd;
-  --wave-coral-b: #ffb8a4;
+  --wave-cream-a: color-mix(in srgb, var(--accent) 11%, #fffaf2);
+  --wave-cream-b: color-mix(in srgb, var(--accent) 16%, #f3e8da);
+  --wave-coral-a: color-mix(in srgb, var(--accent) 36%, #ffe6dd);
+  --wave-coral-b: color-mix(in srgb, var(--accent) 58%, #ffb8a4);
 }
 
 [data-theme="dark"] .start-ambient {
-  --wave-cream-a: #16273e;
-  --wave-cream-b: #101d30;
-  --wave-coral-a: #2c3350;
-  --wave-coral-b: #9c5440;
+  --wave-cream-a: color-mix(in srgb, var(--accent) 22%, #16273e);
+  --wave-cream-b: color-mix(in srgb, var(--accent) 18%, #101d30);
+  --wave-coral-a: color-mix(in srgb, var(--accent) 30%, #2c3350);
+  --wave-coral-b: color-mix(in srgb, var(--accent) 72%, #9c5440);
 }
 
 .ambient-orb {
@@ -2032,6 +2122,55 @@
   background: var(--border);
 }
 
+.space-context {
+  z-index: 90;
+  min-width: 220px;
+}
+
+.space-context-label {
+  padding: 5px 8px 4px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.space-context-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 4px 6px 8px;
+}
+
+.space-context-swatch {
+  position: relative;
+  display: block;
+  height: 28px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--swatch) 44%, transparent);
+  border-radius: var(--r-full);
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.38), transparent 34%),
+    var(--swatch);
+  cursor: pointer;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--swatch) 22%, transparent);
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.space-context-swatch:hover {
+  transform: translateY(-1px);
+}
+
+.space-context-swatch.is-active {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--swatch),
+    0 10px 22px color-mix(in srgb, var(--swatch) 26%, transparent);
+}
+
 /* ====================================================================== */
 /* Downloads tray                                                         */
 /* ====================================================================== */
@@ -2229,7 +2368,7 @@
 
 .settings-panel {
   display: flex;
-  width: min(460px, calc(100vw - 320px));
+  width: min(500px, calc(100vw - 320px));
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-strong);
@@ -2321,6 +2460,119 @@
 .settings-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.appearance-picker {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(var(--texture-color) 0.55px, transparent 0.55px),
+    linear-gradient(160deg, var(--surface-sunken), transparent);
+  background-size: 14px 14px, auto;
+}
+
+.appearance-modes {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.appearance-mode {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.appearance-mode:hover {
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.appearance-mode.is-active {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border);
+}
+
+.appearance-swatches {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.appearance-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--swatch);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, black 10%, transparent);
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.appearance-swatch:hover {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.appearance-swatch.is-active {
+  box-shadow:
+    0 0 0 4px var(--surface-solid),
+    0 0 0 7px var(--swatch),
+    var(--shadow-md);
+}
+
+.appearance-preview {
+  position: relative;
+  display: grid;
+  height: 72px;
+  align-items: end;
+  padding: 0 24px 12px;
+}
+
+.appearance-preview-wave {
+  display: block;
+  width: 62%;
+  height: 32px;
+  border-radius: var(--r-full);
+  background:
+    radial-gradient(circle at 20px 50%, transparent 13px, color-mix(in srgb, var(--accent) 66%, white) 14px 18px, transparent 19px),
+    repeating-radial-gradient(ellipse at 0 50%, transparent 0 13px, color-mix(in srgb, var(--text) 52%, transparent) 14px 17px, transparent 18px 33px);
+  opacity: 0.78;
+}
+
+.appearance-preview-dot {
+  position: absolute;
+  right: 34px;
+  bottom: 12px;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  background: var(--surface-raised);
+  box-shadow:
+    0 -20px 0 -17px var(--text),
+    20px 0 0 -17px var(--text),
+    0 20px 0 -17px var(--text),
+    -20px 0 0 -17px var(--text);
 }
 
 .settings-segment {

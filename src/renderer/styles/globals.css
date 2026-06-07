@@ -49,23 +49,28 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg-base: #fbf7f1;
+  --bg-base: color-mix(in srgb, var(--accent) 7%, #fbf7f1);
   --bg-shell:
-    radial-gradient(120% 80% at 78% -8%, rgba(255, 122, 92, 0.13), transparent 46%),
+    radial-gradient(120% 80% at 78% -8%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 46%),
     radial-gradient(90% 70% at 8% 6%, rgba(255, 255, 255, 0.7), transparent 50%),
-    radial-gradient(120% 120% at 50% 120%, rgba(255, 178, 120, 0.08), transparent 55%),
-    linear-gradient(155deg, #fdfaf5 0%, #faf5ed 48%, #f6efe4 100%);
+    radial-gradient(120% 120% at 50% 120%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--accent) 6%, #fdfaf5) 0%,
+      color-mix(in srgb, var(--accent) 8%, #faf5ed) 48%,
+      color-mix(in srgb, var(--accent) 12%, #f6efe4) 100%
+    );
 
-  --surface-glass: rgba(255, 252, 247, 0.66);
-  --surface-glass-strong: rgba(255, 252, 247, 0.82);
-  --surface-raised: rgba(255, 253, 249, 0.78);
-  --surface-solid: #fffdf9;
-  --surface-sunken: rgba(28, 42, 56, 0.035);
+  --surface-glass: color-mix(in srgb, var(--accent) 8%, rgba(255, 252, 247, 0.72));
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 9%, rgba(255, 252, 247, 0.86));
+  --surface-raised: color-mix(in srgb, var(--accent) 9%, rgba(255, 253, 249, 0.82));
+  --surface-solid: color-mix(in srgb, var(--accent) 7%, #fffdf9);
+  --surface-sunken: color-mix(in srgb, var(--accent) 8%, rgba(28, 42, 56, 0.035));
 
-  --hover: rgba(24, 40, 56, 0.05);
-  --hover-strong: rgba(24, 40, 56, 0.08);
-  --selected: rgba(255, 122, 92, 0.1);
-  --selected-wash: linear-gradient(90deg, rgba(255, 122, 92, 0.14), rgba(255, 250, 244, 0.32));
+  --hover: color-mix(in srgb, var(--accent) 9%, rgba(24, 40, 56, 0.05));
+  --hover-strong: color-mix(in srgb, var(--accent) 13%, rgba(24, 40, 56, 0.08));
+  --selected: color-mix(in srgb, var(--accent) 19%, transparent);
+  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 9%, rgba(255, 250, 244, 0.34)));
 
   --text: #16273a;
   --text-soft: #50657a;
@@ -73,16 +78,16 @@
   --text-faint: rgba(80, 101, 122, 0.42);
   --text-inverse: #fffaf4;
 
-  --border: rgba(45, 34, 25, 0.085);
-  --border-soft: rgba(45, 34, 25, 0.05);
-  --border-strong: rgba(45, 34, 25, 0.14);
+  --border: color-mix(in srgb, var(--accent) 10%, rgba(45, 34, 25, 0.085));
+  --border-soft: color-mix(in srgb, var(--accent) 8%, rgba(45, 34, 25, 0.05));
+  --border-strong: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.14));
 
   --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --accent-on-surface: color-mix(in srgb, var(--accent) 78%, black);
 
-  --field: rgba(255, 252, 247, 0.6);
-  --field-border: rgba(45, 34, 25, 0.09);
+  --field: color-mix(in srgb, var(--accent) 7%, rgba(255, 252, 247, 0.66));
+  --field-border: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.09));
 
   --texture-opacity: 0.05;
   --texture-blend: multiply;
@@ -106,23 +111,28 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg-base: #0e1727;
+  --bg-base: color-mix(in srgb, var(--accent) 16%, #0e1727);
   --bg-shell:
-    radial-gradient(125% 80% at 82% -12%, rgba(255, 122, 92, 0.13), transparent 46%),
-    radial-gradient(95% 70% at 0% 0%, rgba(72, 122, 210, 0.13), transparent 52%),
-    radial-gradient(130% 120% at 50% 122%, rgba(255, 130, 95, 0.05), transparent 55%),
-    linear-gradient(162deg, #16263c 0%, #0e1727 54%, #0a1120 100%);
+    radial-gradient(125% 80% at 82% -12%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 48%),
+    radial-gradient(95% 70% at 0% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 52%),
+    radial-gradient(130% 120% at 50% 122%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 56%),
+    linear-gradient(
+      162deg,
+      color-mix(in srgb, var(--accent) 24%, #16263c) 0%,
+      color-mix(in srgb, var(--accent) 17%, #0e1727) 54%,
+      color-mix(in srgb, var(--accent) 12%, #0a1120) 100%
+    );
 
-  --surface-glass: rgba(28, 45, 68, 0.55);
-  --surface-glass-strong: rgba(25, 40, 62, 0.82);
-  --surface-raised: rgba(33, 51, 76, 0.68);
-  --surface-solid: #18273c;
-  --surface-sunken: rgba(4, 10, 20, 0.42);
+  --surface-glass: color-mix(in srgb, var(--accent) 18%, rgba(28, 45, 68, 0.64));
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 20%, rgba(25, 40, 62, 0.86));
+  --surface-raised: color-mix(in srgb, var(--accent) 19%, rgba(33, 51, 76, 0.74));
+  --surface-solid: color-mix(in srgb, var(--accent) 20%, #18273c);
+  --surface-sunken: color-mix(in srgb, var(--accent) 15%, rgba(4, 10, 20, 0.46));
 
-  --hover: rgba(160, 196, 240, 0.07);
-  --hover-strong: rgba(160, 196, 240, 0.12);
-  --selected: rgba(255, 122, 92, 0.18);
-  --selected-wash: linear-gradient(90deg, rgba(255, 122, 92, 0.2), rgba(255, 122, 92, 0.03));
+  --hover: color-mix(in srgb, var(--accent) 13%, rgba(160, 196, 240, 0.07));
+  --hover-strong: color-mix(in srgb, var(--accent) 18%, rgba(160, 196, 240, 0.12));
+  --selected: color-mix(in srgb, var(--accent) 27%, transparent);
+  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 9%, transparent));
 
   --text: #e9eff8;
   --text-soft: #a2b4ca;
@@ -130,16 +140,16 @@
   --text-faint: rgba(162, 180, 202, 0.42);
   --text-inverse: #0e1727;
 
-  --border: rgba(160, 196, 240, 0.11);
-  --border-soft: rgba(160, 196, 240, 0.06);
-  --border-strong: rgba(160, 196, 240, 0.18);
+  --border: color-mix(in srgb, var(--accent) 13%, rgba(160, 196, 240, 0.11));
+  --border-soft: color-mix(in srgb, var(--accent) 10%, rgba(160, 196, 240, 0.06));
+  --border-strong: color-mix(in srgb, var(--accent) 18%, rgba(160, 196, 240, 0.18));
 
   --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 36%, transparent);
   --accent-on-surface: color-mix(in srgb, var(--accent) 72%, white);
 
-  --field: rgba(160, 196, 240, 0.055);
-  --field-border: rgba(160, 196, 240, 0.12);
+  --field: color-mix(in srgb, var(--accent) 15%, rgba(160, 196, 240, 0.055));
+  --field-border: color-mix(in srgb, var(--accent) 20%, rgba(160, 196, 240, 0.12));
 
   --texture-opacity: 0.04;
   --texture-blend: screen;
@@ -155,6 +165,34 @@
   --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
 
   --scrollbar: rgba(160, 196, 240, 0.22);
+}
+
+[data-appearance="glow"] {
+  color-scheme: dark;
+
+  --bg-base: color-mix(in srgb, var(--accent) 22%, #101d2f);
+  --bg-shell:
+    radial-gradient(90% 70% at 82% -10%, color-mix(in srgb, var(--accent) 42%, transparent), transparent 48%),
+    radial-gradient(92% 72% at -8% 0%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 52%),
+    radial-gradient(130% 110% at 50% 122%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 58%),
+    linear-gradient(
+      162deg,
+      color-mix(in srgb, var(--accent) 30%, #20354f) 0%,
+      color-mix(in srgb, var(--accent) 22%, #101d2f) 56%,
+      color-mix(in srgb, var(--accent) 14%, #091321) 100%
+    );
+
+  --surface-glass: color-mix(in srgb, var(--accent) 23%, rgba(31, 49, 73, 0.66));
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 25%, rgba(34, 52, 78, 0.88));
+  --surface-raised: color-mix(in srgb, var(--accent) 24%, rgba(37, 57, 84, 0.8));
+  --surface-solid: color-mix(in srgb, var(--accent) 25%, #1c2d44);
+  --surface-sunken: color-mix(in srgb, var(--accent) 17%, rgba(2, 8, 18, 0.4));
+
+  --selected: color-mix(in srgb, var(--accent) 31%, transparent);
+  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 37%, transparent), color-mix(in srgb, var(--accent) 11%, rgba(255, 255, 255, 0.025)));
+
+  --texture-opacity: 0.055;
+  --texture-color: rgba(218, 231, 255, 0.62);
 }
 
 /* ---- Legacy aliases (keep older selectors resolving) ------------------ */

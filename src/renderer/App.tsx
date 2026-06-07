@@ -156,6 +156,7 @@ export default function App() {
   } = useBrowserStore();
 
   const showReactStartPage = activeTab.isStartPage;
+  const shellAccent = selectedSpace?.accent ?? settings.appearanceAccent;
   const recentSites = useMemo<RecentSite[]>(() => {
     const seen = new Set<string>();
     const sites: RecentSite[] = [];
@@ -1104,7 +1105,7 @@ export default function App() {
     <div className="window-frame">
       <div
         className={isSidebarCollapsed ? "app-shell is-sidebar-collapsed" : "app-shell"}
-        style={{ "--accent": selectedSpace.accent } as CSSProperties}
+        style={{ "--accent": shellAccent } as CSSProperties}
       >
         <Toolbar
           addressValue={addressValue}
@@ -1285,8 +1286,10 @@ export default function App() {
           isOpen={isSettingsOpen}
           settings={settings}
           theme={theme}
+          appearanceAccent={shellAccent}
           onUpdateSettings={updateSettings}
           onSetTheme={setTheme}
+          onChangeAccent={(accent) => updateSpace(selectedSpace.id, { accent })}
           onClose={closeSettings}
         />
         <DownloadsTray

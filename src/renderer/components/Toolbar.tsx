@@ -1,5 +1,6 @@
 import { memo, useEffect, useState, type RefObject } from "react";
 import Icon, { IconName } from "./Icon";
+import type { ThemeMode } from "../state/useTheme";
 
 function getHostname(url: string): string {
   try {
@@ -19,7 +20,7 @@ type ToolbarProps = {
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
-  theme: "light" | "dark";
+  theme: ThemeMode;
   isSidebarCollapsed: boolean;
   canBookmark: boolean;
   isBookmarked: boolean;
@@ -87,6 +88,7 @@ function Toolbar({
   const showFavicon = Boolean(
     currentPageFaviconUrl && !isStartPage && currentPageFaviconUrl !== failedFaviconUrl
   );
+  const themeIcon: IconName = theme === "day" ? "sun" : theme === "night" ? "moon" : "sparkle";
 
   useEffect(() => {
     setFailedFaviconUrl(null);
@@ -234,10 +236,11 @@ function Toolbar({
         <button
           className="toolbar-icon theme-toggle"
           type="button"
-          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          aria-label="Cycle appearance"
+          title="Cycle appearance"
           onClick={onToggleTheme}
         >
-          <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
+          <Icon name={themeIcon} size={17} />
         </button>
         <button className="profile-badge" type="button" aria-label="Profile">
           A
