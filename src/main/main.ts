@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { app, BrowserWindow } from "electron";
 import { WebContentsViewManager } from "./webContentsViewManager";
 import { registerIpc } from "./ipc";
@@ -54,7 +55,26 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
+function applyDockIcon(): void {
+  if (process.platform !== "darwin" || !app.dock) {
+    return;
+  }
+
+  const candidates = [
+    path.join(app.getAppPath(), "andromeda.png"),
+    path.join(__dirname, "../../andromeda.png"),
+    path.join(process.cwd(), "andromeda.png"),
+    path.join(process.resourcesPath ?? "", "andromeda.png")
+  ];
+
+  const iconPath = candidates.find((candidate) => candidate && existsSync(candidate));
+  if (iconPath) {
+    app.dock.setIcon(iconPath);
+  }
+}
+
 app.whenReady().then(() => {
+  applyDockIcon();
   createMainWindow();
 
   app.on("activate", () => {

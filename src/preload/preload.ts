@@ -36,6 +36,16 @@ type NavigationStatePayload = {
   isLoading: boolean;
 };
 
+type DownloadPayload = {
+  id: string;
+  filename: string;
+  url: string;
+  savePath: string;
+  receivedBytes: number;
+  totalBytes: number;
+  state: string;
+};
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -121,6 +131,10 @@ contextBridge.exposeInMainWorld("andromeda", {
     ipcRenderer.invoke("browser:navigate", { pane: sanitizePane(pane), url }),
   showTab: (tabId: string, url: string) => ipcRenderer.invoke("browser:showTab", { tabId, url }),
   pruneTabs: (ids: string[]) => ipcRenderer.invoke("browser:pruneTabs", { ids }),
+  setTabMuted: (tabId: string, muted: boolean) =>
+    ipcRenderer.invoke("browser:setTabMuted", { tabId, muted }),
+  openDownload: (path: string) => ipcRenderer.invoke("browser:openDownload", { path }),
+  revealDownload: (path: string) => ipcRenderer.invoke("browser:revealDownload", { path }),
   goBack: (pane?: BrowserPane) => ipcRenderer.invoke("browser:goBack", { pane: sanitizePane(pane) }),
   goForward: (pane?: BrowserPane) =>
     ipcRenderer.invoke("browser:goForward", { pane: sanitizePane(pane) }),
@@ -301,6 +315,35 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:openTab", listener);
     return () => ipcRenderer.removeListener("browser:openTab", listener);
+  },
+  onTabAudio: (callback: (payload: { tabId: string; audible: boolean }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { tabId?: unknown }).tabId === "string" &&
+        typeof (payload as { audible?: unknown }).audible === "boolean"
+      ) {
+        callback(payload as { tabId: string; audible: boolean });
+      }
+    };
+
+    ipcRenderer.on("browser:tabAudio", listener);
+    return () => ipcRenderer.removeListener("browser:tabAudio", listener);
+  },
+  onDownload: (callback: (payload: DownloadPayload) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { id?: unknown }).id === "string"
+      ) {
+        callback(payload as DownloadPayload);
+      }
+    };
+
+    ipcRenderer.on("browser:download", listener);
+    return () => ipcRenderer.removeListener("browser:download", listener);
   },
   onShortcut: (callback: (action: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {

@@ -8,7 +8,8 @@ import {
   type DragEvent,
   type MouseEvent as ReactMouseEvent
 } from "react";
-import CommandBar, { CommandBarItem } from "./components/CommandBar";
+import CommandBar from "./components/CommandBar";
+import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
 import FindBar from "./components/FindBar";
 import SettingsPanel from "./components/SettingsPanel";
 import Sidebar from "./components/Sidebar";
@@ -25,11 +26,6 @@ import type { IconName } from "./components/Icon";
 const SPLIT_RATIO_KEY = "andromeda.splitRatio";
 const MIN_SPLIT_RATIO = 0.25;
 const MAX_SPLIT_RATIO = 0.75;
-
-const QUICK_URLS = {
-  github: "https://github.com",
-  linear: "https://linear.app"
-};
 
 const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
@@ -92,7 +88,8 @@ function loadSplitRatio(): number {
 export default function App() {
   const { theme, toggleTheme, setTheme } = useTheme();
   const { settings, updateSettings } = useSettings();
-  const { quickLinks, removeQuickLink, toggleQuickLink, isQuickLink } = useQuickLinks();
+  const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink } =
+    useQuickLinks();
   const contentRef = useRef<HTMLDivElement>(null);
   const splitRatioRef = useRef<number>(loadSplitRatio());
   const addressInputRef = useRef<HTMLInputElement>(null);
@@ -102,12 +99,17 @@ export default function App() {
   const lastCommandBarOpenRef = useRef(false);
   const didCompleteLaunchResetRef = useRef(false);
   const resizeFrameRef = useRef<number | null>(null);
+  const seenDownloadIdsRef = useRef<Set<string>>(new Set());
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
   const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFindOpen, setFindOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [isDownloadsOpen, setDownloadsOpen] = useState(false);
+  const [downloads, setDownloads] = useState<DownloadEntry[]>([]);
+  const [addressFocused, setAddressFocused] = useState(false);
+  const [addressDirty, setAddressDirty] = useState(false);
   const [splitRatio, setSplitRatio] = useState<number>(() => splitRatioRef.current);
   const [isResizingSplit, setResizingSplit] = useState(false);
   const [draggedTab, setDraggedTab] = useState<BrowserTab | null>(null);
@@ -115,6 +117,7 @@ export default function App() {
   const [splitDropSide, setSplitDropSide] = useState<BrowserPane | null>(null);
   const [splitNav, setSplitNav] = useState<PaneNavigationState>(DEFAULT_NAVIGATION_STATE);
   const [mainTabNav, setMainTabNav] = useState<Record<string, PaneNavigationState>>({});
+  const [tabAudio, setTabAudio] = useState<Record<string, { audible: boolean; muted: boolean }>>({});
   const {
     state,
     selectedSpace,
@@ -142,7 +145,6 @@ export default function App() {
     togglePinTab,
     reorderTabs,
     reorderSpaces,
-    openNewTab,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
@@ -184,6 +186,62 @@ export default function App() {
 
     return sites.slice(0, 6);
   }, [state.spaces]);
+  const quickOpenItems = useMemo<RecentSite[]>(() => {
+    const seen = new Set<string>();
+    const items: RecentSite[] = [];
+
+    const addItem = (id: string, title: string, url: string) => {
+      const key = url.toLowerCase();
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      items.push({ id, title, url });
+    };
+
+    for (const link of quickLinks) {
+      addItem(`quick-${link.id}`, link.label, link.url);
+    }
+
+    for (const site of recentSites) {
+      addItem(`recent-${site.id}`, site.title, site.url);
+    }
+
+    return items.slice(0, 6);
+  }, [quickLinks, recentSites]);
+
+  const addressSuggestions = useMemo(() => {
+    const query = addressValue.trim().toLowerCase();
+    if (!query) {
+      return [] as Array<{ id: string; title: string; url: string }>;
+    }
+
+    const seen = new Set<string>();
+    const out: Array<{ id: string; title: string; url: string }> = [];
+    const consider = (id: string, title: string, url: string) => {
+      const key = url.toLowerCase();
+      if (seen.has(key)) {
+        return;
+      }
+      if (`${title} ${url}`.toLowerCase().includes(query)) {
+        seen.add(key);
+        out.push({ id, title: title || url, url });
+      }
+    };
+
+    for (const link of quickLinks) {
+      consider(`ql-${link.id}`, link.label, link.url);
+    }
+    for (const site of recentSites) {
+      consider(`rs-${site.id}`, site.title, site.url);
+    }
+
+    return out.slice(0, 6);
+  }, [addressValue, quickLinks, recentSites]);
+
+  const showAddressSuggestions =
+    addressFocused && addressDirty && addressValue.trim().length > 0 && addressSuggestions.length > 0;
   const currentPageIcon = useMemo<IconName>(() => {
     if (activePane === "split") {
       return getPageFallbackIcon(splitUrl, false);
@@ -462,6 +520,36 @@ export default function App() {
   }, [openMainUrl]);
 
   useEffect(() => {
+    return window.andromeda.onDownload((payload) => {
+      if (!seenDownloadIdsRef.current.has(payload.id)) {
+        seenDownloadIdsRef.current.add(payload.id);
+        setDownloadsOpen(true);
+      }
+      setDownloads((current) => {
+        const index = current.findIndex((entry) => entry.id === payload.id);
+        if (index >= 0) {
+          const next = [...current];
+          next[index] = payload;
+          return next;
+        }
+        return [payload, ...current].slice(0, 20);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.andromeda.onTabAudio(({ tabId, audible }) => {
+      setTabAudio((current) => {
+        const existing = current[tabId];
+        if (existing && existing.audible === audible) {
+          return current;
+        }
+        return { ...current, [tabId]: { audible, muted: existing?.muted ?? false } };
+      });
+    });
+  }, []);
+
+  useEffect(() => {
     return window.andromeda.onPaneFocused(({ pane }) => {
       selectPane(pane);
     });
@@ -484,7 +572,8 @@ export default function App() {
 
   // The command bar and settings modal both need the web views detached so the
   // renderer overlay is visible above the content region.
-  const isContentOverlayOpen = isCommandBarOpen || isSettingsOpen;
+  const isContentOverlayOpen =
+    isCommandBarOpen || isSettingsOpen || isDownloadsOpen || showAddressSuggestions;
   useEffect(() => {
     if (lastCommandBarOpenRef.current === isContentOverlayOpen) {
       return;
@@ -527,23 +616,61 @@ export default function App() {
 
   const handleSubmitAddress = useCallback(() => {
     const url = resolveNavigationInput(addressValue);
+    setAddressDirty(false);
+    setAddressFocused(false);
     navigateTo(url);
   }, [addressValue, navigateTo]);
 
+  const handleAddressChange = useCallback((value: string) => {
+    setAddressValue(value);
+    setAddressDirty(true);
+  }, []);
+
+  const handleAddressFocus = useCallback(() => {
+    setAddressFocused(true);
+    setAddressDirty(false);
+  }, []);
+
+  const handleAddressBlur = useCallback(() => {
+    setAddressFocused(false);
+  }, []);
+
+  const handlePickSuggestion = useCallback(
+    (url: string) => {
+      setAddressDirty(false);
+      setAddressFocused(false);
+      addressInputRef.current?.blur();
+      navigateTo(url);
+    },
+    [navigateTo]
+  );
+
   const handleNewTab = useCallback(() => {
-    openNewTab();
+    setCommandBarMode("default");
+    setCommandBarOpen(true);
     setAddressValue("");
-    requestAnimationFrame(() => {
-      addressInputRef.current?.focus();
-      addressInputRef.current?.select();
-    });
-  }, [openNewTab]);
+  }, []);
 
   const handleSelectSpace = useCallback(
     (spaceId: SpaceId) => {
       selectSpace(spaceId);
     },
     [selectSpace]
+  );
+
+  const handleSwitchSpace = useCallback(
+    (direction: "previous" | "next") => {
+      if (state.spaces.length < 2) {
+        return;
+      }
+
+      const currentIndex = state.spaces.findIndex((space) => space.id === state.selectedSpaceId);
+      const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+      const delta = direction === "next" ? 1 : -1;
+      const nextIndex = (safeIndex + delta + state.spaces.length) % state.spaces.length;
+      selectSpace(state.spaces[nextIndex].id);
+    },
+    [selectSpace, state.selectedSpaceId, state.spaces]
   );
 
   const handleSelectSidebarTab = useCallback(
@@ -591,8 +718,6 @@ export default function App() {
     void window.andromeda.toggleMaximizeWindow();
   }, []);
 
-  const handleImportChrome = useCallback(() => undefined, []);
-
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((collapsed) => !collapsed);
   }, []);
@@ -628,12 +753,39 @@ export default function App() {
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
+  const toggleDownloads = useCallback(() => setDownloadsOpen((open) => !open), []);
+  const closeDownloads = useCallback(() => setDownloadsOpen(false), []);
+  const handleOpenDownload = useCallback((path: string) => {
+    if (path) {
+      void window.andromeda.openDownload(path);
+    }
+  }, []);
+  const handleRevealDownload = useCallback((path: string) => {
+    if (path) {
+      void window.andromeda.revealDownload(path);
+    }
+  }, []);
+  const handleClearDownloads = useCallback(() => setDownloads([]), []);
+  const hasActiveDownload = downloads.some((entry) => entry.state === "progressing");
+
   const handleToggleBookmark = useCallback(() => {
     if (!bookmarkUrl) {
       return;
     }
     toggleQuickLink(bookmarkUrl, currentPageTitle);
   }, [bookmarkUrl, currentPageTitle, toggleQuickLink]);
+
+  const handleToggleMute = useCallback(
+    (tabId: string) => {
+      const muted = !(tabAudio[tabId]?.muted ?? false);
+      void window.andromeda.setTabMuted(tabId, muted);
+      setTabAudio((current) => ({
+        ...current,
+        [tabId]: { audible: current[tabId]?.audible ?? false, muted }
+      }));
+    },
+    [tabAudio]
+  );
 
   // Detach the web views during a divider drag so the host window keeps
   // receiving mousemove events even when the cursor passes over the page.
@@ -812,134 +964,6 @@ export default function App() {
     [navigateSplitTo, navigateTo]
   );
 
-  const commandBarItems = useMemo<CommandBarItem[]>(
-    () => [
-      {
-        id: "open-split-view",
-        title: "Open Split View",
-        subtitle: showReactStartPage ? "Choose a page for the right pane" : "Open a right pane",
-        icon: "square",
-        keywords: ["split", "side by side", "right pane"],
-        run: () => {
-          openSplitCommandBar();
-          return { keepOpen: true };
-        }
-      },
-      {
-        id: "open-github-split",
-        title: "Open GitHub in Split View",
-        subtitle: "https://github.com",
-        icon: "github",
-        keywords: ["github.com", "split", "right pane"],
-        run: () => navigateSplitTo(QUICK_URLS.github)
-      },
-      {
-        id: "open-linear-split",
-        title: "Open Linear in Split View",
-        subtitle: "https://linear.app",
-        icon: "linear",
-        keywords: ["linear.app", "split", "right pane"],
-        run: () => navigateSplitTo(QUICK_URLS.linear)
-      },
-      {
-        id: "search-split",
-        title: "Search in Split View",
-        subtitle: "Use the typed query in the right pane",
-        icon: "search",
-        keywords: ["search", "split", "right pane"],
-        run: (query) => {
-          const trimmedQuery = query.trim();
-          if (!trimmedQuery) {
-            openSplitCommandBar();
-            return { keepOpen: true };
-          }
-
-          return navigateSplitTo(resolveNavigationInput(trimmedQuery));
-        }
-      },
-      {
-        id: "new-tab",
-        title: "New Tab",
-        subtitle: "Open a fresh start page",
-        icon: "plus",
-        keywords: ["start", "home", "tab", "new"],
-        run: handleNewTab
-      },
-      {
-        id: "open-github",
-        title: "Open GitHub",
-        subtitle: "https://github.com",
-        icon: "github",
-        keywords: ["github.com", "code", "repo"],
-        run: () => navigateTo(QUICK_URLS.github)
-      },
-      {
-        id: "open-linear",
-        title: "Open Linear",
-        subtitle: "https://linear.app",
-        icon: "linear",
-        keywords: ["linear.app", "issues", "work"],
-        run: () => navigateTo(QUICK_URLS.linear)
-      },
-      {
-        id: "new-space",
-        title: "Create New Space",
-        subtitle: "Add a fresh workspace",
-        icon: "plus",
-        keywords: ["space", "workspace", "add", "create"],
-        run: () => {
-          createSpace();
-        }
-      },
-      ...state.spaces
-        .filter((space) => space.id !== state.selectedSpaceId)
-        .map<CommandBarItem>((space) => ({
-          id: `switch-space-${space.id}`,
-          title: `Switch to ${space.name}`,
-          subtitle: `${space.tabs.length} ${space.tabs.length === 1 ? "tab" : "tabs"}`,
-          icon: space.icon,
-          keywords: ["space", "switch", space.name.toLowerCase()],
-          run: () => handleSelectSpace(space.id)
-        })),
-      {
-        id: "reload-page",
-        title: "Reload Page",
-        subtitle: "Refresh the current page",
-        icon: "reload",
-        keywords: ["refresh"],
-        run: () => void window.andromeda.reload(activePane)
-      },
-      {
-        id: "go-back",
-        title: "Go Back",
-        subtitle: "Navigate back",
-        icon: "arrowLeft",
-        keywords: ["history", "previous"],
-        run: () => void window.andromeda.goBack(activePane)
-      },
-      {
-        id: "go-forward",
-        title: "Go Forward",
-        subtitle: "Navigate forward",
-        icon: "arrowRight",
-        keywords: ["history", "next"],
-        run: () => void window.andromeda.goForward(activePane)
-      }
-    ],
-    [
-      activePane,
-      createSpace,
-      handleNewTab,
-      handleSelectSpace,
-      navigateSplitTo,
-      navigateTo,
-      openSplitCommandBar,
-      showReactStartPage,
-      state.selectedSpaceId,
-      state.spaces
-    ]
-  );
-
   // Keyboard shortcuts (Cmd+T, Cmd+W, Cmd+1..9, etc.) are delivered from the
   // native application menu in the main process so they fire even while a web
   // page has focus. This dispatcher applies them to the React state.
@@ -1096,7 +1120,13 @@ export default function App() {
           isSidebarCollapsed={isSidebarCollapsed}
           canBookmark={Boolean(bookmarkUrl)}
           isBookmarked={isBookmarked}
-          onAddressChange={setAddressValue}
+          hasActiveDownload={hasActiveDownload}
+          addressSuggestions={addressSuggestions}
+          showAddressSuggestions={showAddressSuggestions}
+          onAddressChange={handleAddressChange}
+          onAddressFocus={handleAddressFocus}
+          onAddressBlur={handleAddressBlur}
+          onPickSuggestion={handlePickSuggestion}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
           onForward={handleForward}
@@ -1104,6 +1134,7 @@ export default function App() {
           onNewTab={handleNewTab}
           onOpenSplitView={openSplitCommandBar}
           onToggleBookmark={handleToggleBookmark}
+          onToggleDownloads={toggleDownloads}
           onToggleTheme={toggleTheme}
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
@@ -1120,6 +1151,7 @@ export default function App() {
           onUpdateSpace={updateSpace}
           onDeleteSpace={deleteSpace}
           onReorderSpaces={reorderSpaces}
+          onSwitchSpace={handleSwitchSpace}
           onSelectTab={handleSelectSidebarTab}
           onCloseTab={handleCloseSidebarTab}
           onTogglePinTab={togglePinTab}
@@ -1127,6 +1159,8 @@ export default function App() {
           onCloseOtherTabs={closeOtherTabs}
           onMoveTabToSpace={moveTabToSpace}
           loadingTabId={loadingTabId}
+          tabAudio={tabAudio}
+          onToggleMute={handleToggleMute}
           onReorderTabs={handleReorderSidebarTabs}
           onTabDragStart={handleSidebarTabDragStart}
           onTabDragEnd={handleSidebarTabDragEnd}
@@ -1231,10 +1265,10 @@ export default function App() {
             <StartPage
               greetingName={settings.name}
               quickLinks={quickLinks}
-              onOpenCommand={openCommandBar}
+              onOpenCommand={handleNewTab}
               onOpenLink={navigateTo}
               onRemoveQuickLink={removeQuickLink}
-              onImportChrome={handleImportChrome}
+              onReorderQuickLink={reorderQuickLink}
               recentSites={recentSites}
             />
           ) : null}
@@ -1242,8 +1276,7 @@ export default function App() {
         <CommandBar
           isOpen={isCommandBarOpen}
           mode={commandBarMode}
-          commands={commandBarItems}
-          historyItems={recentSites}
+          historyItems={quickOpenItems}
           onClose={closeCommandBar}
           onNavigateInput={handleCommandInputNavigation}
           onOpenUrl={handleOpenUrlFromCommand}
@@ -1255,6 +1288,14 @@ export default function App() {
           onUpdateSettings={updateSettings}
           onSetTheme={setTheme}
           onClose={closeSettings}
+        />
+        <DownloadsTray
+          isOpen={isDownloadsOpen}
+          downloads={downloads}
+          onClose={closeDownloads}
+          onOpen={handleOpenDownload}
+          onReveal={handleRevealDownload}
+          onClear={handleClearDownloads}
         />
       </div>
     </div>

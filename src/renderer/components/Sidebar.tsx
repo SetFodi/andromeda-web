@@ -1,7 +1,8 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent, WheelEvent } from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
+import AndromedaMark from "./AndromedaMark";
 import { getFaviconSrc } from "../utils/favicon";
 
 const SPACE_COLORS = [
@@ -35,6 +36,7 @@ type SidebarProps = {
   onUpdateSpace: (spaceId: SpaceId, patch: { name?: string; icon?: IconName; accent?: string }) => void;
   onDeleteSpace: (spaceId: SpaceId) => void;
   onReorderSpaces: (sourceSpaceId: SpaceId, targetSpaceId: SpaceId) => void;
+  onSwitchSpace: (direction: "previous" | "next") => void;
   onSelectTab: (spaceId: SpaceId, tabId: string) => void;
   onCloseTab: (spaceId: SpaceId, tabId: string) => void;
   onTogglePinTab: (spaceId: SpaceId, tabId: string) => void;
@@ -42,6 +44,8 @@ type SidebarProps = {
   onCloseOtherTabs: (spaceId: SpaceId, tabId: string) => void;
   onMoveTabToSpace: (fromSpaceId: SpaceId, tabId: string, toSpaceId: SpaceId) => void;
   loadingTabId: string | null;
+  tabAudio: Record<string, { audible: boolean; muted: boolean }>;
+  onToggleMute: (tabId: string) => void;
   onReorderTabs: (spaceId: SpaceId, sourceTabId: string, targetTabId: string) => void;
   onTabDragStart: (event: DragEvent<HTMLElement>, tab: BrowserTab) => void;
   onTabDragEnd: () => void;
@@ -116,6 +120,7 @@ function Sidebar({
   onUpdateSpace,
   onDeleteSpace,
   onReorderSpaces,
+  onSwitchSpace,
   onSelectTab,
   onCloseTab,
   onTogglePinTab,
@@ -123,6 +128,8 @@ function Sidebar({
   onCloseOtherTabs,
   onMoveTabToSpace,
   loadingTabId,
+  tabAudio,
+  onToggleMute,
   onReorderTabs,
   onTabDragStart,
   onTabDragEnd,
@@ -136,6 +143,7 @@ function Sidebar({
   const [dropSpaceId, setDropSpaceId] = useState<string | null>(null);
   const [draggedSpaceId, setDraggedSpaceId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const swipeLockRef = useRef(false);
 
   useEffect(() => {
     if (!draggedTabId) {
@@ -202,10 +210,128 @@ function Sidebar({
   const pinnedTabs = selectedSpace.tabs.filter((tab) => tab.pinned);
   const regularTabs = selectedSpace.tabs.filter((tab) => !tab.pinned);
 
+  const handleWheel = (event: WheelEvent<HTMLElement>) => {
+    const isHorizontalSwipe =
+      Math.abs(event.deltaX) > 28 && Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.35;
+
+    if (!isHorizontalSwipe || spaces.length < 2) {
+      return;
+    }
+
+    event.preventDefault();
+    if (swipeLockRef.current) {
+      return;
+    }
+
+    swipeLockRef.current = true;
+    onSwitchSpace(event.deltaX > 0 ? "next" : "previous");
+    window.setTimeout(() => {
+      swipeLockRef.current = false;
+    }, 420);
+  };
+
+  const renderSpaceEditor = (space: BrowserSpace) => (
+    <div className="space-editor" onClick={(event) => event.stopPropagation()}>
+      <input
+        ref={renameInputRef}
+        className="space-editor-name"
+        value={draftName}
+        spellCheck={false}
+        placeholder="Space name"
+        maxLength={28}
+        onChange={(event) => setDraftName(event.target.value)}
+        onBlur={commitRename}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitRename();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            setEditingSpaceId(null);
+          }
+        }}
+      />
+      <div className="space-editor-label">Color</div>
+      <div className="space-editor-colors">
+        {SPACE_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            className={
+              color.toLowerCase() === space.accent.toLowerCase()
+                ? "space-swatch is-active"
+                : "space-swatch"
+            }
+            style={{ "--swatch": color } as CSSProperties}
+            aria-label={`Use ${color}`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onUpdateSpace(space.id, { accent: color })}
+          />
+        ))}
+      </div>
+      <div className="space-editor-label">Icon</div>
+      <div className="space-editor-icons">
+        {SPACE_ICON_OPTIONS.map((iconName) => (
+          <button
+            key={iconName}
+            type="button"
+            className={iconName === space.icon ? "space-icon-pick is-active" : "space-icon-pick"}
+            aria-label={`Use ${iconName} icon`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onUpdateSpace(space.id, { icon: iconName })}
+          >
+            <Icon name={iconName} size={15} />
+          </button>
+        ))}
+      </div>
+      {spaces.length > 1 ? (
+        <button
+          type="button"
+          className="space-editor-delete"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            onDeleteSpace(space.id);
+            setEditingSpaceId(null);
+          }}
+        >
+          Delete space
+        </button>
+      ) : null}
+    </div>
+  );
+
+  const handleSpaceDragOver = (event: DragEvent<HTMLElement>, spaceId: string) => {
+    const isSpaceDrag = draggedSpaceId && draggedSpaceId !== spaceId;
+    const isTabDrag = draggedTabId && spaceId !== selectedSpaceId;
+    if (!isSpaceDrag && !isTabDrag) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dropSpaceId !== spaceId) {
+      setDropSpaceId(spaceId);
+    }
+  };
+
+  const handleSpaceDrop = (event: DragEvent<HTMLElement>, spaceId: string) => {
+    if (draggedSpaceId && draggedSpaceId !== spaceId) {
+      event.preventDefault();
+      event.stopPropagation();
+      onReorderSpaces(draggedSpaceId, spaceId);
+    } else if (draggedTabId && spaceId !== selectedSpaceId) {
+      event.preventDefault();
+      event.stopPropagation();
+      onMoveTabToSpace(selectedSpaceId, draggedTabId, spaceId);
+    }
+    setDropSpaceId(null);
+    setDraggedSpaceId(null);
+  };
+
   const renderTab = (tab: BrowserTab) => {
     const isActive = tab.id === selectedSpace.activeTabId;
     const canDrag = Boolean(tab.url && !tab.isStartPage);
     const canClose = selectedSpace.tabs.length > 1;
+    const audio = tabAudio[tab.id];
     const rowClassName = [
       "tab-row",
       isActive ? "is-selected" : "",
@@ -221,6 +347,12 @@ function Sidebar({
         className={rowClassName}
         draggable={canDrag}
         onContextMenu={(event) => openTabMenu(event, tab)}
+        onAuxClick={(event) => {
+          if (event.button === 1 && canClose) {
+            event.preventDefault();
+            onCloseTab(selectedSpace.id, tab.id);
+          }
+        }}
         onDragStart={(event) => onTabDragStart(event, tab)}
         onDragEnd={onTabDragEnd}
         onDragOver={(event) => {
@@ -255,6 +387,20 @@ function Sidebar({
           </span>
         </button>
         <span className="tab-actions">
+          {audio && (audio.audible || audio.muted) ? (
+            <button
+              className={audio.muted ? "tab-action-btn tab-audio-btn is-muted" : "tab-action-btn tab-audio-btn"}
+              type="button"
+              aria-label={audio.muted ? `Unmute ${tab.title}` : `Mute ${tab.title}`}
+              title={audio.muted ? "Unmute tab" : "Mute tab"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleMute(tab.id);
+              }}
+            >
+              <Icon name={audio.muted ? "volumeMute" : "volume"} size={14} />
+            </button>
+          ) : null}
           {!tab.isStartPage ? (
             <button
               className="tab-action-btn"
@@ -288,210 +434,43 @@ function Sidebar({
   };
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" onWheel={handleWheel}>
       <div className="brand">
-        <div className="brand-mark">A</div>
+        <span className="brand-mark">
+          <AndromedaMark size={30} />
+        </span>
         <div className="brand-name">Andromeda</div>
       </div>
 
       <div className="sidebar-body">
-        <section className="sidebar-section spaces-section">
-          <div className="section-header">
-            <span>Spaces</span>
+        <section className="sidebar-section active-space-section">
+          <div className="active-space-wrap">
             <button
-              className="small-round-button"
               type="button"
-              aria-label="Create space"
-              title="New space"
-              onClick={handleCreateSpace}
+              className="active-space-card"
+              title="Double-click to edit space"
+              onDoubleClick={() => beginRename(selectedSpace)}
             >
-              <Icon name="plus" size={16} />
+              <span
+                className="active-space-mark"
+                style={{ "--tile-hue": selectedSpace.accent } as CSSProperties}
+              >
+                <Icon name={selectedSpace.icon} size={18} />
+              </span>
+              <span className="active-space-copy">
+                <span>{selectedSpace.name}</span>
+              </span>
             </button>
+            {selectedSpace.id === editingSpaceId ? renderSpaceEditor(selectedSpace) : null}
           </div>
 
-          <div className="space-list">
-            {spaces.map((space) => {
-              const isSelected = space.id === selectedSpaceId;
-              const isEditing = space.id === editingSpaceId;
-
-              return (
-                <div
-                  key={space.id}
-                  className={
-                    [
-                      "space-item",
-                      isSelected ? "is-selected" : "",
-                      isEditing ? "is-editing" : "",
-                      dropSpaceId === space.id ? "is-drop-target" : "",
-                      draggedSpaceId === space.id ? "is-dragging" : ""
-                    ]
-                      .filter(Boolean)
-                      .join(" ")
-                  }
-                  draggable={!isEditing}
-                  onClick={() => !isEditing && onSelectSpace(space.id)}
-                  onDoubleClick={() => beginRename(space)}
-                  onDragStart={(event) => {
-                    if (isEditing) {
-                      event.preventDefault();
-                      return;
-                    }
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("application/x-andromeda-space", space.id);
-                    setDraggedSpaceId(space.id);
-                  }}
-                  onDragEnd={() => {
-                    setDraggedSpaceId(null);
-                    setDropSpaceId(null);
-                  }}
-                  onDragOver={(event) => {
-                    const isSpaceDrag = draggedSpaceId && draggedSpaceId !== space.id;
-                    const isTabDrag = draggedTabId && space.id !== selectedSpaceId;
-                    if (!isSpaceDrag && !isTabDrag) {
-                      return;
-                    }
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                    if (dropSpaceId !== space.id) {
-                      setDropSpaceId(space.id);
-                    }
-                  }}
-                  onDragLeave={(event) => {
-                    const next = event.relatedTarget;
-                    if (next instanceof Node && event.currentTarget.contains(next)) {
-                      return;
-                    }
-                    setDropSpaceId((current) => (current === space.id ? null : current));
-                  }}
-                  onDrop={(event) => {
-                    if (draggedSpaceId && draggedSpaceId !== space.id) {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onReorderSpaces(draggedSpaceId, space.id);
-                    } else if (draggedTabId && space.id !== selectedSpaceId) {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onMoveTabToSpace(selectedSpaceId, draggedTabId, space.id);
-                    }
-                    setDropSpaceId(null);
-                    setDraggedSpaceId(null);
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(event) => {
-                    if (isEditing) {
-                      return;
-                    }
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onSelectSpace(space.id);
-                    }
-                  }}
-                >
-                  <span
-                    className="space-icon"
-                    style={{ "--tile-hue": space.accent } as CSSProperties}
-                  >
-                    <Icon name={space.icon} size={16} />
-                  </span>
-                  <span className="space-name">{space.name}</span>
-                  <span className="space-count">{space.tabs.length}</span>
-                  {spaces.length > 1 && !isEditing ? (
-                    <button
-                      className="space-delete"
-                      type="button"
-                      aria-label={`Delete ${space.name}`}
-                      title="Delete space"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDeleteSpace(space.id);
-                      }}
-                    >
-                      <Icon name="close" size={13} />
-                    </button>
-                  ) : null}
-
-                  {isEditing ? (
-                    <div
-                      className="space-editor"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <input
-                        ref={renameInputRef}
-                        className="space-editor-name"
-                        value={draftName}
-                        spellCheck={false}
-                        placeholder="Space name"
-                        maxLength={28}
-                        onChange={(event) => setDraftName(event.target.value)}
-                        onBlur={commitRename}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            commitRename();
-                          } else if (event.key === "Escape") {
-                            event.preventDefault();
-                            setEditingSpaceId(null);
-                          }
-                        }}
-                      />
-                      <div className="space-editor-label">Color</div>
-                      <div className="space-editor-colors">
-                        {SPACE_COLORS.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            className={
-                              color.toLowerCase() === space.accent.toLowerCase()
-                                ? "space-swatch is-active"
-                                : "space-swatch"
-                            }
-                            style={{ "--swatch": color } as CSSProperties}
-                            aria-label={`Use ${color}`}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => onUpdateSpace(space.id, { accent: color })}
-                          />
-                        ))}
-                      </div>
-                      <div className="space-editor-label">Icon</div>
-                      <div className="space-editor-icons">
-                        {SPACE_ICON_OPTIONS.map((iconName) => (
-                          <button
-                            key={iconName}
-                            type="button"
-                            className={
-                              iconName === space.icon ? "space-icon-pick is-active" : "space-icon-pick"
-                            }
-                            aria-label={`Use ${iconName} icon`}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => onUpdateSpace(space.id, { icon: iconName })}
-                          >
-                            <Icon name={iconName} size={15} />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+          <button type="button" className="sidebar-new-tab" onClick={onNewTab}>
+            <Icon name="plus" size={20} />
+            <span>New Tab</span>
+          </button>
         </section>
 
-        <section className="sidebar-section tabs-section">
-          <div className="section-header">
-            <span>Tabs</span>
-            <button
-              className="small-round-button"
-              type="button"
-              aria-label="New tab"
-              title="New tab"
-              onClick={onNewTab}
-            >
-              <Icon name="plus" size={16} />
-            </button>
-          </div>
-
+        <section className="sidebar-section tabs-section" aria-label={`${selectedSpace.name} tabs`}>
           {pinnedTabs.length > 0 ? (
             <>
               <div className="tab-group-label">
@@ -507,6 +486,81 @@ function Sidebar({
           ) : null}
         </section>
       </div>
+
+      <nav className="space-dock" aria-label="Spaces">
+        <span className="space-dock-spacer" aria-hidden="true" />
+        <div className="space-dock-items">
+          {spaces.map((space) => {
+            const isSelected = space.id === selectedSpaceId;
+            const isEditing = space.id === editingSpaceId && space.id !== selectedSpace.id;
+
+            return (
+              <div
+                key={space.id}
+                className={[
+                  "space-dock-item",
+                  isSelected ? "is-selected" : "",
+                  isEditing ? "is-editing" : "",
+                  dropSpaceId === space.id ? "is-drop-target" : "",
+                  draggedSpaceId === space.id ? "is-dragging" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                style={{ "--tile-hue": space.accent } as CSSProperties}
+                title={`${space.name} (${space.tabs.length} ${space.tabs.length === 1 ? "tab" : "tabs"})`}
+                draggable={!isEditing}
+                onClick={() => !isEditing && onSelectSpace(space.id)}
+                onDoubleClick={() => beginRename(space)}
+                onDragStart={(event) => {
+                  if (isEditing) {
+                    event.preventDefault();
+                    return;
+                  }
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("application/x-andromeda-space", space.id);
+                  setDraggedSpaceId(space.id);
+                }}
+                onDragEnd={() => {
+                  setDraggedSpaceId(null);
+                  setDropSpaceId(null);
+                }}
+                onDragOver={(event) => handleSpaceDragOver(event, space.id)}
+                onDragLeave={(event) => {
+                  const next = event.relatedTarget;
+                  if (next instanceof Node && event.currentTarget.contains(next)) {
+                    return;
+                  }
+                  setDropSpaceId((current) => (current === space.id ? null : current));
+                }}
+                onDrop={(event) => handleSpaceDrop(event, space.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (isEditing) {
+                    return;
+                  }
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectSpace(space.id);
+                  }
+                }}
+              >
+                <Icon name={space.icon} size={17} />
+                {isEditing ? renderSpaceEditor(space) : null}
+              </div>
+            );
+          })}
+        </div>
+        <button
+          className="space-dock-add"
+          type="button"
+          aria-label="Create space"
+          title="New space"
+          onClick={handleCreateSpace}
+        >
+          <Icon name="plus" size={22} />
+        </button>
+      </nav>
 
       {tabMenu ? (
         <div

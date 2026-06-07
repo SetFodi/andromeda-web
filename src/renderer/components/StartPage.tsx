@@ -16,7 +16,7 @@ type StartPageProps = {
   onOpenCommand: () => void;
   onOpenLink: (url: string) => void;
   onRemoveQuickLink: (id: string) => void;
-  onImportChrome: () => void;
+  onReorderQuickLink: (sourceId: string, targetId: string) => void;
   recentSites: RecentSite[];
 };
 
@@ -94,11 +94,13 @@ function StartPage({
   onOpenCommand,
   onOpenLink,
   onRemoveQuickLink,
-  onImportChrome,
+  onReorderQuickLink,
   recentSites
 }: StartPageProps) {
   const now = useNow();
   const greeting = getGreeting(now);
+  const [draggedQuickId, setDraggedQuickId] = useState<string | null>(null);
+  const [dropQuickId, setDropQuickId] = useState<string | null>(null);
 
   return (
     <main className="start-page">
@@ -127,7 +129,7 @@ function StartPage({
             <Icon name="search" size={19} />
             <span className="start-search-text">Search the web or type a URL</span>
             <kbd className="start-search-kbd">
-              <span>⌘</span>K
+              <span>⌘</span>T
             </kbd>
           </button>
 
@@ -142,7 +144,46 @@ function StartPage({
             {quickLinks.length > 0 ? (
               <div className="quick-grid">
                 {quickLinks.map((link) => (
-                  <div key={link.id} className="quick-tile" title={getHostname(link.url)}>
+                  <div
+                    key={link.id}
+                    className={[
+                      "quick-tile",
+                      draggedQuickId === link.id ? "is-dragging" : "",
+                      dropQuickId === link.id ? "is-drop-target" : ""
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    title={getHostname(link.url)}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", link.id);
+                      setDraggedQuickId(link.id);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedQuickId(null);
+                      setDropQuickId(null);
+                    }}
+                    onDragOver={(event) => {
+                      if (!draggedQuickId || draggedQuickId === link.id) {
+                        return;
+                      }
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      if (dropQuickId !== link.id) {
+                        setDropQuickId(link.id);
+                      }
+                    }}
+                    onDrop={(event) => {
+                      if (!draggedQuickId || draggedQuickId === link.id) {
+                        return;
+                      }
+                      event.preventDefault();
+                      onReorderQuickLink(draggedQuickId, link.id);
+                      setDraggedQuickId(null);
+                      setDropQuickId(null);
+                    }}
+                  >
                     <button
                       type="button"
                       className="quick-open"
@@ -169,7 +210,7 @@ function StartPage({
             ) : (
               <button type="button" className="quick-empty" onClick={onOpenCommand}>
                 <Icon name="plus" size={15} />
-                Add a site with the ☆ in the toolbar, or search with ⌘K
+                Add a site with the ☆ in the toolbar, or search with ⌘T
               </button>
             )}
           </section>
@@ -203,16 +244,6 @@ function StartPage({
               </div>
             </section>
           ) : null}
-
-          <footer
-            className="start-foot reveal"
-            style={{ "--reveal-delay": "340ms" } as React.CSSProperties}
-          >
-            <p className="start-quote">The best browser is the one that gets out of your way.</p>
-            <button type="button" className="start-import" onClick={onImportChrome}>
-              Import from Chrome
-            </button>
-          </footer>
         </section>
       </div>
     </main>

@@ -8,7 +8,9 @@ import {
   Clock,
   Code2,
   Command,
+  Download,
   FileText,
+  FolderOpen,
   Github,
   Globe,
   History,
@@ -28,6 +30,8 @@ import {
   Star,
   Sun,
   UserRound,
+  Volume2,
+  VolumeX,
   X
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
@@ -41,6 +45,8 @@ const iconMap = {
   clock: Clock,
   code: Code2,
   command: Command,
+  download: Download,
+  folder: FolderOpen,
   docs: FileText,
   github: Github,
   globe: Globe,
@@ -62,6 +68,8 @@ const iconMap = {
   star: Star,
   sun: Sun,
   user: UserRound,
+  volume: Volume2,
+  volumeMute: VolumeX,
   close: X
 };
 

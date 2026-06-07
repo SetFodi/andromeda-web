@@ -49,11 +49,24 @@ type TabNavStatePayload = {
   isLoading: boolean;
 };
 
+type DownloadPayload = {
+  id: string;
+  filename: string;
+  url: string;
+  savePath: string;
+  receivedBytes: number;
+  totalBytes: number;
+  state: string;
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string, pane?: BrowserPane) => Promise<void>;
     showTab: (tabId: string, url: string) => Promise<void>;
     pruneTabs: (ids: string[]) => Promise<void>;
+    setTabMuted: (tabId: string, muted: boolean) => Promise<void>;
+    openDownload: (path: string) => Promise<void>;
+    revealDownload: (path: string) => Promise<void>;
     goBack: (pane?: BrowserPane) => Promise<void>;
     goForward: (pane?: BrowserPane) => Promise<void>;
     reload: (pane?: BrowserPane) => Promise<void>;
@@ -85,5 +98,7 @@ interface Window {
     onTabFavicon: (callback: (payload: { tabId: string; faviconUrl: string }) => void) => () => void;
     onTabNavState: (callback: (payload: TabNavStatePayload) => void) => () => void;
     onOpenTab: (callback: (payload: { url: string }) => void) => () => void;
+    onTabAudio: (callback: (payload: { tabId: string; audible: boolean }) => void) => () => void;
+    onDownload: (callback: (payload: DownloadPayload) => void) => () => void;
   };
 }

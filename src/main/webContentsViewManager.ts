@@ -80,6 +80,7 @@ function getFaviconUrl(favicons: string[]): string | null {
  */
 export class WebContentsViewManager {
   private mainTabs = new Map<string, MainTab>();
+  private mediaPlaying = new Set<string>();
   private activeMainTabId: string | null = null;
   private mainBounds: ContentBounds = { ...DEFAULT_BOUNDS };
   private split: SplitState = {
@@ -91,13 +92,45 @@ export class WebContentsViewManager {
   };
   private activePane: BrowserPane = "main";
   private overlayOpen = false;
+  private downloadSeq = 0;
 
-  constructor(private readonly window: BrowserWindow) {}
+  constructor(private readonly window: BrowserWindow) {
+    this.registerDownloads();
+  }
+
+  private registerDownloads(): void {
+    this.window.webContents.session.on("will-download", (_event, item) => {
+      const id = `dl-${Date.now().toString(36)}-${this.downloadSeq++}`;
+      const emit = (state: string) => {
+        if (this.window.isDestroyed()) {
+          return;
+        }
+        this.window.webContents.send("browser:download", {
+          id,
+          filename: item.getFilename(),
+          url: item.getURL(),
+          savePath: item.getSavePath(),
+          receivedBytes: item.getReceivedBytes(),
+          totalBytes: item.getTotalBytes(),
+          state
+        });
+      };
+
+      item.on("updated", (_updateEvent, state) => emit(state));
+      item.once("done", (_doneEvent, state) => emit(state));
+      emit("progressing");
+    });
+  }
 
   // ---- Main tabs --------------------------------------------------------
   showTab(tabId: string, url: string): void {
     if (!isLoadableUrl(url)) {
       return;
+    }
+
+    // Pop the previous tab's playing video into a floating mini player.
+    if (this.activeMainTabId && this.activeMainTabId !== tabId && this.mediaPlaying.has(this.activeMainTabId)) {
+      this.requestPictureInPicture(this.activeMainTabId);
     }
 
     // Detach every other main view so only the target tab is ever visible.
@@ -122,10 +155,16 @@ export class WebContentsViewManager {
     this.activeMainTabId = tabId;
     this.activePane = "main";
     this.attachMain(tabId);
+    // Returning to a tab brings its video back inline (closes its mini player).
+    this.exitPictureInPicture(tabId);
     this.emitMainNavState(tabId);
   }
 
   showStartPage(): void {
+    if (this.activeMainTabId && this.mediaPlaying.has(this.activeMainTabId)) {
+      this.requestPictureInPicture(this.activeMainTabId);
+    }
+
     // Detach every main view (not just the tracked active one) so the React
     // start page is never left with a stray page floating over it.
     for (const [, entry] of this.mainTabs) {
@@ -136,6 +175,35 @@ export class WebContentsViewManager {
     }
     this.activeMainTabId = null;
     this.activePane = "main";
+  }
+
+  private requestPictureInPicture(tabId: string): void {
+    const entry = this.mainTabs.get(tabId);
+    if (!entry) {
+      return;
+    }
+
+    const code = `(() => {
+      try {
+        if (!document.pictureInPictureEnabled || document.pictureInPictureElement) return;
+        const videos = [...document.querySelectorAll('video')].filter(
+          (v) => !v.disablePictureInPicture && v.readyState > 2 && v.videoWidth > 0
+        );
+        const target = videos.find((v) => !v.paused && !v.ended) || videos[0];
+        if (target) target.requestPictureInPicture().catch(() => {});
+      } catch (error) {}
+    })();`;
+    void entry.view.webContents.executeJavaScript(code, true).catch(() => {});
+  }
+
+  private exitPictureInPicture(tabId: string): void {
+    const entry = this.mainTabs.get(tabId);
+    if (!entry) {
+      return;
+    }
+
+    const code = `try { if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {}); } catch (error) {}`;
+    void entry.view.webContents.executeJavaScript(code, true).catch(() => {});
   }
 
   pruneTabs(validTabIds: string[]): void {
@@ -150,6 +218,7 @@ export class WebContentsViewManager {
       }
       entry.view.webContents.close();
       this.mainTabs.delete(id);
+      this.mediaPlaying.delete(id);
       if (this.activeMainTabId === id) {
         this.activeMainTabId = null;
       }
@@ -223,7 +292,22 @@ export class WebContentsViewManager {
       }
     });
 
+    // Report the deterministic play/paused state rather than isCurrentlyAudible(),
+    // which is racy and frequently false at the moment media starts.
+    view.webContents.on("media-started-playing", () => {
+      this.mediaPlaying.add(tabId);
+      this.window.webContents.send("browser:tabAudio", { tabId, audible: true });
+    });
+    view.webContents.on("media-paused", () => {
+      this.mediaPlaying.delete(tabId);
+      this.window.webContents.send("browser:tabAudio", { tabId, audible: false });
+    });
+
     return view;
+  }
+
+  setTabMuted(tabId: string, muted: boolean): void {
+    this.mainTabs.get(tabId)?.view.webContents.setAudioMuted(muted);
   }
 
   private attachMain(tabId: string): void {

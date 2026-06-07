@@ -1,15 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resolveNavigationInput } from "../utils/url";
+import { getFaviconSrc } from "../utils/favicon";
 import Icon, { IconName } from "./Icon";
-
-export type CommandBarItem = {
-  id: string;
-  title: string;
-  subtitle: string;
-  icon: IconName;
-  keywords?: string[];
-  run: (query: string) => void | { keepOpen?: boolean };
-};
 
 type HistoryItem = {
   id: string;
@@ -20,7 +12,6 @@ type HistoryItem = {
 type CommandBarProps = {
   isOpen: boolean;
   mode: "default" | "split";
-  commands: CommandBarItem[];
   historyItems?: HistoryItem[];
   onClose: () => void;
   onNavigateInput: (input: string, target: "active" | "split") => void;
@@ -35,8 +26,13 @@ function getHostname(url: string): string {
   }
 }
 
-type CommandResult = CommandBarItem & {
-  kind: "command" | "navigation";
+type QuickOpenResult = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: IconName;
+  faviconUrl?: string | null;
+  run: () => void;
 };
 
 function looksLikeUrl(input: string): boolean {
@@ -52,10 +48,27 @@ function normalize(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function QuickOpenIcon({ result }: { result: QuickOpenResult }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [result.faviconUrl]);
+
+  return (
+    <span className="command-result-icon">
+      {result.faviconUrl && !failed ? (
+        <img alt="" src={result.faviconUrl} onError={() => setFailed(true)} />
+      ) : (
+        <Icon name={result.icon} size={18} />
+      )}
+    </span>
+  );
+}
+
 export default function CommandBar({
   isOpen,
   mode,
-  commands,
   historyItems = [],
   onClose,
   onNavigateInput,
@@ -65,72 +78,43 @@ export default function CommandBar({
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const results = useMemo<CommandResult[]>(() => {
+  const results = useMemo<QuickOpenResult[]>(() => {
     const normalizedQuery = normalize(query);
-    const matchedCommands = normalizedQuery
-      ? commands.filter((command) => {
-          const haystack = normalize(
-            [command.title, command.subtitle, ...(command.keywords ?? [])].join(" ")
-          );
-          return haystack.includes(normalizedQuery);
-        })
-      : commands;
-
-    if (!normalizedQuery) {
-      return matchedCommands.map((command) => ({ ...command, kind: "command" }));
-    }
-
     const navigationTarget: "active" | "split" = mode === "split" ? "split" : "active";
-    const historyResults: CommandResult[] = historyItems
+    const historyResults: QuickOpenResult[] = historyItems
       .filter((item) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+
         const haystack = normalize(`${item.title} ${item.url}`);
         return haystack.includes(normalizedQuery);
       })
-      .slice(0, 4)
+      .slice(0, 5)
       .map((item) => ({
         id: `history-${item.id}`,
         title: item.title || getHostname(item.url),
         subtitle: getHostname(item.url),
+        faviconUrl: getFaviconSrc(item.url),
         icon: "history",
-        kind: "navigation",
         run: () => onOpenUrl(item.url, navigationTarget)
       }));
 
-    const resolvedUrl = resolveNavigationInput(query);
-    const navigationResult: CommandResult = {
-      id: "navigate-input",
-      title: looksLikeUrl(query) ? `Open ${query.trim()}` : `Search for "${query.trim()}"`,
-      subtitle: looksLikeUrl(query) ? resolvedUrl : "Web search",
-      icon: "search",
-      kind: "navigation",
-      run: () => onNavigateInput(query, "active")
-    };
-    const splitNavigationResult: CommandResult = {
-      id: "navigate-split-input",
-      title: looksLikeUrl(query)
-        ? `Open ${query.trim()} in Split View`
-        : `Search Split View for "${query.trim()}"`,
-      subtitle: looksLikeUrl(query) ? resolvedUrl : "Right pane",
-      icon: "square",
-      kind: "navigation",
-      run: () => onNavigateInput(query, "split")
-    };
-
-    if (mode === "split") {
-      return [
-        splitNavigationResult,
-        ...historyResults,
-        ...matchedCommands.map((command) => ({ ...command, kind: "command" as const }))
-      ];
+    if (!normalizedQuery) {
+      return historyResults;
     }
 
-    return [
-      ...historyResults,
-      ...matchedCommands.map((command) => ({ ...command, kind: "command" as const })),
-      navigationResult,
-      splitNavigationResult
-    ];
-  }, [commands, historyItems, mode, onNavigateInput, onOpenUrl, query]);
+    const resolvedUrl = resolveNavigationInput(query);
+    const navigationResult: QuickOpenResult = {
+      id: "navigate-input",
+      title: query.trim(),
+      subtitle: looksLikeUrl(query) ? resolvedUrl : "Web search",
+      icon: "search",
+      run: () => onNavigateInput(query, navigationTarget)
+    };
+
+    return [navigationResult, ...historyResults];
+  }, [historyItems, mode, onNavigateInput, onOpenUrl, query]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -154,10 +138,8 @@ export default function CommandBar({
       return;
     }
 
-    const outcome = result.run(query);
-    if (!outcome?.keepOpen) {
-      onClose();
-    }
+    result.run();
+    onClose();
   };
 
   if (!isOpen) {
@@ -167,7 +149,7 @@ export default function CommandBar({
   return (
     <div className="command-bar-layer" role="presentation" onMouseDown={onClose}>
       <section
-        className="command-bar"
+        className={results.length > 0 ? "command-bar has-results" : "command-bar"}
         role="dialog"
         aria-modal="true"
         aria-label="Andromeda command bar"
@@ -178,11 +160,7 @@ export default function CommandBar({
           <input
             ref={inputRef}
             value={query}
-            placeholder={
-              mode === "split"
-                ? "Search or open in the right split pane…"
-                : "Search, open, or run a command…"
-            }
+            placeholder="Search..."
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -223,49 +201,31 @@ export default function CommandBar({
           />
         </div>
 
-        <div className="command-results" role="listbox" aria-label="Command results">
-          {results.map((result, index) => (
-            <button
-              key={`${result.kind}-${result.id}`}
-              className={index === selectedIndex ? "command-result is-selected" : "command-result"}
-              type="button"
-              role="option"
-              aria-selected={index === selectedIndex}
-              onMouseEnter={() => setSelectedIndex(index)}
-              onClick={() => {
-                const outcome = result.run(query);
-                if (!outcome?.keepOpen) {
+        {results.length > 0 ? (
+          <div className="command-results" role="listbox" aria-label="Search suggestions">
+            {results.map((result, index) => (
+              <button
+                key={result.id}
+                className={index === selectedIndex ? "command-result is-selected" : "command-result"}
+                type="button"
+                role="option"
+                aria-selected={index === selectedIndex}
+                onMouseEnter={() => setSelectedIndex(index)}
+                onClick={() => {
+                  result.run();
                   onClose();
-                }
-              }}
-            >
-              <span className="command-result-icon">
-                <Icon name={result.icon} size={18} />
-              </span>
-              <span className="command-result-copy">
-                <span>{result.title}</span>
-                <small>{result.subtitle}</small>
-              </span>
-              <kbd>↵</kbd>
-            </button>
-          ))}
-        </div>
-
-        <footer className="command-foot">
-          <span className="command-foot-hint">
-            <kbd>↑</kbd>
-            <kbd>↓</kbd>
-            navigate
-          </span>
-          <span className="command-foot-hint">
-            <kbd>↵</kbd>
-            open
-          </span>
-          <span className="command-foot-hint">
-            <kbd>esc</kbd>
-            dismiss
-          </span>
-        </footer>
+                }}
+              >
+                <QuickOpenIcon result={result} />
+                <span className="command-result-copy">
+                  <span>{result.title}</span>
+                  <small>{result.subtitle}</small>
+                </span>
+                <kbd>↵</kbd>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </section>
     </div>
   );

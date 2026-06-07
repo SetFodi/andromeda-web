@@ -1,6 +1,14 @@
 import { memo, useEffect, useState, type RefObject } from "react";
 import Icon, { IconName } from "./Icon";
 
+function getHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 type ToolbarProps = {
   addressValue: string;
   inputRef: RefObject<HTMLInputElement | null>;
@@ -15,7 +23,13 @@ type ToolbarProps = {
   isSidebarCollapsed: boolean;
   canBookmark: boolean;
   isBookmarked: boolean;
+  hasActiveDownload: boolean;
+  addressSuggestions: Array<{ id: string; title: string; url: string }>;
+  showAddressSuggestions: boolean;
   onAddressChange: (value: string) => void;
+  onAddressFocus: () => void;
+  onAddressBlur: () => void;
+  onPickSuggestion: (url: string) => void;
   onSubmit: () => void;
   onBack: () => void;
   onForward: () => void;
@@ -23,6 +37,7 @@ type ToolbarProps = {
   onNewTab: () => void;
   onOpenSplitView: () => void;
   onToggleBookmark: () => void;
+  onToggleDownloads: () => void;
   onToggleTheme: () => void;
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
@@ -45,7 +60,13 @@ function Toolbar({
   isSidebarCollapsed,
   canBookmark,
   isBookmarked,
+  hasActiveDownload,
+  addressSuggestions,
+  showAddressSuggestions,
   onAddressChange,
+  onAddressFocus,
+  onAddressBlur,
+  onPickSuggestion,
   onSubmit,
   onBack,
   onForward,
@@ -53,6 +74,7 @@ function Toolbar({
   onNewTab,
   onOpenSplitView,
   onToggleBookmark,
+  onToggleDownloads,
   onToggleTheme,
   onToggleSidebar,
   onOpenSettings,
@@ -72,6 +94,7 @@ function Toolbar({
 
   return (
     <header className="toolbar">
+      {isLoading ? <span className="toolbar-progress" aria-hidden="true" /> : null}
       <div className="traffic-lights" aria-label="Window controls">
         <button className="traffic traffic-close" type="button" onClick={onCloseWindow} />
         <button className="traffic traffic-minimize" type="button" onClick={onMinimizeWindow} />
@@ -145,10 +168,33 @@ function Toolbar({
           value={addressValue}
           placeholder="Search or enter website"
           onChange={(event) => onAddressChange(event.target.value)}
+          onFocus={onAddressFocus}
+          onBlur={onAddressBlur}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.currentTarget.blur();
+            }
+          }}
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
         />
+        {showAddressSuggestions ? (
+          <div className="address-suggest" onMouseDown={(event) => event.preventDefault()}>
+            {addressSuggestions.map((suggestion) => (
+              <button
+                key={suggestion.id}
+                type="button"
+                className="address-suggest-item"
+                onClick={() => onPickSuggestion(suggestion.url)}
+              >
+                <Icon name="history" size={14} />
+                <span className="address-suggest-title">{suggestion.title}</span>
+                <span className="address-suggest-host">{getHostname(suggestion.url)}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </form>
 
       <div className="toolbar-actions" aria-label="Browser actions">
@@ -172,6 +218,14 @@ function Toolbar({
           onClick={onOpenSplitView}
         >
           <Icon name="split" size={17} />
+        </button>
+        <button
+          className={hasActiveDownload ? "toolbar-icon has-activity" : "toolbar-icon"}
+          type="button"
+          aria-label="Downloads"
+          onClick={onToggleDownloads}
+        >
+          <Icon name="download" size={18} />
         </button>
         <button className="toolbar-icon" type="button" aria-label="Security">
           <Icon name="shield" size={18} />

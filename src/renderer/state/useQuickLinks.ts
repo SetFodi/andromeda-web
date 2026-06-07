@@ -117,6 +117,23 @@ export function useQuickLinks() {
     setQuickLinks((current) => current.filter((link) => link.id !== id));
   }, []);
 
+  const reorderQuickLink = useCallback((sourceId: string, targetId: string) => {
+    if (sourceId === targetId) {
+      return;
+    }
+    setQuickLinks((current) => {
+      const from = current.findIndex((link) => link.id === sourceId);
+      const to = current.findIndex((link) => link.id === targetId);
+      if (from < 0 || to < 0) {
+        return current;
+      }
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
   const toggleQuickLink = useCallback((url: string, label?: string) => {
     if (!isValidUrl(url)) {
       return;
@@ -149,5 +166,12 @@ export function useQuickLinks() {
     [quickLinks]
   );
 
-  return { quickLinks, addQuickLink, removeQuickLink, toggleQuickLink, isQuickLink };
+  return {
+    quickLinks,
+    addQuickLink,
+    removeQuickLink,
+    reorderQuickLink,
+    toggleQuickLink,
+    isQuickLink
+  };
 }

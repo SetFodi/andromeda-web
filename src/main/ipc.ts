@@ -1,4 +1,4 @@
-import { BrowserWindow, IpcMainInvokeEvent, ipcMain } from "electron";
+import { BrowserWindow, IpcMainInvokeEvent, ipcMain, shell } from "electron";
 import {
   BrowserPane,
   ContentBounds,
@@ -134,6 +134,35 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     }
 
     manager.pruneTabs(ids as string[]);
+  });
+
+  setHandler("browser:openDownload", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    const path = (payload as { path?: unknown } | null)?.path;
+    if (typeof path !== "string" || !path) {
+      throw new Error("Invalid download path");
+    }
+    void shell.openPath(path);
+  });
+
+  setHandler("browser:revealDownload", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    const path = (payload as { path?: unknown } | null)?.path;
+    if (typeof path !== "string" || !path) {
+      throw new Error("Invalid download path");
+    }
+    shell.showItemInFolder(path);
+  });
+
+  setHandler("browser:setTabMuted", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const candidate = (payload ?? {}) as { tabId?: unknown; muted?: unknown };
+    if (typeof candidate.tabId !== "string" || typeof candidate.muted !== "boolean") {
+      throw new Error("Invalid mute request");
+    }
+
+    manager.setTabMuted(candidate.tabId, candidate.muted);
   });
 
   setHandler("browser:goBack", (event, payload: unknown) => {
