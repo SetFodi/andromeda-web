@@ -2,7 +2,6 @@ import { memo, useEffect, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent, WheelEvent } from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
-import AndromedaMark from "./AndromedaMark";
 import { getFaviconSrc } from "../utils/favicon";
 
 const SPACE_COLORS = [
@@ -435,35 +434,8 @@ function Sidebar({
 
   return (
     <aside className="sidebar" onWheel={handleWheel}>
-      <div className="brand">
-        <span className="brand-mark">
-          <AndromedaMark size={30} />
-        </span>
-        <div className="brand-name">Andromeda</div>
-      </div>
-
       <div className="sidebar-body">
-        <section className="sidebar-section active-space-section">
-          <div className="active-space-wrap">
-            <button
-              type="button"
-              className="active-space-card"
-              title="Double-click to edit space"
-              onDoubleClick={() => beginRename(selectedSpace)}
-            >
-              <span
-                className="active-space-mark"
-                style={{ "--tile-hue": selectedSpace.accent } as CSSProperties}
-              >
-                <Icon name={selectedSpace.icon} size={18} />
-              </span>
-              <span className="active-space-copy">
-                <span>{selectedSpace.name}</span>
-              </span>
-            </button>
-            {selectedSpace.id === editingSpaceId ? renderSpaceEditor(selectedSpace) : null}
-          </div>
-
+        <section className="sidebar-section new-tab-section">
           <button type="button" className="sidebar-new-tab" onClick={onNewTab}>
             <Icon name="plus" size={20} />
             <span>New Tab</span>
@@ -492,7 +464,7 @@ function Sidebar({
         <div className="space-dock-items">
           {spaces.map((space) => {
             const isSelected = space.id === selectedSpaceId;
-            const isEditing = space.id === editingSpaceId && space.id !== selectedSpace.id;
+            const isEditing = space.id === editingSpaceId;
 
             return (
               <div

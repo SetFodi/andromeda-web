@@ -32,6 +32,7 @@ type QuickOpenResult = {
   subtitle: string;
   icon: IconName;
   faviconUrl?: string | null;
+  matchRank?: number;
   run: () => void;
 };
 
@@ -46,6 +47,59 @@ function looksLikeUrl(input: string): boolean {
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function getDisplayUrl(url: string): string {
+  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+function getMatchRank(item: HistoryItem, normalizedQuery: string): number {
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  const title = normalize(item.title);
+  const host = normalize(getHostname(item.url));
+  const displayUrl = normalize(getDisplayUrl(item.url));
+
+  if (host.startsWith(normalizedQuery)) {
+    return 0;
+  }
+  if (displayUrl.startsWith(normalizedQuery)) {
+    return 1;
+  }
+  if (title.startsWith(normalizedQuery)) {
+    return 2;
+  }
+  if (host.includes(normalizedQuery) || displayUrl.includes(normalizedQuery)) {
+    return 3;
+  }
+  if (title.includes(normalizedQuery)) {
+    return 4;
+  }
+
+  return Number.POSITIVE_INFINITY;
+}
+
+function getCompletionText(query: string, historyItems: HistoryItem[]): string | null {
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery) {
+    return null;
+  }
+
+  for (const item of historyItems) {
+    const candidates = [getHostname(item.url), getDisplayUrl(item.url), item.title].filter(Boolean);
+    const candidate = candidates.find((value) => {
+      const normalizedValue = normalize(value);
+      return normalizedValue.startsWith(normalizedQuery) && normalizedValue !== normalizedQuery;
+    });
+
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 function QuickOpenIcon({ result }: { result: QuickOpenResult }) {
@@ -77,26 +131,23 @@ export default function CommandBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const completionText = useMemo(() => getCompletionText(query, historyItems), [historyItems, query]);
 
   const results = useMemo<QuickOpenResult[]>(() => {
     const normalizedQuery = normalize(query);
     const navigationTarget: "active" | "split" = mode === "split" ? "split" : "active";
     const historyResults: QuickOpenResult[] = historyItems
-      .filter((item) => {
-        if (!normalizedQuery) {
-          return true;
-        }
-
-        const haystack = normalize(`${item.title} ${item.url}`);
-        return haystack.includes(normalizedQuery);
-      })
+      .map((item, index) => ({ item, index, rank: getMatchRank(item, normalizedQuery) }))
+      .filter(({ rank }) => Number.isFinite(rank))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
       .slice(0, 5)
-      .map((item) => ({
+      .map(({ item, rank }) => ({
         id: `history-${item.id}`,
         title: item.title || getHostname(item.url),
-        subtitle: getHostname(item.url),
+        subtitle: getDisplayUrl(item.url),
         faviconUrl: getFaviconSrc(item.url),
         icon: "history",
+        matchRank: rank,
         run: () => onOpenUrl(item.url, navigationTarget)
       }));
 
@@ -112,6 +163,11 @@ export default function CommandBar({
       icon: "search",
       run: () => onNavigateInput(query, navigationTarget)
     };
+
+    const bestHistoryResult = historyResults[0];
+    if (bestHistoryResult && bestHistoryResult.matchRank !== undefined && bestHistoryResult.matchRank <= 2) {
+      return [...historyResults, navigationResult];
+    }
 
     return [navigationResult, ...historyResults];
   }, [historyItems, mode, onNavigateInput, onOpenUrl, query]);
@@ -157,48 +213,66 @@ export default function CommandBar({
       >
         <div className="command-input-wrap">
           <Icon name="search" size={19} />
-          <input
-            ref={inputRef}
-            value={query}
-            placeholder="Search..."
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setSelectedIndex(0);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                onClose();
-                return;
-              }
-
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                if (results.length === 0) {
+          <span className="command-input-field">
+            {completionText ? (
+              <span className="command-completion" aria-hidden="true">
+                <span className="command-completion-typed">{query}</span>
+                {completionText.slice(query.length)}
+              </span>
+            ) : null}
+            <input
+              ref={inputRef}
+              value={query}
+              placeholder="Search..."
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setSelectedIndex(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onClose();
                   return;
                 }
-                setSelectedIndex((current) => (current + 1) % results.length);
-                return;
-              }
 
-              if (event.key === "ArrowUp") {
-                event.preventDefault();
-                if (results.length === 0) {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  if (results.length === 0) {
+                    return;
+                  }
+                  setSelectedIndex((current) => (current + 1) % results.length);
                   return;
                 }
-                setSelectedIndex((current) => (current - 1 + results.length) % results.length);
-                return;
-              }
 
-              if (event.key === "Enter") {
-                event.preventDefault();
-                runSelectedResult();
-              }
-            }}
-          />
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  if (results.length === 0) {
+                    return;
+                  }
+                  setSelectedIndex((current) => (current - 1 + results.length) % results.length);
+                  return;
+                }
+
+                const isCaretAtEnd =
+                  event.currentTarget.selectionStart === event.currentTarget.value.length &&
+                  event.currentTarget.selectionEnd === event.currentTarget.value.length;
+                if ((event.key === "Tab" || (event.key === "ArrowRight" && isCaretAtEnd)) && completionText) {
+                  event.preventDefault();
+                  setQuery(completionText);
+                  setSelectedIndex(0);
+                  return;
+                }
+
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  runSelectedResult();
+                }
+              }}
+            />
+          </span>
         </div>
 
         {results.length > 0 ? (
