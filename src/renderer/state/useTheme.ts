@@ -22,8 +22,11 @@ function normalizeTheme(value: string | null | undefined): ThemeMode | null {
 }
 
 function applyTheme(mode: ThemeMode) {
-  document.documentElement.dataset.theme = mode === "day" ? "light" : "dark";
+  const isDark = mode !== "day";
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
   document.documentElement.dataset.appearance = mode;
+  // Mirror onto a `.dark` class so vendored components (color picker) adapt.
+  document.documentElement.classList.toggle("dark", isDark);
 }
 
 function getInitialTheme(): ThemeMode {

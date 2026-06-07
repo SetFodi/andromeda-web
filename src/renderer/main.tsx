@@ -20,8 +20,10 @@ import "./styles/app.css";
           : stored === "dark" || prefersDark
             ? "night"
             : "day";
-    document.documentElement.dataset.theme = appearance === "day" ? "light" : "dark";
+    const isDark = appearance !== "day";
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
     document.documentElement.dataset.appearance = appearance;
+    document.documentElement.classList.toggle("dark", isDark);
   } catch {
     document.documentElement.dataset.theme = "light";
     document.documentElement.dataset.appearance = "day";

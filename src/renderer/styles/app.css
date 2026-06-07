@@ -17,7 +17,11 @@
   background: var(--bg-shell);
   box-shadow: var(--shadow-window);
   animation: shell-in var(--dur-slow) var(--ease-out) both;
-  transition: --accent 420ms var(--ease-out);
+  transition:
+    --accent 460ms var(--ease-out),
+    --grad-1 460ms var(--ease-out),
+    --grad-2 460ms var(--ease-out),
+    --grad-3 460ms var(--ease-out);
 }
 
 [data-theme="light"] .app-shell {
@@ -515,9 +519,7 @@
   background:
     radial-gradient(140% 80% at 14% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 58%),
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 6%, transparent)),
-    var(--surface-glass);
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
+    var(--surface-glass-strong);
   transition:
     transform 360ms var(--ease-out),
     opacity 240ms var(--ease-out);
@@ -2124,7 +2126,50 @@
 
 .space-context {
   z-index: 90;
-  min-width: 220px;
+  min-width: 256px;
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+}
+
+/* While actively picking a space color, swap the expensive rendering (gradient
+   meshes, backdrop blur, animated/blurred orb, transitions) for cheap flat fills
+   so the live re-tint stays smooth. The rich rendering returns when you settle. */
+.app-shell.is-recoloring,
+.app-shell.is-recoloring .start-page {
+  background: var(--bg-base);
+  transition: none;
+}
+
+.app-shell.is-recoloring .start-ambient {
+  display: none;
+}
+
+.app-shell.is-recoloring .toolbar,
+.app-shell.is-recoloring .command-bar,
+.app-shell.is-recoloring .split-pane-label,
+.app-shell.is-recoloring .split-divider {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.app-shell.is-recoloring::after {
+  display: none;
+}
+
+.space-color-picker {
+  padding: 4px 10px 10px;
+}
+
+.space-color-picker .color-picker {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.space-color-swatches {
+  justify-content: center;
+  padding-top: 2px;
 }
 
 .space-context-label {
@@ -2169,6 +2214,119 @@
     0 0 0 2px var(--surface-raised),
     0 0 0 4px var(--swatch),
     0 10px 22px color-mix(in srgb, var(--swatch) 26%, transparent);
+}
+
+/* ---- Gradient theme picker (Zen/Arc-style) -------------------------- */
+.grad-stops {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 9px 9px;
+}
+
+.grad-stop {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-full);
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.42), transparent 36%),
+    var(--swatch);
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--swatch) 52%, transparent),
+    0 6px 14px color-mix(in srgb, var(--swatch) 30%, transparent);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.grad-stop:hover {
+  transform: translateY(-1px);
+}
+
+.grad-stop-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.grad-stop-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  background: var(--surface-solid);
+  color: var(--text-soft);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.grad-stop-remove:hover {
+  color: #ff5f57;
+}
+
+.grad-stop-add {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.grad-stop-add:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.grad-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  padding: 4px 9px 9px;
+}
+
+.grad-preset {
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.grad-preset:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.grad-preset.is-active {
+  box-shadow:
+    0 0 0 2px var(--surface-glass-strong),
+    0 0 0 3.5px var(--accent);
 }
 
 /* ====================================================================== */

@@ -1,41 +1,21 @@
-import { memo, useEffect, useRef, type CSSProperties } from "react";
-import Icon, { IconName } from "./Icon";
+import { memo, useEffect, useRef } from "react";
+import Icon from "./Icon";
 import { SEARCH_ENGINES, SearchEngineId } from "../utils/url";
-import { APPEARANCE_ACCENTS, type Settings } from "../state/useSettings";
-import type { ThemeMode } from "../state/useTheme";
+import type { Settings } from "../state/useSettings";
 
 type SettingsPanelProps = {
   isOpen: boolean;
   settings: Settings;
-  theme: ThemeMode;
-  appearanceAccent: string;
   onUpdateSettings: (patch: Partial<Settings>) => void;
-  onSetTheme: (mode: ThemeMode) => void;
-  onChangeAccent: (accent: string) => void;
   onClose: () => void;
 };
-
-const THEME_OPTIONS: Array<{ id: ThemeMode; label: string; icon: IconName }> = [
-  { id: "glow", label: "Glow", icon: "sparkle" },
-  { id: "day", label: "Day", icon: "sun" },
-  { id: "night", label: "Night", icon: "moon" }
-];
 
 const SEARCH_OPTIONS = (Object.keys(SEARCH_ENGINES) as SearchEngineId[]).map((id) => ({
   id,
   label: SEARCH_ENGINES[id].label
 }));
 
-function SettingsPanel({
-  isOpen,
-  settings,
-  theme,
-  appearanceAccent,
-  onUpdateSettings,
-  onSetTheme,
-  onChangeAccent,
-  onClose
-}: SettingsPanelProps) {
+function SettingsPanel({ isOpen, settings, onUpdateSettings, onClose }: SettingsPanelProps) {
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -84,46 +64,6 @@ function SettingsPanel({
               maxLength={40}
               onChange={(event) => onUpdateSettings({ name: event.target.value })}
             />
-          </div>
-
-          <div className="settings-field">
-            <label>Appearance</label>
-            <div className="appearance-picker">
-              <div className="appearance-modes" aria-label="Ambience">
-                {THEME_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={theme === option.id ? "appearance-mode is-active" : "appearance-mode"}
-                    aria-label={option.label}
-                    title={option.label}
-                    onClick={() => onSetTheme(option.id)}
-                  >
-                    <Icon name={option.icon} size={18} />
-                  </button>
-                ))}
-              </div>
-              <div className="appearance-swatches" aria-label="Accent color">
-                {APPEARANCE_ACCENTS.map((accent) => (
-                  <button
-                    key={accent}
-                    type="button"
-                    className={
-                      appearanceAccent.toLowerCase() === accent.toLowerCase()
-                        ? "appearance-swatch is-active"
-                        : "appearance-swatch"
-                    }
-                    style={{ "--swatch": accent } as CSSProperties}
-                    aria-label={`Use ${accent}`}
-                    onClick={() => onChangeAccent(accent)}
-                  />
-                ))}
-              </div>
-              <div className="appearance-preview" aria-hidden="true">
-                <span className="appearance-preview-wave" />
-                <span className="appearance-preview-dot" />
-              </div>
-            </div>
           </div>
 
           <div className="settings-field">

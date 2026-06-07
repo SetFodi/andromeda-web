@@ -18,9 +18,24 @@ export type BrowserSpace = {
   name: string;
   icon: IconName;
   accent: string;
+  colors: string[];
   tabs: BrowserTab[];
   activeTabId: string;
 };
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+function sanitizeColors(value: unknown, fallback: string): string[] {
+  if (Array.isArray(value)) {
+    const valid = value
+      .filter((color): color is string => typeof color === "string" && HEX_RE.test(color))
+      .slice(0, 3);
+    if (valid.length > 0) {
+      return valid;
+    }
+  }
+  return [fallback];
+}
 
 type BrowserState = {
   selectedSpaceId: SpaceId;
@@ -64,6 +79,7 @@ function createDefaultSpace(): BrowserSpace {
     name: "Home",
     icon: "globe",
     accent: "#4f7df4",
+    colors: ["#4f7df4"],
     tabs: [startTab],
     activeTabId: startTab.id
   };
@@ -219,10 +235,9 @@ function sanitizeSpace(value: unknown): BrowserSpace | null {
 
   const cappedTabs = capSpaceTabs(tabs.length > 0 ? tabs : [createStartTab()]);
   const icon = SPACE_ICON_NAMES.includes(space.icon as IconName) ? (space.icon as IconName) : "globe";
-  const accent =
-    typeof space.accent === "string" && /^#[0-9a-fA-F]{6}$/.test(space.accent)
-      ? space.accent
-      : "#4f7df4";
+  const fallbackAccent =
+    typeof space.accent === "string" && HEX_RE.test(space.accent) ? space.accent : "#4f7df4";
+  const colors = sanitizeColors(space.colors, fallbackAccent);
   const activeTabId =
     typeof space.activeTabId === "string" && cappedTabs.some((tab) => tab.id === space.activeTabId)
       ? space.activeTabId
@@ -232,7 +247,8 @@ function sanitizeSpace(value: unknown): BrowserSpace | null {
     id: space.id,
     name: space.name.trim() || "Space",
     icon,
-    accent,
+    accent: colors[0],
+    colors,
     tabs: cappedTabs,
     activeTabId
   };
@@ -380,6 +396,7 @@ export function useBrowserStore() {
         name,
         icon: preset.icon,
         accent: preset.accent,
+        colors: [preset.accent],
         tabs: [startTab],
         activeTabId: startTab.id
       };
@@ -416,7 +433,10 @@ export function useBrowserStore() {
   }, []);
 
   const updateSpace = useCallback(
-    (spaceId: SpaceId, patch: { name?: string; icon?: IconName; accent?: string }) => {
+    (
+      spaceId: SpaceId,
+      patch: { name?: string; icon?: IconName; accent?: string; colors?: string[] }
+    ) => {
       setState((current) => {
         let didChange = false;
         const spaces = current.spaces.map((space) => {
@@ -433,12 +453,16 @@ export function useBrowserStore() {
             next.icon = patch.icon;
             didChange = true;
           }
-          if (
-            patch.accent !== undefined &&
-            /^#[0-9a-fA-F]{6}$/.test(patch.accent) &&
-            patch.accent !== space.accent
-          ) {
-            next.accent = patch.accent;
+
+          const nextColors =
+            patch.colors !== undefined
+              ? sanitizeColors(patch.colors, space.accent)
+              : patch.accent !== undefined && HEX_RE.test(patch.accent)
+                ? [patch.accent]
+                : null;
+          if (nextColors && nextColors.join() !== space.colors.join()) {
+            next.colors = nextColors;
+            next.accent = nextColors[0];
             didChange = true;
           }
 

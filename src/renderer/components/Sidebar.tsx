@@ -3,6 +3,14 @@ import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent, WheelEven
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
 import { getFaviconSrc } from "../utils/favicon";
+import {
+  ColorArea,
+  ColorField,
+  ColorPicker,
+  ColorSlider,
+  ColorSwatch,
+  ColorSwatchPicker
+} from "./ui/heroui-color-picker";
 
 const SPACE_COLORS = [
   "#ff7a5c",
@@ -26,13 +34,18 @@ const SPACE_ICON_OPTIONS: IconName[] = [
   "github"
 ];
 
+
 type SidebarProps = {
   spaces: BrowserSpace[];
   selectedSpaceId: SpaceId;
   onSelectSpace: (spaceId: SpaceId) => void;
   onCreateSpace: () => SpaceId;
   onRenameSpace: (spaceId: SpaceId, name: string) => void;
-  onUpdateSpace: (spaceId: SpaceId, patch: { name?: string; icon?: IconName; accent?: string }) => void;
+  onUpdateSpace: (
+    spaceId: SpaceId,
+    patch: { name?: string; icon?: IconName; accent?: string; colors?: string[] }
+  ) => void;
+  onPreviewSpaceColor: (spaceId: SpaceId, hex: string) => void;
   onDeleteSpace: (spaceId: SpaceId) => void;
   onReorderSpaces: (sourceSpaceId: SpaceId, targetSpaceId: SpaceId) => void;
   onSwitchSpace: (direction: "previous" | "next") => void;
@@ -117,6 +130,7 @@ function Sidebar({
   onCreateSpace,
   onRenameSpace,
   onUpdateSpace,
+  onPreviewSpaceColor,
   onDeleteSpace,
   onReorderSpaces,
   onSwitchSpace,
@@ -176,11 +190,9 @@ function Sidebar({
 
     window.addEventListener("mousedown", close);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("blur", close);
     return () => {
       window.removeEventListener("mousedown", close);
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("blur", close);
     };
   }, [spaceMenu, tabMenu]);
 
@@ -198,8 +210,13 @@ function Sidebar({
   const openSpaceMenu = (event: ReactMouseEvent, space: BrowserSpace) => {
     event.preventDefault();
     event.stopPropagation();
-    const left = Math.max(8, Math.min(event.clientX, 280 - 208));
-    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - 310));
+    // Keep the tall color-picker menu fully on-screen: pin it within the sidebar
+    // width and let it grow upward when opened from a space near the bottom.
+    const MENU_WIDTH = 256;
+    const MENU_HEIGHT = 504;
+    const margin = 10;
+    const left = Math.max(margin, Math.min(event.clientX, 286 - MENU_WIDTH - margin));
+    const top = Math.max(margin, Math.min(event.clientY, window.innerHeight - MENU_HEIGHT - margin));
     setTabMenu(null);
     setSpaceMenu({ spaceId: space.id, x: left, y: top });
   };
@@ -663,23 +680,37 @@ function Sidebar({
           style={{ top: spaceMenu.y, left: spaceMenu.x }}
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <div className="space-context-label">Color</div>
-          <div className="space-context-swatches" role="group" aria-label={`Set ${menuSpace.name} color`}>
-            {SPACE_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                className={
-                  color.toLowerCase() === menuSpace.accent.toLowerCase()
-                    ? "space-context-swatch is-active"
-                    : "space-context-swatch"
-                }
-                style={{ "--swatch": color } as CSSProperties}
-                aria-label={`Use ${color}`}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onUpdateSpace(menuSpace.id, { accent: color })}
-              />
-            ))}
+          <div className="space-context-label">Theme color</div>
+          <div className="space-color-picker">
+            <ColorPicker
+              key={menuSpace.id}
+              defaultValue={menuSpace.colors[0]}
+              onChange={(next) => onPreviewSpaceColor(menuSpace.id, next.toString("hex"))}
+            >
+              <ColorArea aria-label="Saturation and brightness">
+                <ColorArea.Thumb />
+              </ColorArea>
+              <ColorSlider channel="hue" colorSpace="hsb" aria-label="Hue">
+                <ColorSlider.Track>
+                  <ColorSlider.Thumb />
+                </ColorSlider.Track>
+              </ColorSlider>
+              <ColorField aria-label="Hex color">
+                <ColorField.Group>
+                  <ColorField.Prefix>
+                    <ColorSwatch size="xs" />
+                  </ColorField.Prefix>
+                  <ColorField.Input />
+                </ColorField.Group>
+              </ColorField>
+              <ColorSwatchPicker className="space-color-swatches">
+                {SPACE_COLORS.map((swatch) => (
+                  <ColorSwatchPicker.Item key={swatch} color={swatch}>
+                    <ColorSwatchPicker.Swatch />
+                  </ColorSwatchPicker.Item>
+                ))}
+              </ColorSwatchPicker>
+            </ColorPicker>
           </div>
           <div className="tab-context-sep" />
           <button

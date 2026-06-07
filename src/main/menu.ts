@@ -89,7 +89,7 @@ export function buildAppMenu(window: BrowserWindow): void {
         { label: "Zoom Out", accelerator: "CmdOrCtrl+-", click: () => send("zoom-out") },
         { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => send("zoom-reset") },
         { type: "separator" },
-        { label: "Toggle Sidebar", accelerator: "CmdOrCtrl+\\", click: () => send("toggle-sidebar") },
+        { label: "Toggle Compact Sidebar", accelerator: "CmdOrCtrl+S", click: () => send("toggle-sidebar") },
         { label: "Toggle Split View", accelerator: "CmdOrCtrl+D", click: () => send("toggle-split") },
         { type: "separator" },
         { label: "Open Command Bar", accelerator: "CmdOrCtrl+K", click: () => send("command-bar") },

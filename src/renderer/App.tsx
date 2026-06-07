@@ -86,11 +86,15 @@ function loadSplitRatio(): number {
 }
 
 export default function App() {
-  const { theme, toggleTheme, setTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const { settings, updateSettings } = useSettings();
   const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink } =
     useQuickLinks();
   const contentRef = useRef<HTMLDivElement>(null);
+  const appShellRef = useRef<HTMLDivElement>(null);
+  const recolorIdleRef = useRef<number | null>(null);
+  const recolorRafRef = useRef<number | null>(null);
+  const pendingRecolorRef = useRef<{ spaceId: string; hex: string } | null>(null);
   const splitRatioRef = useRef<number>(loadSplitRatio());
   const addressInputRef = useRef<HTMLInputElement>(null);
   const lastContentLayoutKeyRef = useRef<string | null>(null);
@@ -156,7 +160,17 @@ export default function App() {
   } = useBrowserStore();
 
   const showReactStartPage = activeTab.isStartPage;
-  const shellAccent = selectedSpace?.accent ?? settings.appearanceAccent;
+  const shellColors =
+    selectedSpace?.colors && selectedSpace.colors.length > 0
+      ? selectedSpace.colors
+      : [settings.appearanceAccent];
+  const shellAccent = shellColors[0];
+  const shellStyle = {
+    "--accent": shellAccent,
+    "--grad-1": shellColors[0],
+    "--grad-2": shellColors[1] ?? shellColors[0],
+    "--grad-3": shellColors[2] ?? shellColors[1] ?? shellColors[0]
+  } as CSSProperties;
   const recentSites = useMemo<RecentSite[]>(() => {
     const seen = new Set<string>();
     const sites: RecentSite[] = [];
@@ -754,6 +768,50 @@ export default function App() {
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
+  // Live, jank-free space recoloring: paint the shell vars directly on the DOM
+  // (no React re-render) and drop the blur/transition while picking, then commit
+  // to the store once the user settles.
+  const handleSpaceColorPreview = useCallback(
+    (spaceId: SpaceId, hex: string) => {
+      pendingRecolorRef.current = { spaceId, hex };
+
+      // Coalesce to one cheap repaint per frame (pointer events can fire faster
+      // than the display refreshes).
+      if (recolorRafRef.current == null) {
+        recolorRafRef.current = requestAnimationFrame(() => {
+          recolorRafRef.current = null;
+          const pending = pendingRecolorRef.current;
+          const shell = appShellRef.current;
+          if (pending && shell) {
+            shell.classList.add("is-recoloring");
+            shell.style.setProperty("--accent", pending.hex);
+            shell.style.setProperty("--grad-1", pending.hex);
+            shell.style.setProperty("--grad-2", pending.hex);
+            shell.style.setProperty("--grad-3", pending.hex);
+          }
+        });
+      }
+
+      // Commit to the store (rich rendering + persistence) once the user settles.
+      if (recolorIdleRef.current) {
+        window.clearTimeout(recolorIdleRef.current);
+      }
+      recolorIdleRef.current = window.setTimeout(() => {
+        recolorIdleRef.current = null;
+        if (recolorRafRef.current != null) {
+          cancelAnimationFrame(recolorRafRef.current);
+          recolorRafRef.current = null;
+        }
+        const pending = pendingRecolorRef.current;
+        appShellRef.current?.classList.remove("is-recoloring");
+        if (pending) {
+          updateSpace(pending.spaceId, { colors: [pending.hex] });
+        }
+      }, 180);
+    },
+    [updateSpace]
+  );
+
   const toggleDownloads = useCallback(() => setDownloadsOpen((open) => !open), []);
   const closeDownloads = useCallback(() => setDownloadsOpen(false), []);
   const handleOpenDownload = useCallback((path: string) => {
@@ -1104,8 +1162,9 @@ export default function App() {
   return (
     <div className="window-frame">
       <div
+        ref={appShellRef}
         className={isSidebarCollapsed ? "app-shell is-sidebar-collapsed" : "app-shell"}
-        style={{ "--accent": shellAccent } as CSSProperties}
+        style={shellStyle}
       >
         <Toolbar
           addressValue={addressValue}
@@ -1150,6 +1209,7 @@ export default function App() {
           onCreateSpace={createSpace}
           onRenameSpace={renameSpace}
           onUpdateSpace={updateSpace}
+          onPreviewSpaceColor={handleSpaceColorPreview}
           onDeleteSpace={deleteSpace}
           onReorderSpaces={reorderSpaces}
           onSwitchSpace={handleSwitchSpace}
@@ -1285,11 +1345,7 @@ export default function App() {
         <SettingsPanel
           isOpen={isSettingsOpen}
           settings={settings}
-          theme={theme}
-          appearanceAccent={shellAccent}
           onUpdateSettings={updateSettings}
-          onSetTheme={setTheme}
-          onChangeAccent={(accent) => updateSpace(selectedSpace.id, { accent })}
           onClose={closeSettings}
         />
         <DownloadsTray
