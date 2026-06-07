@@ -12,6 +12,7 @@ type ToolbarProps = {
   canGoForward: boolean;
   isLoading: boolean;
   theme: "light" | "dark";
+  isSidebarCollapsed: boolean;
   onAddressChange: (value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -20,6 +21,8 @@ type ToolbarProps = {
   onNewTab: () => void;
   onOpenSplitView: () => void;
   onToggleTheme: () => void;
+  onToggleSidebar: () => void;
+  onOpenSettings: () => void;
   onCloseWindow: () => void;
   onMinimizeWindow: () => void;
   onToggleMaximizeWindow: () => void;
@@ -36,6 +39,7 @@ function Toolbar({
   canGoForward,
   isLoading,
   theme,
+  isSidebarCollapsed,
   onAddressChange,
   onSubmit,
   onBack,
@@ -44,6 +48,8 @@ function Toolbar({
   onNewTab,
   onOpenSplitView,
   onToggleTheme,
+  onToggleSidebar,
+  onOpenSettings,
   onCloseWindow,
   onMinimizeWindow,
   onToggleMaximizeWindow
@@ -66,7 +72,13 @@ function Toolbar({
         <button className="traffic traffic-maximize" type="button" onClick={onToggleMaximizeWindow} />
       </div>
 
-      <button className="toolbar-icon sidebar-switch" type="button" aria-label="Toggle sidebar">
+      <button
+        className={isSidebarCollapsed ? "toolbar-icon sidebar-switch is-active" : "toolbar-icon sidebar-switch"}
+        type="button"
+        aria-label="Toggle sidebar"
+        aria-pressed={isSidebarCollapsed}
+        onClick={onToggleSidebar}
+      >
         <Icon name="panel" size={18} />
       </button>
 
@@ -160,7 +172,12 @@ function Toolbar({
         <button className="profile-badge" type="button" aria-label="Profile">
           A
         </button>
-        <button className="toolbar-icon" type="button" aria-label="Menu">
+        <button
+          className="toolbar-icon"
+          type="button"
+          aria-label="Settings"
+          onClick={onOpenSettings}
+        >
           <Icon name="menu" size={19} />
         </button>
       </div>

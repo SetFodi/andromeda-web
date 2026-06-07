@@ -146,6 +146,37 @@ export class WebContentsViewManager {
     }
   }
 
+  findInPage(pane: BrowserPane, text: string, options: { forward: boolean; findNext: boolean }): void {
+    if (!text) {
+      return;
+    }
+
+    const view = this.panes[pane].view;
+    view?.webContents.findInPage(text, { forward: options.forward, findNext: options.findNext });
+  }
+
+  stopFind(pane: BrowserPane): void {
+    const view = this.panes[pane].view;
+    view?.webContents.stopFindInPage("clearSelection");
+  }
+
+  adjustZoom(pane: BrowserPane, direction: "in" | "out" | "reset"): void {
+    const view = this.panes[pane].view;
+    if (!view) {
+      return;
+    }
+
+    const webContents = view.webContents;
+    if (direction === "reset") {
+      webContents.setZoomLevel(0);
+      return;
+    }
+
+    const step = direction === "in" ? 0.5 : -0.5;
+    const next = Math.max(-3, Math.min(5, webContents.getZoomLevel() + step));
+    webContents.setZoomLevel(next);
+  }
+
   setCommandBarOpen(isOpen: boolean): void {
     (["main", "split"] as BrowserPane[]).forEach((pane) => {
       const paneState = this.panes[pane];
@@ -204,18 +235,20 @@ export class WebContentsViewManager {
       return { action: "deny" };
     });
 
-    view.webContents.on("before-input-event", (event, input) => {
-      this.setActivePane(pane);
-
-      if (!input.meta) {
-        return;
+    view.webContents.on("before-input-event", (_event, input) => {
+      // Track which pane the user is interacting with. App-level shortcuts are
+      // handled by the native menu, so we no longer intercept keys here.
+      if (input.type === "keyDown") {
+        this.setActivePane(pane);
       }
+    });
 
-      const key = input.key.toLowerCase();
-      if (key === "k" || key === "t") {
-        event.preventDefault();
-        this.window.webContents.send("browser:openCommandBar");
-      }
+    view.webContents.on("found-in-page", (_event, result) => {
+      this.window.webContents.send("browser:foundInPage", {
+        pane,
+        activeMatchOrdinal: result.activeMatchOrdinal,
+        matches: result.matches
+      });
     });
 
     view.webContents.on("focus", () => {

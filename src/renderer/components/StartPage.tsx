@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from "react";
 import Icon, { IconName } from "./Icon";
 import { formatClock, formatLongDate, getGreeting } from "../utils/time";
+import { getFaviconSrc } from "../utils/favicon";
 
 export type RecentSite = {
   id: string;
@@ -53,6 +54,25 @@ function getSiteFallbackIcon(url: string): IconName {
     return "linear";
   }
   return "globe";
+}
+
+function RecentFavicon({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = getFaviconSrc(url);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  return (
+    <span className="recent-icon">
+      {src && !failed ? (
+        <img alt="" src={src} loading="lazy" onError={() => setFailed(true)} />
+      ) : (
+        <Icon name={getSiteFallbackIcon(url)} size={15} />
+      )}
+    </span>
+  );
 }
 
 function useNow(): Date {
@@ -155,9 +175,7 @@ function StartPage({
                     title={site.url}
                     onClick={() => onOpenLink(site.url)}
                   >
-                    <span className="recent-icon">
-                      <Icon name={getSiteFallbackIcon(site.url)} size={15} />
-                    </span>
+                    <RecentFavicon url={site.url} />
                     <span className="recent-copy">
                       <span className="recent-title">{site.title}</span>
                       <span className="recent-host">{getHostname(site.url)}</span>

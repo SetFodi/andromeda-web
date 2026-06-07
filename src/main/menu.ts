@@ -29,6 +29,8 @@ export function buildAppMenu(window: BrowserWindow): void {
             submenu: [
               { role: "about" },
               { type: "separator" },
+              { label: "Preferences…", accelerator: "CmdOrCtrl+,", click: () => send("settings") },
+              { type: "separator" },
               { role: "hide" },
               { role: "hideOthers" },
               { role: "unhide" },
@@ -65,7 +67,9 @@ export function buildAppMenu(window: BrowserWindow): void {
         { role: "cut" },
         { role: "copy" },
         { role: "paste" },
-        { role: "selectAll" }
+        { role: "selectAll" },
+        { type: "separator" },
+        { label: "Find in Page", accelerator: "CmdOrCtrl+F", click: () => send("find") }
       ]
     },
     {
@@ -76,9 +80,15 @@ export function buildAppMenu(window: BrowserWindow): void {
         { label: "Back", accelerator: "CmdOrCtrl+[", click: () => send("back") },
         { label: "Forward", accelerator: "CmdOrCtrl+]", click: () => send("forward") },
         { type: "separator" },
+        { label: "Zoom In", accelerator: "CmdOrCtrl+Plus", click: () => send("zoom-in") },
+        { label: "Zoom Out", accelerator: "CmdOrCtrl+-", click: () => send("zoom-out") },
+        { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => send("zoom-reset") },
+        { type: "separator" },
+        { label: "Toggle Sidebar", accelerator: "CmdOrCtrl+\\", click: () => send("toggle-sidebar") },
+        { label: "Toggle Split View", accelerator: "CmdOrCtrl+D", click: () => send("toggle-split") },
+        { type: "separator" },
         { label: "Open Command Bar", accelerator: "CmdOrCtrl+K", click: () => send("command-bar") },
         { label: "Focus Address Bar", accelerator: "CmdOrCtrl+L", click: () => send("focus-address") },
-        { label: "Toggle Split View", accelerator: "CmdOrCtrl+D", click: () => send("toggle-split") },
         { type: "separator" },
         { role: "toggleDevTools" }
       ]

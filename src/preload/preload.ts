@@ -129,6 +129,21 @@ contextBridge.exposeInMainWorld("andromeda", {
     ipcRenderer.invoke("browser:setActivePane", { pane: sanitizePane(pane) }),
   setCommandBarOpen: (isOpen: boolean) =>
     ipcRenderer.invoke("browser:setCommandBarOpen", { isOpen }),
+  findInPage: (
+    pane: BrowserPane,
+    text: string,
+    options?: { forward?: boolean; findNext?: boolean }
+  ) =>
+    ipcRenderer.invoke("browser:findInPage", {
+      pane: sanitizePane(pane),
+      text,
+      forward: options?.forward !== false,
+      findNext: options?.findNext === true
+    }),
+  stopFind: (pane: BrowserPane) =>
+    ipcRenderer.invoke("browser:stopFind", { pane: sanitizePane(pane) }),
+  setZoom: (pane: BrowserPane, direction: "in" | "out" | "reset") =>
+    ipcRenderer.invoke("browser:setZoom", { pane: sanitizePane(pane), direction }),
   resizeContentView: (layout: ContentBounds | ContentLayout) =>
     ipcRenderer.invoke("browser:resizeContentView", sanitizeLayout(layout)),
   closeWindow: () => ipcRenderer.invoke("window:close"),
@@ -210,5 +225,27 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:shortcut", listener);
     return () => ipcRenderer.removeListener("browser:shortcut", listener);
+  },
+  onFoundInPage: (
+    callback: (payload: { pane: BrowserPane; activeMatchOrdinal: number; matches: number }) => void
+  ) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { activeMatchOrdinal?: unknown }).activeMatchOrdinal === "number" &&
+        typeof (payload as { matches?: unknown }).matches === "number"
+      ) {
+        const data = payload as { pane: BrowserPane; activeMatchOrdinal: number; matches: number };
+        callback({
+          pane: sanitizePane(data.pane),
+          activeMatchOrdinal: data.activeMatchOrdinal,
+          matches: data.matches
+        });
+      }
+    };
+
+    ipcRenderer.on("browser:foundInPage", listener);
+    return () => ipcRenderer.removeListener("browser:foundInPage", listener);
   }
 });

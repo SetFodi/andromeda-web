@@ -24,15 +24,22 @@
   --sidebar-width: 286px;
   --toolbar-height: 56px;
 
-  /* ---- Accent (shared across themes) --------------------------------- */
-  --accent: #ff7a5c;
-  --accent-strong: #f15c3a;
-  --accent-bright: #ff9277;
+  /* ---- Brand (fixed identity color, never themed) -------------------- */
+  --brand: #ff7a5c;
+  --brand-strong: #f15c3a;
+  --brand-bright: #ff9277;
 
-  /* Per-space hues */
-  --hue-dev: #4f7df4;
-  --hue-work: #ff7a5c;
-  --hue-personal: #41a96c;
+  /* ---- Accent (follows the active space; overridden on .app-shell) ---- */
+  --accent: #ff7a5c;
+  --accent-strong: color-mix(in srgb, var(--accent) 82%, #160a04);
+  --accent-bright: color-mix(in srgb, var(--accent) 78%, white);
+}
+
+/* Registered so the accent can smoothly animate when switching spaces. */
+@property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ff7a5c;
 }
 
 /* ====================================================================== */
@@ -70,9 +77,9 @@
   --border-soft: rgba(45, 34, 25, 0.05);
   --border-strong: rgba(45, 34, 25, 0.14);
 
-  --accent-soft: rgba(255, 122, 92, 0.12);
-  --accent-glow: rgba(255, 122, 92, 0.24);
-  --accent-on-surface: #e65636;
+  --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
+  --accent-on-surface: color-mix(in srgb, var(--accent) 78%, black);
 
   --field: rgba(255, 252, 247, 0.6);
   --field-border: rgba(45, 34, 25, 0.09);
@@ -86,7 +93,8 @@
   --shadow-lg: 0 18px 44px rgba(16, 35, 51, 0.1), 0 6px 16px rgba(16, 35, 51, 0.06);
   --shadow-xl: 0 34px 80px rgba(16, 35, 51, 0.18), 0 12px 30px rgba(16, 35, 51, 0.1);
   --shadow-window: 0 40px 90px rgba(16, 35, 51, 0.2), 0 12px 34px rgba(16, 35, 51, 0.12);
-  --shadow-accent: 0 12px 28px rgba(255, 122, 92, 0.26);
+  --shadow-accent: 0 12px 28px color-mix(in srgb, var(--accent) 26%, transparent);
+  --shadow-brand: 0 12px 28px color-mix(in srgb, var(--brand) 26%, transparent);
   --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
   --scrollbar: rgba(80, 101, 122, 0.26);
@@ -126,9 +134,9 @@
   --border-soft: rgba(255, 248, 240, 0.055);
   --border-strong: rgba(255, 248, 240, 0.16);
 
-  --accent-soft: rgba(255, 122, 92, 0.18);
-  --accent-glow: rgba(255, 122, 92, 0.34);
-  --accent-on-surface: #ff9277;
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 34%, transparent);
+  --accent-on-surface: color-mix(in srgb, var(--accent) 76%, white);
 
   --field: rgba(255, 248, 240, 0.05);
   --field-border: rgba(255, 248, 240, 0.1);
@@ -142,7 +150,8 @@
   --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.36);
   --shadow-xl: 0 34px 80px rgba(0, 0, 0, 0.6), 0 12px 30px rgba(0, 0, 0, 0.4);
   --shadow-window: 0 40px 100px rgba(0, 0, 0, 0.66), 0 12px 34px rgba(0, 0, 0, 0.46);
-  --shadow-accent: 0 12px 30px rgba(255, 122, 92, 0.32);
+  --shadow-accent: 0 12px 30px color-mix(in srgb, var(--accent) 32%, transparent);
+  --shadow-brand: 0 12px 30px color-mix(in srgb, var(--brand) 32%, transparent);
   --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   --scrollbar: rgba(255, 248, 240, 0.2);

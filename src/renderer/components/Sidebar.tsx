@@ -1,7 +1,30 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { CSSProperties, DragEvent } from "react";
+import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
+import { getFaviconSrc } from "../utils/favicon";
+
+const SPACE_COLORS = [
+  "#ff7a5c",
+  "#f4a23b",
+  "#41a96c",
+  "#3bb0c9",
+  "#4f7df4",
+  "#7c5cff",
+  "#e0567f",
+  "#8a8f98"
+];
+
+const SPACE_ICON_OPTIONS: IconName[] = [
+  "globe",
+  "code",
+  "briefcase",
+  "user",
+  "sparkle",
+  "grid",
+  "docs",
+  "github"
+];
 
 type SidebarProps = {
   spaces: BrowserSpace[];
@@ -9,10 +32,13 @@ type SidebarProps = {
   onSelectSpace: (spaceId: SpaceId) => void;
   onCreateSpace: () => SpaceId;
   onRenameSpace: (spaceId: SpaceId, name: string) => void;
+  onUpdateSpace: (spaceId: SpaceId, patch: { name?: string; icon?: IconName; accent?: string }) => void;
   onDeleteSpace: (spaceId: SpaceId) => void;
   onSelectTab: (spaceId: SpaceId, tabId: string) => void;
   onCloseTab: (spaceId: SpaceId, tabId: string) => void;
   onTogglePinTab: (spaceId: SpaceId, tabId: string) => void;
+  onDuplicateTab: (spaceId: SpaceId, tabId: string) => void;
+  onCloseOtherTabs: (spaceId: SpaceId, tabId: string) => void;
   onReorderTabs: (spaceId: SpaceId, sourceTabId: string, targetTabId: string) => void;
   onTabDragStart: (event: DragEvent<HTMLElement>, tab: BrowserTab) => void;
   onTabDragEnd: () => void;
@@ -58,23 +84,17 @@ function getTabHostname(tab: BrowserTab): string | null {
 }
 
 function TabFavicon({ tab }: { tab: BrowserTab }) {
-  const [failedFaviconUrl, setFailedFaviconUrl] = useState<string | null>(null);
-  const showFavicon = Boolean(
-    tab.faviconUrl && !tab.isStartPage && tab.faviconUrl !== failedFaviconUrl
-  );
+  const [failed, setFailed] = useState(false);
+  const src = tab.isStartPage ? null : getFaviconSrc(tab.url, tab.faviconUrl);
 
   useEffect(() => {
-    setFailedFaviconUrl(null);
-  }, [tab.faviconUrl]);
+    setFailed(false);
+  }, [src]);
 
   return (
     <span className="tab-favicon">
-      {showFavicon ? (
-        <img
-          alt=""
-          src={tab.faviconUrl}
-          onError={() => setFailedFaviconUrl(tab.faviconUrl ?? null)}
-        />
+      {src && !failed ? (
+        <img alt="" src={src} loading="lazy" onError={() => setFailed(true)} />
       ) : (
         <Icon name={getTabFallbackIcon(tab)} size={15} />
       )}
@@ -88,10 +108,13 @@ function Sidebar({
   onSelectSpace,
   onCreateSpace,
   onRenameSpace,
+  onUpdateSpace,
   onDeleteSpace,
   onSelectTab,
   onCloseTab,
   onTogglePinTab,
+  onDuplicateTab,
+  onCloseOtherTabs,
   onReorderTabs,
   onTabDragStart,
   onTabDragEnd,
@@ -101,6 +124,7 @@ function Sidebar({
   const selectedSpace = spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0];
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [tabMenu, setTabMenu] = useState<{ tab: BrowserTab; x: number; y: number } | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,6 +133,37 @@ function Sidebar({
       renameInputRef.current?.select();
     }
   }, [editingSpaceId]);
+
+  useEffect(() => {
+    if (!tabMenu) {
+      return;
+    }
+
+    const close = () => setTabMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTabMenu(null);
+      }
+    };
+
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", close);
+    };
+  }, [tabMenu]);
+
+  const openTabMenu = (event: ReactMouseEvent, tab: BrowserTab) => {
+    event.preventDefault();
+    const left = Math.max(8, Math.min(event.clientX, 280 - 200));
+    const top = Math.min(event.clientY, window.innerHeight - 250);
+    setTabMenu({ tab, x: left, y: Math.max(8, top) });
+  };
+
+  const closeTabMenu = () => setTabMenu(null);
 
   const beginRename = (space: BrowserSpace) => {
     setDraftName(space.name);
@@ -149,6 +204,7 @@ function Sidebar({
         key={tab.id}
         className={rowClassName}
         draggable={canDrag}
+        onContextMenu={(event) => openTabMenu(event, tab)}
         onDragStart={(event) => onTabDragStart(event, tab)}
         onDragEnd={onTabDragEnd}
         onDragOver={(event) => {
@@ -245,7 +301,15 @@ function Sidebar({
               return (
                 <div
                   key={space.id}
-                  className={isSelected ? "space-item is-selected" : "space-item"}
+                  className={
+                    [
+                      "space-item",
+                      isSelected ? "is-selected" : "",
+                      isEditing ? "is-editing" : ""
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                  }
                   onClick={() => !isEditing && onSelectSpace(space.id)}
                   onDoubleClick={() => beginRename(space)}
                   role="button"
@@ -266,30 +330,9 @@ function Sidebar({
                   >
                     <Icon name={space.icon} size={16} />
                   </span>
-                  {isEditing ? (
-                    <input
-                      ref={renameInputRef}
-                      className="space-rename"
-                      value={draftName}
-                      spellCheck={false}
-                      onChange={(event) => setDraftName(event.target.value)}
-                      onClick={(event) => event.stopPropagation()}
-                      onBlur={commitRename}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          commitRename();
-                        } else if (event.key === "Escape") {
-                          event.preventDefault();
-                          setEditingSpaceId(null);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className="space-name">{space.name}</span>
-                  )}
+                  <span className="space-name">{space.name}</span>
                   <span className="space-count">{space.tabs.length}</span>
-                  {spaces.length > 1 ? (
+                  {spaces.length > 1 && !isEditing ? (
                     <button
                       className="space-delete"
                       type="button"
@@ -302,6 +345,68 @@ function Sidebar({
                     >
                       <Icon name="close" size={13} />
                     </button>
+                  ) : null}
+
+                  {isEditing ? (
+                    <div
+                      className="space-editor"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        ref={renameInputRef}
+                        className="space-editor-name"
+                        value={draftName}
+                        spellCheck={false}
+                        placeholder="Space name"
+                        maxLength={28}
+                        onChange={(event) => setDraftName(event.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitRename();
+                          } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            setEditingSpaceId(null);
+                          }
+                        }}
+                      />
+                      <div className="space-editor-label">Color</div>
+                      <div className="space-editor-colors">
+                        {SPACE_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            className={
+                              color.toLowerCase() === space.accent.toLowerCase()
+                                ? "space-swatch is-active"
+                                : "space-swatch"
+                            }
+                            style={{ "--swatch": color } as CSSProperties}
+                            aria-label={`Use ${color}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => onUpdateSpace(space.id, { accent: color })}
+                          />
+                        ))}
+                      </div>
+                      <div className="space-editor-label">Icon</div>
+                      <div className="space-editor-icons">
+                        {SPACE_ICON_OPTIONS.map((iconName) => (
+                          <button
+                            key={iconName}
+                            type="button"
+                            className={
+                              iconName === space.icon ? "space-icon-pick is-active" : "space-icon-pick"
+                            }
+                            aria-label={`Use ${iconName} icon`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => onUpdateSpace(space.id, { icon: iconName })}
+                          >
+                            <Icon name={iconName} size={15} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ) : null}
                 </div>
               );
@@ -338,6 +443,89 @@ function Sidebar({
           ) : null}
         </section>
       </div>
+
+      {tabMenu ? (
+        <div
+          className="tab-context"
+          role="menu"
+          style={{ top: tabMenu.y, left: tabMenu.x }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          {!tabMenu.tab.isStartPage ? (
+            <button
+              type="button"
+              className="tab-context-item"
+              role="menuitem"
+              onClick={() => {
+                onTogglePinTab(selectedSpace.id, tabMenu.tab.id);
+                closeTabMenu();
+              }}
+            >
+              <Icon name={tabMenu.tab.pinned ? "pinOff" : "pin"} size={15} />
+              <span>{tabMenu.tab.pinned ? "Unpin tab" : "Pin tab"}</span>
+            </button>
+          ) : null}
+          {tabMenu.tab.url && !tabMenu.tab.isStartPage ? (
+            <button
+              type="button"
+              className="tab-context-item"
+              role="menuitem"
+              onClick={() => {
+                onDuplicateTab(selectedSpace.id, tabMenu.tab.id);
+                closeTabMenu();
+              }}
+            >
+              <Icon name="plus" size={15} />
+              <span>Duplicate tab</span>
+            </button>
+          ) : null}
+          {tabMenu.tab.url ? (
+            <button
+              type="button"
+              className="tab-context-item"
+              role="menuitem"
+              onClick={() => {
+                if (tabMenu.tab.url) {
+                  void navigator.clipboard?.writeText(tabMenu.tab.url);
+                }
+                closeTabMenu();
+              }}
+            >
+              <Icon name="globe" size={15} />
+              <span>Copy address</span>
+            </button>
+          ) : null}
+          {selectedSpace.tabs.length > 1 ? (
+            <>
+              <div className="tab-context-sep" />
+              <button
+                type="button"
+                className="tab-context-item"
+                role="menuitem"
+                onClick={() => {
+                  onCloseTab(selectedSpace.id, tabMenu.tab.id);
+                  closeTabMenu();
+                }}
+              >
+                <Icon name="close" size={15} />
+                <span>Close tab</span>
+              </button>
+              <button
+                type="button"
+                className="tab-context-item is-danger"
+                role="menuitem"
+                onClick={() => {
+                  onCloseOtherTabs(selectedSpace.id, tabMenu.tab.id);
+                  closeTabMenu();
+                }}
+              >
+                <Icon name="close" size={15} />
+                <span>Close other tabs</span>
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </aside>
   );
 }

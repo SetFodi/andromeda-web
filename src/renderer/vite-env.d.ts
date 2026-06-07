@@ -36,6 +36,12 @@ type NavigationStatePayload = {
   isLoading: boolean;
 };
 
+type FoundInPagePayload = {
+  pane: BrowserPane;
+  activeMatchOrdinal: number;
+  matches: number;
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string, pane?: BrowserPane) => Promise<void>;
@@ -46,6 +52,13 @@ interface Window {
     closeSplitView: () => Promise<void>;
     setActivePane: (pane: BrowserPane) => Promise<void>;
     setCommandBarOpen: (isOpen: boolean) => Promise<void>;
+    findInPage: (
+      pane: BrowserPane,
+      text: string,
+      options?: { forward?: boolean; findNext?: boolean }
+    ) => Promise<void>;
+    stopFind: (pane: BrowserPane) => Promise<void>;
+    setZoom: (pane: BrowserPane, direction: "in" | "out" | "reset") => Promise<void>;
     resizeContentView: (layout: ContentBounds | ContentLayout) => Promise<void>;
     closeWindow: () => Promise<void>;
     minimizeWindow: () => Promise<void>;
@@ -57,5 +70,6 @@ interface Window {
     onPaneFocused: (callback: (payload: { pane: BrowserPane }) => void) => () => void;
     onOpenCommandBar: (callback: () => void) => () => void;
     onShortcut: (callback: (action: string) => void) => () => void;
+    onFoundInPage: (callback: (payload: FoundInPagePayload) => void) => () => void;
   };
 }

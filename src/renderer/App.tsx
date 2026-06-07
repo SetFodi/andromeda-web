@@ -1,15 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 import CommandBar, { CommandBarItem } from "./components/CommandBar";
+import FindBar from "./components/FindBar";
+import SettingsPanel from "./components/SettingsPanel";
 import Sidebar from "./components/Sidebar";
 import StartPage from "./components/StartPage";
 import Toolbar from "./components/Toolbar";
 import { BrowserPane, BrowserTab, useBrowserStore, SpaceId } from "./state/browserStore";
 import { useTheme } from "./state/useTheme";
+import { useSettings } from "./state/useSettings";
 import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
 import type { RecentSite } from "./components/StartPage";
 import type { IconName } from "./components/Icon";
 
-const GREETING_NAME = "Alex";
+const SPLIT_RATIO_KEY = "andromeda.splitRatio";
+const MIN_SPLIT_RATIO = 0.25;
+const MAX_SPLIT_RATIO = 0.75;
 
 const QUICK_URLS = {
   github: "https://github.com",
@@ -18,6 +32,7 @@ const QUICK_URLS = {
 
 const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
+const FIND_BAR_HEIGHT = 46;
 const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
 
 type PaneNavigationState = {
@@ -61,9 +76,23 @@ function getPageFallbackIcon(url: string | null, isStartPage: boolean): IconName
   return "globe";
 }
 
+function loadSplitRatio(): number {
+  try {
+    const raw = Number.parseFloat(localStorage.getItem(SPLIT_RATIO_KEY) ?? "");
+    if (Number.isFinite(raw)) {
+      return Math.max(MIN_SPLIT_RATIO, Math.min(MAX_SPLIT_RATIO, raw));
+    }
+  } catch {
+    // ignore
+  }
+  return 0.5;
+}
+
 export default function App() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, setTheme } = useTheme();
+  const { settings, updateSettings } = useSettings();
   const contentRef = useRef<HTMLDivElement>(null);
+  const splitRatioRef = useRef<number>(loadSplitRatio());
   const addressInputRef = useRef<HTMLInputElement>(null);
   const lastContentLayoutKeyRef = useRef<string | null>(null);
   const lastMainRequestRef = useRef<string | null>(null);
@@ -74,6 +103,11 @@ export default function App() {
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
   const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isFindOpen, setFindOpen] = useState(false);
+  const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [splitRatio, setSplitRatio] = useState<number>(() => splitRatioRef.current);
+  const [isResizingSplit, setResizingSplit] = useState(false);
   const [draggedTab, setDraggedTab] = useState<BrowserTab | null>(null);
   const [isSplitDropTargetActive, setSplitDropTargetActive] = useState(false);
   const [splitDropSide, setSplitDropSide] = useState<BrowserPane | null>(null);
@@ -93,6 +127,7 @@ export default function App() {
     selectSpace,
     createSpace,
     renameSpace,
+    updateSpace,
     deleteSpace,
     selectPane,
     openUrl,
@@ -100,8 +135,11 @@ export default function App() {
     openSplitUrl,
     selectTab,
     closeTab,
+    duplicateTab,
+    closeOtherTabs,
     togglePinTab,
     reorderTabs,
+    openNewTab,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,
@@ -154,45 +192,49 @@ export default function App() {
       ? DEFAULT_NAVIGATION_STATE
       : navigationStates[activePane];
 
-  const getContentLayout = useCallback((splitOpen: boolean): ContentBounds | ContentLayout | null => {
-    const content = contentRef.current;
-    if (!content) {
-      return null;
-    }
-
-    const rect = content.getBoundingClientRect();
-    const mainBounds: ContentBounds = {
-      x: Math.round(rect.x),
-      y: Math.round(rect.y),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height)
-    };
-
-    if (!splitOpen) {
-      return mainBounds;
-    }
-
-    const width = Math.round(rect.width);
-    const leftWidth = Math.floor((width - SPLIT_GAP) / 2);
-    const rightWidth = Math.max(0, width - leftWidth - SPLIT_GAP);
-    const y = Math.round(rect.y + SPLIT_HEADER_HEIGHT);
-    const height = Math.max(0, Math.round(rect.height - SPLIT_HEADER_HEIGHT));
-
-    return {
-      main: {
-        x: Math.round(rect.x),
-        y,
-        width: leftWidth,
-        height
-      },
-      split: {
-        x: Math.round(rect.x + leftWidth + SPLIT_GAP),
-        y,
-        width: rightWidth,
-        height
+  const getContentLayout = useCallback(
+    (splitOpen: boolean): ContentBounds | ContentLayout | null => {
+      const content = contentRef.current;
+      if (!content) {
+        return null;
       }
-    };
-  }, []);
+
+      const rect = content.getBoundingClientRect();
+      const findInset = isFindOpen ? FIND_BAR_HEIGHT : 0;
+      const mainBounds: ContentBounds = {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y + findInset),
+        width: Math.round(rect.width),
+        height: Math.max(0, Math.round(rect.height - findInset))
+      };
+
+      if (!splitOpen) {
+        return mainBounds;
+      }
+
+      const width = Math.round(rect.width);
+      const leftWidth = Math.round((width - SPLIT_GAP) * splitRatioRef.current);
+      const rightWidth = Math.max(0, width - leftWidth - SPLIT_GAP);
+      const y = Math.round(rect.y + SPLIT_HEADER_HEIGHT + findInset);
+      const height = Math.max(0, Math.round(rect.height - SPLIT_HEADER_HEIGHT - findInset));
+
+      return {
+        main: {
+          x: Math.round(rect.x),
+          y,
+          width: leftWidth,
+          height
+        },
+        split: {
+          x: Math.round(rect.x + leftWidth + SPLIT_GAP),
+          y,
+          width: rightWidth,
+          height
+        }
+      };
+    },
+    [isFindOpen]
+  );
 
   const sendContentLayout = useCallback((layout: ContentBounds | ContentLayout | null, force = false) => {
     if (!layout) {
@@ -244,6 +286,12 @@ export default function App() {
       window.removeEventListener("resize", resizeContentView);
     };
   }, [resizeContentView]);
+
+  // Re-inset the web view when the find bar opens/closes (the DOM size of the
+  // content host does not change, so the ResizeObserver won't fire on its own).
+  useEffect(() => {
+    flushContentLayout(isSplitOpen, true);
+  }, [flushContentLayout, isFindOpen, isSplitOpen]);
 
   useEffect(() => {
     if (!didCompleteLaunchResetRef.current) {
@@ -372,14 +420,17 @@ export default function App() {
     });
   }, []);
 
+  // The command bar and settings modal both need the web views detached so the
+  // renderer overlay is visible above the content region.
+  const isContentOverlayOpen = isCommandBarOpen || isSettingsOpen;
   useEffect(() => {
-    if (lastCommandBarOpenRef.current === isCommandBarOpen) {
+    if (lastCommandBarOpenRef.current === isContentOverlayOpen) {
       return;
     }
 
-    lastCommandBarOpenRef.current = isCommandBarOpen;
-    void window.andromeda.setCommandBarOpen(isCommandBarOpen);
-  }, [isCommandBarOpen]);
+    lastCommandBarOpenRef.current = isContentOverlayOpen;
+    void window.andromeda.setCommandBarOpen(isContentOverlayOpen);
+  }, [isContentOverlayOpen]);
 
   const navigateTo = useCallback(
     (url: string) => {
@@ -417,10 +468,14 @@ export default function App() {
     navigateTo(url);
   }, [addressValue, navigateTo]);
 
-  const handleShowStartPage = useCallback(() => {
-    showStartPage();
+  const handleNewTab = useCallback(() => {
+    openNewTab();
     setAddressValue("");
-  }, [showStartPage]);
+    requestAnimationFrame(() => {
+      addressInputRef.current?.focus();
+      addressInputRef.current?.select();
+    });
+  }, [openNewTab]);
 
   const handleSelectSpace = useCallback(
     (spaceId: SpaceId) => {
@@ -475,6 +530,81 @@ export default function App() {
   }, []);
 
   const handleImportChrome = useCallback(() => undefined, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((collapsed) => !collapsed);
+  }, []);
+
+  const openFind = useCallback(() => {
+    setFindOpen(true);
+  }, []);
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    void window.andromeda.stopFind(activePane);
+  }, [activePane]);
+
+  const handleFind = useCallback(
+    (query: string, options: { forward: boolean; findNext: boolean }) => {
+      if (!query.trim()) {
+        void window.andromeda.stopFind(activePane);
+        return;
+      }
+
+      void window.andromeda.findInPage(activePane, query, options);
+    },
+    [activePane]
+  );
+
+  const adjustZoom = useCallback(
+    (direction: "in" | "out" | "reset") => {
+      void window.andromeda.setZoom(activePane, direction);
+    },
+    [activePane]
+  );
+
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+
+  // Detach the web views during a divider drag so the host window keeps
+  // receiving mousemove events even when the cursor passes over the page.
+  const handleSplitResizeStart = useCallback(
+    (event: ReactMouseEvent) => {
+      event.preventDefault();
+      const content = contentRef.current;
+      if (!content) {
+        return;
+      }
+
+      setResizingSplit(true);
+      void window.andromeda.setCommandBarOpen(true);
+
+      const onMove = (moveEvent: MouseEvent) => {
+        const rect = content.getBoundingClientRect();
+        const ratio = (moveEvent.clientX - rect.left - SPLIT_GAP / 2) / Math.max(1, rect.width - SPLIT_GAP);
+        const clamped = Math.max(MIN_SPLIT_RATIO, Math.min(MAX_SPLIT_RATIO, ratio));
+        splitRatioRef.current = clamped;
+        setSplitRatio(clamped);
+      };
+
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        setResizingSplit(false);
+        try {
+          localStorage.setItem(SPLIT_RATIO_KEY, String(splitRatioRef.current));
+        } catch {
+          // ignore storage failures
+        }
+        flushContentLayout(true, true);
+        void window.andromeda.setCommandBarOpen(isCommandBarOpen);
+      };
+
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [flushContentLayout, isCommandBarOpen]
+  );
 
   const handleSelectPane = useCallback(
     (pane: BrowserPane) => {
@@ -650,10 +780,10 @@ export default function App() {
       {
         id: "new-tab",
         title: "New Tab",
-        subtitle: "Return to the Andromeda start page",
+        subtitle: "Open a fresh start page",
         icon: "plus",
-        keywords: ["start", "home", "tab"],
-        run: handleShowStartPage
+        keywords: ["start", "home", "tab", "new"],
+        run: handleNewTab
       },
       {
         id: "open-github",
@@ -719,8 +849,8 @@ export default function App() {
     [
       activePane,
       createSpace,
+      handleNewTab,
       handleSelectSpace,
-      handleShowStartPage,
       navigateSplitTo,
       navigateTo,
       openSplitCommandBar,
@@ -746,7 +876,7 @@ export default function App() {
 
       switch (action) {
         case "new-tab":
-          handleShowStartPage();
+          handleNewTab();
           break;
         case "new-space":
           createSpace();
@@ -781,6 +911,24 @@ export default function App() {
             openSplitCommandBar();
           }
           break;
+        case "toggle-sidebar":
+          toggleSidebar();
+          break;
+        case "find":
+          openFind();
+          break;
+        case "settings":
+          openSettings();
+          break;
+        case "zoom-in":
+          adjustZoom("in");
+          break;
+        case "zoom-out":
+          adjustZoom("out");
+          break;
+        case "zoom-reset":
+          adjustZoom("reset");
+          break;
         case "select-last-tab": {
           const displayTabs = getDisplayOrderTabs(selectedSpace);
           const target = displayTabs[displayTabs.length - 1];
@@ -807,15 +955,19 @@ export default function App() {
     },
     [
       activePane,
+      adjustZoom,
       closeTab,
       createSpace,
       handleCloseSplitView,
-      handleShowStartPage,
+      handleNewTab,
       isSplitOpen,
       openCommandBar,
+      openFind,
+      openSettings,
       openSplitCommandBar,
       selectTab,
-      selectedSpace
+      selectedSpace,
+      toggleSidebar
     ]
   );
 
@@ -842,7 +994,10 @@ export default function App() {
 
   return (
     <div className="window-frame">
-      <div className="app-shell">
+      <div
+        className={isSidebarCollapsed ? "app-shell is-sidebar-collapsed" : "app-shell"}
+        style={{ "--accent": selectedSpace.accent } as CSSProperties}
+      >
         <Toolbar
           addressValue={addressValue}
           inputRef={addressInputRef}
@@ -854,14 +1009,17 @@ export default function App() {
           canGoForward={activeNavigationState.canGoForward}
           isLoading={activeNavigationState.isLoading}
           theme={theme}
+          isSidebarCollapsed={isSidebarCollapsed}
           onAddressChange={setAddressValue}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
           onForward={handleForward}
           onReload={handleReload}
-          onNewTab={handleShowStartPage}
+          onNewTab={handleNewTab}
           onOpenSplitView={openSplitCommandBar}
           onToggleTheme={toggleTheme}
+          onToggleSidebar={toggleSidebar}
+          onOpenSettings={openSettings}
           onCloseWindow={handleCloseWindow}
           onMinimizeWindow={handleMinimizeWindow}
           onToggleMaximizeWindow={handleToggleMaximizeWindow}
@@ -872,26 +1030,34 @@ export default function App() {
           onSelectSpace={handleSelectSpace}
           onCreateSpace={createSpace}
           onRenameSpace={renameSpace}
+          onUpdateSpace={updateSpace}
           onDeleteSpace={deleteSpace}
           onSelectTab={handleSelectSidebarTab}
           onCloseTab={handleCloseSidebarTab}
           onTogglePinTab={togglePinTab}
+          onDuplicateTab={duplicateTab}
+          onCloseOtherTabs={closeOtherTabs}
           onReorderTabs={handleReorderSidebarTabs}
           onTabDragStart={handleSidebarTabDragStart}
           onTabDragEnd={handleSidebarTabDragEnd}
           draggedTabId={draggedTab?.id ?? null}
-          onNewTab={handleShowStartPage}
+          onNewTab={handleNewTab}
         />
 
         <div
           ref={contentRef}
-          className={
-            isSplitDropTargetActive ? "content-view-host is-split-drop-target" : "content-view-host"
-          }
+          className={[
+            "content-view-host",
+            isSplitDropTargetActive ? "is-split-drop-target" : "",
+            isFindOpen ? "is-finding" : ""
+          ]
+            .filter(Boolean)
+            .join(" ")}
           onDragOver={handleContentDragOver}
           onDragLeave={handleContentDragLeave}
           onDrop={handleContentDrop}
         >
+          <FindBar isOpen={isFindOpen} onFind={handleFind} onClose={closeFind} />
           {draggedTab?.url ? (
             <div
               className={[
@@ -916,7 +1082,13 @@ export default function App() {
             </div>
           ) : null}
           {isSplitOpen ? (
-            <div className="split-view-frame" aria-label="Split view">
+            <div
+              className={isResizingSplit ? "split-view-frame is-resizing" : "split-view-frame"}
+              aria-label="Split view"
+              style={{
+                gridTemplateColumns: `calc((100% - ${SPLIT_GAP}px) * ${splitRatio}) ${SPLIT_GAP}px minmax(0, 1fr)`
+              }}
+            >
               <button
                 className={activePane === "main" ? "split-pane-label is-active" : "split-pane-label"}
                 type="button"
@@ -924,7 +1096,25 @@ export default function App() {
               >
                 <span>{activeTab.title}</span>
               </button>
-              <div className="split-divider" aria-hidden="true" />
+              <div
+                className="split-divider"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize split"
+                onMouseDown={handleSplitResizeStart}
+                onDoubleClick={() => {
+                  splitRatioRef.current = 0.5;
+                  setSplitRatio(0.5);
+                  flushContentLayout(true, true);
+                  try {
+                    localStorage.setItem(SPLIT_RATIO_KEY, "0.5");
+                  } catch {
+                    // ignore
+                  }
+                }}
+              >
+                <span className="split-divider-grip" aria-hidden="true" />
+              </div>
               <div className="split-pane-label-wrap">
                 <button
                   className={activePane === "split" ? "split-pane-label is-active" : "split-pane-label"}
@@ -949,7 +1139,7 @@ export default function App() {
           ) : null}
           {showReactStartPage ? (
             <StartPage
-              greetingName={GREETING_NAME}
+              greetingName={settings.name}
               onOpenCommand={openCommandBar}
               onOpenLink={navigateTo}
               onImportChrome={handleImportChrome}
@@ -963,6 +1153,14 @@ export default function App() {
           commands={commandBarItems}
           onClose={closeCommandBar}
           onNavigateInput={handleCommandInputNavigation}
+        />
+        <SettingsPanel
+          isOpen={isSettingsOpen}
+          settings={settings}
+          theme={theme}
+          onUpdateSettings={updateSettings}
+          onSetTheme={setTheme}
+          onClose={closeSettings}
         />
       </div>
     </div>

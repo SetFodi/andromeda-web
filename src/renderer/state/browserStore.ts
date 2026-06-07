@@ -414,6 +414,42 @@ export function useBrowserStore() {
     });
   }, []);
 
+  const updateSpace = useCallback(
+    (spaceId: SpaceId, patch: { name?: string; icon?: IconName; accent?: string }) => {
+      setState((current) => {
+        let didChange = false;
+        const spaces = current.spaces.map((space) => {
+          if (space.id !== spaceId) {
+            return space;
+          }
+
+          const next = { ...space };
+          if (patch.name !== undefined && patch.name.trim() && patch.name.trim() !== space.name) {
+            next.name = patch.name.trim();
+            didChange = true;
+          }
+          if (patch.icon !== undefined && patch.icon !== space.icon) {
+            next.icon = patch.icon;
+            didChange = true;
+          }
+          if (
+            patch.accent !== undefined &&
+            /^#[0-9a-fA-F]{6}$/.test(patch.accent) &&
+            patch.accent !== space.accent
+          ) {
+            next.accent = patch.accent;
+            didChange = true;
+          }
+
+          return didChange ? next : space;
+        });
+
+        return didChange ? { ...current, spaces } : current;
+      });
+    },
+    []
+  );
+
   const deleteSpace = useCallback((spaceId: SpaceId) => {
     setState((current) => {
       if (current.spaces.length <= 1) {
@@ -573,6 +609,57 @@ export function useBrowserStore() {
     },
     [state.selectedSpaceId, state.spaces]
   );
+
+  const duplicateTab = useCallback((spaceId: SpaceId, tabId: string) => {
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== spaceId) {
+          return space;
+        }
+
+        const index = space.tabs.findIndex((tab) => tab.id === tabId);
+        const source = space.tabs[index];
+        if (index < 0 || !source || source.isStartPage || !source.url) {
+          return space;
+        }
+
+        const copy: BrowserTab = { ...source, id: randomId("tab"), pinned: undefined };
+        const tabs = [...space.tabs];
+        tabs.splice(index + 1, 0, copy);
+        didChange = true;
+        return { ...space, tabs: capSpaceTabs(tabs), activeTabId: copy.id };
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+    setSplitState((current) =>
+      current.activePane === "main" ? current : { ...current, activePane: "main" }
+    );
+  }, []);
+
+  const closeOtherTabs = useCallback((spaceId: SpaceId, tabId: string) => {
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== spaceId) {
+          return space;
+        }
+
+        const kept = space.tabs.filter((tab) => tab.id === tabId || tab.pinned);
+        if (kept.length === space.tabs.length) {
+          return space;
+        }
+
+        didChange = true;
+        const tabs = kept.length > 0 ? kept : [createStartTab()];
+        const activeTabId = tabs.some((tab) => tab.id === tabId) ? tabId : tabs[0].id;
+        return { ...space, tabs, activeTabId };
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+  }, []);
 
   const togglePinTab = useCallback((spaceId: SpaceId, tabId: string) => {
     setState((current) => {
@@ -804,6 +891,23 @@ export function useBrowserStore() {
     setSplitState(resetSplitState);
   }, []);
 
+  const openNewTab = useCallback(() => {
+    setState((current) => {
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== current.selectedSpaceId) {
+          return space;
+        }
+
+        const tab = createTab(null, "Start", true);
+        const tabs = capSpaceTabs([...space.tabs, tab]);
+        return { ...space, tabs, activeTabId: tab.id };
+      });
+
+      return { ...current, spaces };
+    });
+    setSplitState(resetSplitState);
+  }, []);
+
   const showStartPage = useCallback(() => {
     setState((current) => {
       let didChange = false;
@@ -845,6 +949,7 @@ export function useBrowserStore() {
     selectSpace,
     createSpace,
     renameSpace,
+    updateSpace,
     deleteSpace,
     selectPane,
     openUrl,
@@ -852,8 +957,11 @@ export function useBrowserStore() {
     openSplitUrl,
     selectTab,
     closeTab,
+    duplicateTab,
+    closeOtherTabs,
     togglePinTab,
     reorderTabs,
+    openNewTab,
     closeSplitView,
     updateActiveUrl,
     updateActiveTitle,

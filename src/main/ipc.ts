@@ -155,6 +155,41 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     manager.closeSplitView();
   });
 
+  setHandler("browser:findInPage", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const candidate = (payload ?? {}) as {
+      pane?: unknown;
+      text?: unknown;
+      forward?: unknown;
+      findNext?: unknown;
+    };
+    if (typeof candidate.text !== "string") {
+      throw new Error("Invalid find query");
+    }
+
+    manager.findInPage(normalizePane(candidate.pane), candidate.text, {
+      forward: candidate.forward !== false,
+      findNext: candidate.findNext === true
+    });
+  });
+
+  setHandler("browser:stopFind", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    manager.stopFind(normalizePane((payload as { pane?: unknown } | null)?.pane));
+  });
+
+  setHandler("browser:setZoom", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const direction = (payload as { direction?: unknown } | null)?.direction;
+    if (direction !== "in" && direction !== "out" && direction !== "reset") {
+      throw new Error("Invalid zoom direction");
+    }
+
+    manager.adjustZoom(normalizePane((payload as { pane?: unknown } | null)?.pane), direction);
+  });
+
   setHandler("browser:setCommandBarOpen", (event, payload: unknown) => {
     assertTrustedSender(event, window);
 
