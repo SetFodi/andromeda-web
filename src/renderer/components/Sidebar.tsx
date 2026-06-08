@@ -172,6 +172,7 @@ function Sidebar({
   const [draggedSpaceId, setDraggedSpaceId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const swipeLockRef = useRef(false);
+  const swipeIdleRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!draggedTabId) {
@@ -209,6 +210,14 @@ function Sidebar({
       window.removeEventListener("keydown", onKey);
     };
   }, [spaceMenu, tabMenu]);
+
+  useEffect(() => {
+    return () => {
+      if (swipeIdleRef.current !== null) {
+        window.clearTimeout(swipeIdleRef.current);
+      }
+    };
+  }, []);
 
   const openTabMenu = (event: ReactMouseEvent, tab: BrowserTab) => {
     event.preventDefault();
@@ -260,6 +269,16 @@ function Sidebar({
   const pinnedTabs = selectedSpace.tabs.filter((tab) => tab.pinned);
   const regularTabs = selectedSpace.tabs.filter((tab) => !tab.pinned);
 
+  const releaseSwipeAfterIdle = () => {
+    if (swipeIdleRef.current !== null) {
+      window.clearTimeout(swipeIdleRef.current);
+    }
+    swipeIdleRef.current = window.setTimeout(() => {
+      swipeIdleRef.current = null;
+      swipeLockRef.current = false;
+    }, 320);
+  };
+
   const handleWheel = (event: WheelEvent<HTMLElement>) => {
     const isHorizontalSwipe =
       Math.abs(event.deltaX) > 28 && Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.35;
@@ -269,15 +288,24 @@ function Sidebar({
     }
 
     event.preventDefault();
+    releaseSwipeAfterIdle();
+
     if (swipeLockRef.current) {
       return;
     }
 
+    const currentIndex = spaces.findIndex((space) => space.id === selectedSpaceId);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const direction = event.deltaX > 0 ? "next" : "previous";
+    const nextIndex = Math.max(
+      0,
+      Math.min(spaces.length - 1, safeIndex + (direction === "next" ? 1 : -1))
+    );
+
     swipeLockRef.current = true;
-    onSwitchSpace(event.deltaX > 0 ? "next" : "previous");
-    window.setTimeout(() => {
-      swipeLockRef.current = false;
-    }, 420);
+    if (nextIndex !== safeIndex) {
+      onSwitchSpace(direction);
+    }
   };
 
   const handleSidebarContextMenu = (event: ReactMouseEvent<HTMLElement>) => {

@@ -22,7 +22,6 @@ import { useSettings } from "./state/useSettings";
 import { useQuickLinks } from "./state/useQuickLinks";
 import { useHistory } from "./state/useHistory";
 import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
-import type { RecentSite } from "./components/StartPage";
 import type { IconName } from "./components/Icon";
 
 const SPLIT_RATIO_KEY = "andromeda.splitRatio";
@@ -41,6 +40,12 @@ type PaneNavigationState = {
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
+};
+
+type RecentSite = {
+  id: string;
+  title: string;
+  url: string;
 };
 
 const DEFAULT_NAVIGATION_STATE: PaneNavigationState = {
@@ -458,7 +463,11 @@ export default function App() {
         window.clearTimeout(spaceSwitchIdleRef.current);
       }
       appShellRef.current?.classList.remove("is-window-resizing");
-      appShellRef.current?.classList.remove("is-switching-space");
+      appShellRef.current?.classList.remove(
+        "is-switching-space",
+        "is-switching-space-previous",
+        "is-switching-space-next"
+      );
       window.removeEventListener("resize", markWindowResizing);
     };
   }, [markWindowResizing, sendLayoutMetrics]);
@@ -788,30 +797,42 @@ export default function App() {
     setAddressValue("");
   }, []);
 
-  const beginSpaceSwitchPaint = useCallback(() => {
+  const beginSpaceSwitchPaint = useCallback((direction?: "previous" | "next") => {
     const shell = appShellRef.current;
     if (!shell) {
       return;
     }
 
+    shell.classList.remove("is-switching-space-previous", "is-switching-space-next");
+    if (direction) {
+      shell.classList.add(`is-switching-space-${direction}`);
+    }
     shell.classList.add("is-switching-space");
     if (spaceSwitchIdleRef.current !== null) {
       window.clearTimeout(spaceSwitchIdleRef.current);
     }
     spaceSwitchIdleRef.current = window.setTimeout(() => {
       spaceSwitchIdleRef.current = null;
-      appShellRef.current?.classList.remove("is-switching-space");
-    }, 160);
+      appShellRef.current?.classList.remove(
+        "is-switching-space",
+        "is-switching-space-previous",
+        "is-switching-space-next"
+      );
+    }, 260);
   }, []);
 
   const handleSelectSpace = useCallback(
     (spaceId: SpaceId) => {
       if (spaceId !== state.selectedSpaceId) {
-        beginSpaceSwitchPaint();
+        const currentIndex = state.spaces.findIndex((space) => space.id === state.selectedSpaceId);
+        const targetIndex = state.spaces.findIndex((space) => space.id === spaceId);
+        beginSpaceSwitchPaint(
+          currentIndex >= 0 && targetIndex >= 0 && targetIndex < currentIndex ? "previous" : "next"
+        );
       }
       selectSpace(spaceId);
     },
-    [beginSpaceSwitchPaint, selectSpace, state.selectedSpaceId]
+    [beginSpaceSwitchPaint, selectSpace, state.selectedSpaceId, state.spaces]
   );
 
   const handleSwitchSpace = useCallback(
@@ -823,8 +844,12 @@ export default function App() {
       const currentIndex = state.spaces.findIndex((space) => space.id === state.selectedSpaceId);
       const safeIndex = currentIndex >= 0 ? currentIndex : 0;
       const delta = direction === "next" ? 1 : -1;
-      const nextIndex = (safeIndex + delta + state.spaces.length) % state.spaces.length;
-      beginSpaceSwitchPaint();
+      const nextIndex = Math.max(0, Math.min(state.spaces.length - 1, safeIndex + delta));
+      if (nextIndex === safeIndex) {
+        return;
+      }
+
+      beginSpaceSwitchPaint(direction);
       selectSpace(state.spaces[nextIndex].id);
     },
     [beginSpaceSwitchPaint, selectSpace, state.selectedSpaceId, state.spaces]
@@ -1586,13 +1611,11 @@ export default function App() {
           ) : null}
           {showReactStartPage ? (
             <StartPage
-              greetingName={settings.name}
               quickLinks={quickLinks}
               onOpenCommand={handleNewTab}
               onOpenLink={navigateTo}
               onRemoveQuickLink={removeQuickLink}
               onReorderQuickLink={reorderQuickLink}
-              recentSites={recentSites}
             />
           ) : null}
         </div>
