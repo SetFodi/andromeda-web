@@ -1,0 +1,21 @@
+{
+  "browsers": [
+    "andromeda"
+  ],
+  "urls": [
+    "https://example.com",
+    "https://github.com",
+    "https://react.dev"
+  ],
+  "runs": 1,
+  "intervalMs": 2000,
+  "launchWaitMs": 5000,
+  "loadWaitMs": 6000,
+  "idleMs": 60000,
+  "outDir": "/Users/lukafartenadze/developer/Andromeda/perf-runs/2026-06-08T00-52-31-807Z",
+  "quitExisting": true,
+  "quitAfter": false,
+  "buildAndromeda": false,
+  "powermetrics": false,
+  "host": "Lukas-MacBook-Air.local"
+}

@@ -38,6 +38,7 @@ const SPACE_ICON_OPTIONS: IconName[] = [
 type SidebarProps = {
   spaces: BrowserSpace[];
   selectedSpaceId: SpaceId;
+  onMouseLeave?: () => void;
   onSelectSpace: (spaceId: SpaceId) => void;
   onCreateSpace: () => SpaceId;
   onRenameSpace: (spaceId: SpaceId, name: string) => void;
@@ -126,6 +127,7 @@ function TabFavicon({ tab, isLoading }: { tab: BrowserTab; isLoading: boolean })
 function Sidebar({
   spaces,
   selectedSpaceId,
+  onMouseLeave,
   onSelectSpace,
   onCreateSpace,
   onRenameSpace,
@@ -488,7 +490,12 @@ function Sidebar({
   const menuSpace = spaceMenu ? spaces.find((space) => space.id === spaceMenu.spaceId) ?? null : null;
 
   return (
-    <aside className="sidebar" onWheel={handleWheel} onContextMenu={handleSidebarContextMenu}>
+    <aside
+      className="sidebar"
+      onWheel={handleWheel}
+      onContextMenu={handleSidebarContextMenu}
+      onMouseLeave={onMouseLeave}
+    >
       <div className="sidebar-body">
         <section className="sidebar-section new-tab-section">
           <button type="button" className="sidebar-new-tab" onClick={onNewTab}>

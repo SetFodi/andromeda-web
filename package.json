@@ -8,7 +8,8 @@
     "dev": "node scripts/dev.mjs",
     "typecheck": "tsc --noEmit",
     "build": "pnpm typecheck && vite build && node scripts/build-electron.mjs",
-    "start": "electron dist/main/main.cjs"
+    "start": "electron dist/main/main.cjs",
+    "perf:browsers": "node scripts/browser-perf-compare.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

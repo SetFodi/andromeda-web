@@ -30,6 +30,8 @@ const MAX_SPLIT_RATIO = 0.75;
 const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
 const FIND_BAR_HEIGHT = 46;
+const SIDEBAR_MIN = 220;
+const SIDEBAR_MAX = 460;
 const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
 
 type PaneNavigationState = {
@@ -107,7 +109,16 @@ export default function App() {
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
   const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
-  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("andromeda.compact") === "1"
+  );
+  const [isSidebarPeeking, setSidebarPeeking] = useState(false);
+  const [isResizingSidebar, setResizingSidebar] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const stored = Number.parseInt(localStorage.getItem("andromeda.sidebarWidth") ?? "", 10);
+    return Number.isFinite(stored) ? Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, stored)) : 286;
+  });
+  const sidebarWidthRef = useRef(sidebarWidth);
   const [isFindOpen, setFindOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [isDownloadsOpen, setDownloadsOpen] = useState(false);
@@ -169,7 +180,8 @@ export default function App() {
     "--accent": shellAccent,
     "--grad-1": shellColors[0],
     "--grad-2": shellColors[1] ?? shellColors[0],
-    "--grad-3": shellColors[2] ?? shellColors[1] ?? shellColors[0]
+    "--grad-3": shellColors[2] ?? shellColors[1] ?? shellColors[0],
+    "--sidebar-width": `${sidebarWidth}px`
   } as CSSProperties;
   const recentSites = useMemo<RecentSite[]>(() => {
     const seen = new Set<string>();
@@ -607,6 +619,24 @@ export default function App() {
     [flushContentLayout, openUrl]
   );
 
+  useEffect(() => {
+    const timers: number[] = [];
+    const unsubscribe = window.andromeda.onBenchmarkNavigate(({ urls, loadDelayMs }) => {
+      timers.splice(0).forEach((timer) => window.clearTimeout(timer));
+      urls.forEach((url, index) => {
+        const timer = window.setTimeout(() => {
+          navigateTo(url);
+        }, index * Math.max(0, loadDelayMs));
+        timers.push(timer);
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [navigateTo]);
+
   const openSplitCommandBar = useCallback(() => {
     setCommandBarMode("split");
     setCommandBarOpen(true);
@@ -734,7 +764,24 @@ export default function App() {
   }, []);
 
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((collapsed) => !collapsed);
+    setSidebarPeeking(false);
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      try {
+        localStorage.setItem("andromeda.compact", next ? "1" : "0");
+      } catch {
+        // ignore storage failures
+      }
+      return next;
+    });
+  }, []);
+
+  const handlePeekEnter = useCallback(() => {
+    setSidebarPeeking(true);
+  }, []);
+
+  const handlePeekLeave = useCallback(() => {
+    setSidebarPeeking(false);
   }, []);
 
   const openFind = useCallback(() => {
@@ -844,6 +891,41 @@ export default function App() {
       }));
     },
     [tabAudio]
+  );
+
+  // Drag-to-resize the sidebar. Web views are detached during the drag so the
+  // host receives mousemove and the native view isn't resized every frame.
+  const handleSidebarResizeStart = useCallback(
+    (event: ReactMouseEvent) => {
+      event.preventDefault();
+      setResizingSidebar(true);
+      void window.andromeda.setCommandBarOpen(true);
+
+      const onMove = (moveEvent: MouseEvent) => {
+        const width = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Math.round(moveEvent.clientX)));
+        sidebarWidthRef.current = width;
+        appShellRef.current?.style.setProperty("--sidebar-width", `${width}px`);
+      };
+
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        setResizingSidebar(false);
+        const width = sidebarWidthRef.current;
+        setSidebarWidth(width);
+        try {
+          localStorage.setItem("andromeda.sidebarWidth", String(width));
+        } catch {
+          // ignore storage failures
+        }
+        flushContentLayout(undefined, true);
+        void window.andromeda.setCommandBarOpen(isCommandBarOpen);
+      };
+
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [flushContentLayout, isCommandBarOpen]
   );
 
   // Detach the web views during a divider drag so the host window keeps
@@ -1163,9 +1245,22 @@ export default function App() {
     <div className="window-frame">
       <div
         ref={appShellRef}
-        className={isSidebarCollapsed ? "app-shell is-sidebar-collapsed" : "app-shell"}
+        className={[
+          "app-shell",
+          isSidebarCollapsed ? "is-sidebar-collapsed" : "",
+          isSidebarCollapsed && isSidebarPeeking ? "is-peeking" : ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
         style={shellStyle}
       >
+        {isSidebarCollapsed && !isSidebarPeeking ? (
+          <div
+            className="sidebar-peek-zone"
+            aria-hidden="true"
+            onMouseEnter={handlePeekEnter}
+          />
+        ) : null}
         <Toolbar
           addressValue={addressValue}
           inputRef={addressInputRef}
@@ -1205,6 +1300,7 @@ export default function App() {
         <Sidebar
           spaces={state.spaces}
           selectedSpaceId={state.selectedSpaceId}
+          onMouseLeave={isSidebarCollapsed ? handlePeekLeave : undefined}
           onSelectSpace={handleSelectSpace}
           onCreateSpace={createSpace}
           onRenameSpace={renameSpace}

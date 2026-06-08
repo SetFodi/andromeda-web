@@ -46,6 +46,11 @@ type DownloadPayload = {
   state: string;
 };
 
+type BenchmarkNavigatePayload = {
+  urls: string[];
+  loadDelayMs: number;
+};
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -125,6 +130,37 @@ function isNavigationStatePayload(payload: unknown): payload is NavigationStateP
       typeof (payload as NavigationStatePayload).isLoading === "boolean"
   );
 }
+
+function isBenchmarkNavigatePayload(payload: unknown): payload is BenchmarkNavigatePayload {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      Array.isArray((payload as BenchmarkNavigatePayload).urls) &&
+      (payload as BenchmarkNavigatePayload).urls.every(
+        (url: unknown) => typeof url === "string" && /^https?:\/\//.test(url)
+      ) &&
+      typeof (payload as BenchmarkNavigatePayload).loadDelayMs === "number" &&
+      Number.isFinite((payload as BenchmarkNavigatePayload).loadDelayMs)
+  );
+}
+
+const benchmarkNavigateQueue: BenchmarkNavigatePayload[] = [];
+const benchmarkNavigateCallbacks = new Set<(payload: BenchmarkNavigatePayload) => void>();
+
+ipcRenderer.on("browser:benchmarkNavigate", (_event, payload: unknown) => {
+  if (!isBenchmarkNavigatePayload(payload)) {
+    return;
+  }
+
+  if (benchmarkNavigateCallbacks.size === 0) {
+    benchmarkNavigateQueue.push(payload);
+    return;
+  }
+
+  for (const callback of benchmarkNavigateCallbacks) {
+    callback(payload);
+  }
+});
 
 contextBridge.exposeInMainWorld("andromeda", {
   navigate: (url: string, pane?: BrowserPane) =>
@@ -227,6 +263,13 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("browser:openCommandBar", listener);
     return () => ipcRenderer.removeListener("browser:openCommandBar", listener);
+  },
+  onBenchmarkNavigate: (callback: (payload: BenchmarkNavigatePayload) => void) => {
+    benchmarkNavigateCallbacks.add(callback);
+    benchmarkNavigateQueue.splice(0).forEach((payload) => callback(payload));
+    return () => {
+      benchmarkNavigateCallbacks.delete(callback);
+    };
   },
   onTabNavigated: (callback: (payload: { tabId: string; url: string }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {

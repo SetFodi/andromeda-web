@@ -59,6 +59,11 @@ type DownloadPayload = {
   state: string;
 };
 
+type BenchmarkNavigatePayload = {
+  urls: string[];
+  loadDelayMs: number;
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string, pane?: BrowserPane) => Promise<void>;
@@ -91,6 +96,7 @@ interface Window {
     onNavigationStateUpdated: (callback: (payload: NavigationStatePayload) => void) => () => void;
     onPaneFocused: (callback: (payload: { pane: BrowserPane }) => void) => () => void;
     onOpenCommandBar: (callback: () => void) => () => void;
+    onBenchmarkNavigate: (callback: (payload: BenchmarkNavigatePayload) => void) => () => void;
     onShortcut: (callback: (action: string) => void) => () => void;
     onFoundInPage: (callback: (payload: FoundInPagePayload) => void) => () => void;
     onTabNavigated: (callback: (payload: { tabId: string; url: string }) => void) => () => void;

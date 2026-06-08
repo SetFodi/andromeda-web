@@ -8,6 +8,46 @@ import { buildAppMenu } from "./menu";
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
 let mainWindow: BrowserWindow | null = null;
 
+function getBenchmarkUrls(): string[] {
+  if (!process.env.ANDROMEDA_BENCHMARK_URLS) {
+    return [];
+  }
+
+  try {
+    const urls = JSON.parse(process.env.ANDROMEDA_BENCHMARK_URLS) as unknown;
+    if (!Array.isArray(urls)) {
+      return [];
+    }
+
+    return urls.filter((url): url is string => typeof url === "string" && /^https?:\/\//.test(url));
+  } catch {
+    return [];
+  }
+}
+
+function getBenchmarkDelay(name: string, fallback: number): number {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function scheduleBenchmarkNavigation(window: BrowserWindow): void {
+  const urls = getBenchmarkUrls();
+  if (urls.length === 0) {
+    return;
+  }
+
+  const initialDelay = getBenchmarkDelay("ANDROMEDA_BENCHMARK_NAVIGATE_DELAY_MS", 3000);
+  const loadDelay = getBenchmarkDelay("ANDROMEDA_BENCHMARK_LOAD_WAIT_MS", 10000);
+
+  window.webContents.once("did-finish-load", () => {
+    setTimeout(() => {
+      if (!window.isDestroyed()) {
+        window.webContents.send("browser:benchmarkNavigate", { urls, loadDelayMs: loadDelay });
+      }
+    }, initialDelay);
+  });
+}
+
 function createMainWindow(): BrowserWindow {
   if (mainWindow) {
     mainWindow.focus();
@@ -38,9 +78,18 @@ function createMainWindow(): BrowserWindow {
   const manager = new WebContentsViewManager(window);
   registerIpc(manager, window);
   buildAppMenu(window);
+  scheduleBenchmarkNavigation(window);
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  window.once("ready-to-show", () => window.show());
+  const showWindow = () => {
+    if (!window.isDestroyed() && !window.isVisible()) {
+      window.show();
+    }
+  };
+
+  window.once("ready-to-show", showWindow);
+  window.webContents.once("did-finish-load", showWindow);
+  setTimeout(showWindow, 2500);
   window.on("closed", () => {
     mainWindow = null;
   });

@@ -521,22 +521,46 @@
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 6%, transparent)),
     var(--surface-glass-strong);
   transition:
-    transform 360ms var(--ease-out),
-    opacity 240ms var(--ease-out);
+    transform 240ms var(--ease-out),
+    opacity 180ms var(--ease-out);
 }
 
-.content-view-host {
-  transition: left 360ms var(--ease-out);
-}
+/* No transition on `left`: animating it would resize the native web view every
+   frame (janky). The content snaps once; only the sidebar layer slides. */
 
 .app-shell.is-sidebar-collapsed .sidebar {
+  z-index: 30;
   transform: translateX(-101%);
   opacity: 0;
   pointer-events: none;
 }
 
+/* Compact mode: content reclaims the space, minus a thin left strip that hosts
+   the hover trigger (a renderer hover zone over a native web view would be
+   occluded, so we keep this sliver). */
 .app-shell.is-sidebar-collapsed .content-view-host {
+  left: 8px;
+}
+
+/* Peek: hovering the strip slides the sidebar back in. */
+.app-shell.is-sidebar-collapsed.is-peeking .sidebar {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  box-shadow: 18px 0 48px rgba(0, 0, 0, 0.28);
+}
+
+.app-shell.is-sidebar-collapsed.is-peeking .content-view-host {
+  left: var(--sidebar-width);
+}
+
+.sidebar-peek-zone {
+  position: absolute;
+  top: var(--toolbar-height);
+  bottom: 0;
   left: 0;
+  z-index: 25;
+  width: 14px;
 }
 
 .sidebar-body {
