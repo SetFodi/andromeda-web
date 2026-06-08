@@ -10,6 +10,7 @@ import {
 } from "react";
 import CommandBar from "./components/CommandBar";
 import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
+import SiteInfoPanel from "./components/SiteInfoPanel";
 import FindBar from "./components/FindBar";
 import SettingsPanel from "./components/SettingsPanel";
 import Sidebar from "./components/Sidebar";
@@ -19,6 +20,7 @@ import { BrowserPane, BrowserTab, useBrowserStore, SpaceId } from "./state/brows
 import { useTheme } from "./state/useTheme";
 import { useSettings } from "./state/useSettings";
 import { useQuickLinks } from "./state/useQuickLinks";
+import { useHistory } from "./state/useHistory";
 import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
 import type { RecentSite } from "./components/StartPage";
 import type { IconName } from "./components/Icon";
@@ -30,6 +32,7 @@ const MAX_SPLIT_RATIO = 0.75;
 const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
 const FIND_BAR_HEIGHT = 46;
+const TOOLBAR_HEIGHT = 56;
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 460;
 const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
@@ -75,6 +78,11 @@ function getPageFallbackIcon(url: string | null, isStartPage: boolean): IconName
   return "globe";
 }
 
+function isBlackAccent(hex: string): boolean {
+  const normalized = hex.trim().toLowerCase();
+  return normalized === "#000" || normalized === "#0000" || normalized === "#000000" || normalized === "#000000ff";
+}
+
 function loadSplitRatio(): number {
   try {
     const raw = Number.parseFloat(localStorage.getItem(SPLIT_RATIO_KEY) ?? "");
@@ -92,7 +100,9 @@ export default function App() {
   const { settings, updateSettings } = useSettings();
   const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink } =
     useQuickLinks();
+  const { items: historyEntries, recordVisit, recordTyped, updateMeta: recordMeta } = useHistory();
   const contentRef = useRef<HTMLDivElement>(null);
+  const lastMainUrlRef = useRef<string | null>(null);
   const appShellRef = useRef<HTMLDivElement>(null);
   const recolorIdleRef = useRef<number | null>(null);
   const recolorRafRef = useRef<number | null>(null);
@@ -103,8 +113,11 @@ export default function App() {
   const lastMainRequestRef = useRef<string | null>(null);
   const lastSplitRequestRef = useRef<string | null>(null);
   const lastCommandBarOpenRef = useRef(false);
+  const lastLayoutMetricsKeyRef = useRef<string | null>(null);
   const didCompleteLaunchResetRef = useRef(false);
-  const resizeFrameRef = useRef<number | null>(null);
+  const sidebarResizeFrameRef = useRef<number | null>(null);
+  const windowResizeIdleRef = useRef<number | null>(null);
+  const spaceSwitchIdleRef = useRef<number | null>(null);
   const seenDownloadIdsRef = useRef<Set<string>>(new Set());
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
@@ -122,6 +135,7 @@ export default function App() {
   const [isFindOpen, setFindOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [isDownloadsOpen, setDownloadsOpen] = useState(false);
+  const [isSiteInfoOpen, setSiteInfoOpen] = useState(false);
   const [downloads, setDownloads] = useState<DownloadEntry[]>([]);
   const [addressFocused, setAddressFocused] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
@@ -155,6 +169,7 @@ export default function App() {
     closeTab,
     duplicateTab,
     closeOtherTabs,
+    sleepTab,
     moveTabToSpace,
     reopenClosedTab,
     togglePinTab,
@@ -176,6 +191,7 @@ export default function App() {
       ? selectedSpace.colors
       : [settings.appearanceAccent];
   const shellAccent = shellColors[0];
+  const isPureBlackTheme = isBlackAccent(shellAccent);
   const shellStyle = {
     "--accent": shellAccent,
     "--grad-1": shellColors[0],
@@ -213,30 +229,67 @@ export default function App() {
 
     return sites.slice(0, 6);
   }, [state.spaces]);
-  const quickOpenItems = useMemo<RecentSite[]>(() => {
+  const quickOpenItems = useMemo<
+    Array<{
+      id: string;
+      title: string;
+      url: string;
+      faviconUrl?: string;
+      visitCount?: number;
+      typedCount?: number;
+      lastVisited?: number;
+    }>
+  >(() => {
     const seen = new Set<string>();
-    const items: RecentSite[] = [];
+    const items: Array<{
+      id: string;
+      title: string;
+      url: string;
+      faviconUrl?: string;
+      visitCount?: number;
+      typedCount?: number;
+      lastVisited?: number;
+    }> = [];
 
-    const addItem = (id: string, title: string, url: string) => {
-      const key = url.toLowerCase();
-      if (seen.has(key)) {
-        return;
+    const keyFor = (url: string) => {
+      try {
+        const parsed = new URL(url);
+        return `${parsed.host}${parsed.pathname.replace(/\/+$/, "")}${parsed.search}`.toLowerCase();
+      } catch {
+        return url.toLowerCase();
       }
-
-      seen.add(key);
-      items.push({ id, title, url });
     };
 
+    // Real visit history first (frecency-ranked), then curated quick links for
+    // sites the user hasn't visited yet.
+    for (const entry of historyEntries) {
+      const key = keyFor(entry.url);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      items.push({
+        id: `history-${entry.url}`,
+        title: entry.title,
+        url: entry.url,
+        faviconUrl: entry.faviconUrl,
+        visitCount: entry.visitCount,
+        typedCount: entry.typedCount,
+        lastVisited: entry.lastVisited
+      });
+    }
+
     for (const link of quickLinks) {
-      addItem(`quick-${link.id}`, link.label, link.url);
+      const key = keyFor(link.url);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      items.push({ id: `quick-${link.id}`, title: link.label, url: link.url });
     }
 
-    for (const site of recentSites) {
-      addItem(`recent-${site.id}`, site.title, site.url);
-    }
-
-    return items.slice(0, 6);
-  }, [quickLinks, recentSites]);
+    return items.slice(0, 60);
+  }, [historyEntries, quickLinks]);
 
   const addressSuggestions = useMemo(() => {
     const query = addressValue.trim().toLowerCase();
@@ -349,6 +402,27 @@ export default function App() {
     void window.andromeda.resizeContentView(layout);
   }, []);
 
+  const sendLayoutMetrics = useCallback(
+    (overrides: LayoutMetrics = {}) => {
+      const metrics: LayoutMetrics = {
+        sidebarWidth: sidebarWidthRef.current,
+        sidebarCollapsed: isSidebarCollapsed,
+        splitOpen: isSplitOpen,
+        splitRatio: splitRatioRef.current,
+        findOpen: isFindOpen,
+        ...overrides
+      };
+      const metricsKey = JSON.stringify(metrics);
+      if (lastLayoutMetricsKeyRef.current === metricsKey) {
+        return;
+      }
+
+      lastLayoutMetricsKeyRef.current = metricsKey;
+      void window.andromeda.setLayoutMetrics(metrics);
+    },
+    [isFindOpen, isSidebarCollapsed, isSplitOpen]
+  );
+
   const flushContentLayout = useCallback(
     (splitOpen = isSplitOpen, force = false) => {
       sendContentLayout(getContentLayout(splitOpen), force);
@@ -356,35 +430,44 @@ export default function App() {
     [getContentLayout, isSplitOpen, sendContentLayout]
   );
 
-  const resizeContentView = useCallback(() => {
-    if (resizeFrameRef.current !== null) {
-      return;
+  const markWindowResizing = useCallback(() => {
+    const shell = appShellRef.current;
+    if (shell) {
+      shell.classList.add("is-window-resizing");
+      if (windowResizeIdleRef.current !== null) {
+        window.clearTimeout(windowResizeIdleRef.current);
+      }
+      windowResizeIdleRef.current = window.setTimeout(() => {
+        windowResizeIdleRef.current = null;
+        appShellRef.current?.classList.remove("is-window-resizing");
+      }, 140);
     }
-
-    resizeFrameRef.current = requestAnimationFrame(() => {
-      resizeFrameRef.current = null;
-      flushContentLayout();
-    });
-  }, [flushContentLayout]);
+  }, []);
 
   useEffect(() => {
-    resizeContentView();
+    sendLayoutMetrics();
+    void window.andromeda.syncLayout();
 
-    const resizeObserver = new ResizeObserver(resizeContentView);
-    if (contentRef.current) {
-      resizeObserver.observe(contentRef.current);
-    }
-
-    window.addEventListener("resize", resizeContentView);
+    window.addEventListener("resize", markWindowResizing);
 
     return () => {
-      if (resizeFrameRef.current !== null) {
-        cancelAnimationFrame(resizeFrameRef.current);
+      if (windowResizeIdleRef.current !== null) {
+        window.clearTimeout(windowResizeIdleRef.current);
       }
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", resizeContentView);
+      if (spaceSwitchIdleRef.current !== null) {
+        window.clearTimeout(spaceSwitchIdleRef.current);
+      }
+      appShellRef.current?.classList.remove("is-window-resizing");
+      appShellRef.current?.classList.remove("is-switching-space");
+      window.removeEventListener("resize", markWindowResizing);
     };
-  }, [resizeContentView]);
+  }, [markWindowResizing, sendLayoutMetrics]);
+
+  useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+    splitRatioRef.current = splitRatio;
+    sendLayoutMetrics({ sidebarWidth, splitRatio });
+  }, [sendLayoutMetrics, sidebarWidth, splitRatio]);
 
   // Re-inset the web view when the find bar opens/closes (the DOM size of the
   // content host does not change, so the ResizeObserver won't fire on its own).
@@ -472,22 +555,31 @@ export default function App() {
       }
       if (pane === "split") {
         lastSplitRequestRef.current = `split:${url}`;
+      } else {
+        lastMainUrlRef.current = url;
       }
       updateActiveUrl(url, pane);
+      recordVisit(url);
     });
-  }, [activePane, updateActiveUrl]);
+  }, [activePane, recordVisit, updateActiveUrl]);
 
   useEffect(() => {
     return window.andromeda.onTitleUpdated(({ pane, title }) => {
       updateActiveTitle(title, pane);
+      if (pane !== "split" && lastMainUrlRef.current) {
+        recordMeta(lastMainUrlRef.current, { title });
+      }
     });
-  }, [updateActiveTitle]);
+  }, [recordMeta, updateActiveTitle]);
 
   useEffect(() => {
     return window.andromeda.onFaviconUpdated(({ pane, faviconUrl }) => {
       updateActiveFavicon(faviconUrl, pane);
+      if (pane !== "split" && lastMainUrlRef.current) {
+        recordMeta(lastMainUrlRef.current, { faviconUrl });
+      }
     });
-  }, [updateActiveFavicon]);
+  }, [recordMeta, updateActiveFavicon]);
 
   useEffect(() => {
     return window.andromeda.onNavigationStateUpdated((navigationState) => {
@@ -597,18 +689,17 @@ export default function App() {
     });
   }, []);
 
-  // The command bar and settings modal both need the web views detached so the
-  // renderer overlay is visible above the content region.
-  const isContentOverlayOpen =
-    isCommandBarOpen || isSettingsOpen || isDownloadsOpen || showAddressSuggestions;
+  // Large renderer overlays need the native web views detached. Lightweight
+  // toolbar popovers stay non-destructive so the page does not blink away.
+  const shouldDetachContentViews = isCommandBarOpen || isSettingsOpen;
   useEffect(() => {
-    if (lastCommandBarOpenRef.current === isContentOverlayOpen) {
+    if (lastCommandBarOpenRef.current === shouldDetachContentViews) {
       return;
     }
 
-    lastCommandBarOpenRef.current = isContentOverlayOpen;
-    void window.andromeda.setCommandBarOpen(isContentOverlayOpen);
-  }, [isContentOverlayOpen]);
+    lastCommandBarOpenRef.current = shouldDetachContentViews;
+    void window.andromeda.setCommandBarOpen(shouldDetachContentViews);
+  }, [shouldDetachContentViews]);
 
   const navigateTo = useCallback(
     (url: string) => {
@@ -663,8 +754,9 @@ export default function App() {
     const url = resolveNavigationInput(addressValue);
     setAddressDirty(false);
     setAddressFocused(false);
+    recordTyped(url);
     navigateTo(url);
-  }, [addressValue, navigateTo]);
+  }, [addressValue, navigateTo, recordTyped]);
 
   const handleAddressChange = useCallback((value: string) => {
     setAddressValue(value);
@@ -696,11 +788,30 @@ export default function App() {
     setAddressValue("");
   }, []);
 
+  const beginSpaceSwitchPaint = useCallback(() => {
+    const shell = appShellRef.current;
+    if (!shell) {
+      return;
+    }
+
+    shell.classList.add("is-switching-space");
+    if (spaceSwitchIdleRef.current !== null) {
+      window.clearTimeout(spaceSwitchIdleRef.current);
+    }
+    spaceSwitchIdleRef.current = window.setTimeout(() => {
+      spaceSwitchIdleRef.current = null;
+      appShellRef.current?.classList.remove("is-switching-space");
+    }, 160);
+  }, []);
+
   const handleSelectSpace = useCallback(
     (spaceId: SpaceId) => {
+      if (spaceId !== state.selectedSpaceId) {
+        beginSpaceSwitchPaint();
+      }
       selectSpace(spaceId);
     },
-    [selectSpace]
+    [beginSpaceSwitchPaint, selectSpace, state.selectedSpaceId]
   );
 
   const handleSwitchSpace = useCallback(
@@ -713,9 +824,10 @@ export default function App() {
       const safeIndex = currentIndex >= 0 ? currentIndex : 0;
       const delta = direction === "next" ? 1 : -1;
       const nextIndex = (safeIndex + delta + state.spaces.length) % state.spaces.length;
+      beginSpaceSwitchPaint();
       selectSpace(state.spaces[nextIndex].id);
     },
-    [selectSpace, state.selectedSpaceId, state.spaces]
+    [beginSpaceSwitchPaint, selectSpace, state.selectedSpaceId, state.spaces]
   );
 
   const handleSelectSidebarTab = useCallback(
@@ -730,6 +842,14 @@ export default function App() {
       closeTab(spaceId, tabId);
     },
     [closeTab]
+  );
+
+  const handleSleepSidebarTab = useCallback(
+    (spaceId: SpaceId, tabId: string) => {
+      sleepTab(spaceId, tabId);
+      void window.andromeda.sleepTab(tabId);
+    },
+    [sleepTab]
   );
 
   const handleReorderSidebarTabs = useCallback(
@@ -764,6 +884,14 @@ export default function App() {
   }, []);
 
   const toggleSidebar = useCallback(() => {
+    appShellRef.current?.classList.add("is-window-resizing");
+    if (windowResizeIdleRef.current !== null) {
+      window.clearTimeout(windowResizeIdleRef.current);
+    }
+    windowResizeIdleRef.current = window.setTimeout(() => {
+      windowResizeIdleRef.current = null;
+      appShellRef.current?.classList.remove("is-window-resizing");
+    }, 180);
     setSidebarPeeking(false);
     setSidebarCollapsed((collapsed) => {
       const next = !collapsed;
@@ -859,8 +987,16 @@ export default function App() {
     [updateSpace]
   );
 
-  const toggleDownloads = useCallback(() => setDownloadsOpen((open) => !open), []);
+  const toggleDownloads = useCallback(() => {
+    setSiteInfoOpen(false);
+    setDownloadsOpen((open) => !open);
+  }, []);
   const closeDownloads = useCallback(() => setDownloadsOpen(false), []);
+  const toggleSiteInfo = useCallback(() => {
+    setDownloadsOpen(false);
+    setSiteInfoOpen((open) => !open);
+  }, []);
+  const closeSiteInfo = useCallback(() => setSiteInfoOpen(false), []);
   const handleOpenDownload = useCallback((path: string) => {
     if (path) {
       void window.andromeda.openDownload(path);
@@ -893,25 +1029,48 @@ export default function App() {
     [tabAudio]
   );
 
-  // Drag-to-resize the sidebar. Web views are detached during the drag so the
-  // host receives mousemove and the native view isn't resized every frame.
+  // Drag-to-resize keeps the page live, but coalesces native bounds updates and
+  // temporarily disables expensive shell rendering.
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent) => {
       event.preventDefault();
       setResizingSidebar(true);
-      void window.andromeda.setCommandBarOpen(true);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const syncContentBounds = () => {
+        if (sidebarResizeFrameRef.current !== null) {
+          return;
+        }
+
+        sidebarResizeFrameRef.current = requestAnimationFrame(() => {
+          sidebarResizeFrameRef.current = null;
+          sendLayoutMetrics({ sidebarWidth: sidebarWidthRef.current });
+        });
+      };
 
       const onMove = (moveEvent: MouseEvent) => {
         const width = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Math.round(moveEvent.clientX)));
+        if (sidebarWidthRef.current === width) {
+          return;
+        }
         sidebarWidthRef.current = width;
         appShellRef.current?.style.setProperty("--sidebar-width", `${width}px`);
+        syncContentBounds();
       };
 
       const onUp = () => {
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
+        if (sidebarResizeFrameRef.current !== null) {
+          cancelAnimationFrame(sidebarResizeFrameRef.current);
+          sidebarResizeFrameRef.current = null;
+        }
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
         setResizingSidebar(false);
         const width = sidebarWidthRef.current;
+        appShellRef.current?.style.setProperty("--sidebar-width", `${width}px`);
         setSidebarWidth(width);
         try {
           localStorage.setItem("andromeda.sidebarWidth", String(width));
@@ -919,13 +1078,12 @@ export default function App() {
           // ignore storage failures
         }
         flushContentLayout(undefined, true);
-        void window.andromeda.setCommandBarOpen(isCommandBarOpen);
       };
 
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [flushContentLayout, isCommandBarOpen]
+    [flushContentLayout, sendLayoutMetrics]
   );
 
   // Detach the web views during a divider drag so the host window keeps
@@ -1084,6 +1242,7 @@ export default function App() {
   const handleCommandInputNavigation = useCallback(
     (input: string, target: "active" | "split") => {
       const url = resolveNavigationInput(input);
+      recordTyped(url);
       if (target === "split") {
         return navigateSplitTo(url);
       }
@@ -1091,7 +1250,7 @@ export default function App() {
       navigateTo(url);
       return undefined;
     },
-    [navigateSplitTo, navigateTo]
+    [navigateSplitTo, navigateTo, recordTyped]
   );
 
   const handleOpenUrlFromCommand = useCallback(
@@ -1247,8 +1406,10 @@ export default function App() {
         ref={appShellRef}
         className={[
           "app-shell",
+          isPureBlackTheme ? "is-pure-black" : "",
           isSidebarCollapsed ? "is-sidebar-collapsed" : "",
-          isSidebarCollapsed && isSidebarPeeking ? "is-peeking" : ""
+          isSidebarCollapsed && isSidebarPeeking ? "is-peeking" : "",
+          isResizingSidebar ? "is-resizing-sidebar" : ""
         ]
           .filter(Boolean)
           .join(" ")}
@@ -1276,6 +1437,9 @@ export default function App() {
           canBookmark={Boolean(bookmarkUrl)}
           isBookmarked={isBookmarked}
           hasActiveDownload={hasActiveDownload}
+          profileInitial={(settings.name.trim().charAt(0) || "A").toUpperCase()}
+          currentUrl={bookmarkUrl ?? ""}
+          isSiteInfoOpen={isSiteInfoOpen}
           addressSuggestions={addressSuggestions}
           showAddressSuggestions={showAddressSuggestions}
           onAddressChange={handleAddressChange}
@@ -1286,10 +1450,10 @@ export default function App() {
           onBack={handleBack}
           onForward={handleForward}
           onReload={handleReload}
-          onNewTab={handleNewTab}
           onOpenSplitView={openSplitCommandBar}
           onToggleBookmark={handleToggleBookmark}
           onToggleDownloads={toggleDownloads}
+          onToggleSiteInfo={toggleSiteInfo}
           onToggleTheme={toggleTheme}
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
@@ -1301,6 +1465,7 @@ export default function App() {
           spaces={state.spaces}
           selectedSpaceId={state.selectedSpaceId}
           onMouseLeave={isSidebarCollapsed ? handlePeekLeave : undefined}
+          onResizeStart={handleSidebarResizeStart}
           onSelectSpace={handleSelectSpace}
           onCreateSpace={createSpace}
           onRenameSpace={renameSpace}
@@ -1314,6 +1479,7 @@ export default function App() {
           onTogglePinTab={togglePinTab}
           onDuplicateTab={duplicateTab}
           onCloseOtherTabs={closeOtherTabs}
+          onSleepTab={handleSleepSidebarTab}
           onMoveTabToSpace={moveTabToSpace}
           loadingTabId={loadingTabId}
           tabAudio={tabAudio}
@@ -1451,6 +1617,12 @@ export default function App() {
           onOpen={handleOpenDownload}
           onReveal={handleRevealDownload}
           onClear={handleClearDownloads}
+        />
+        <SiteInfoPanel
+          isOpen={isSiteInfoOpen}
+          url={bookmarkUrl ?? ""}
+          onClose={closeSiteInfo}
+          onReload={handleReload}
         />
       </div>
     </div>

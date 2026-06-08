@@ -3,6 +3,7 @@ import {
   BrowserPane,
   ContentBounds,
   ContentLayout,
+  LayoutMetrics,
   WebContentsViewManager
 } from "./webContentsViewManager";
 
@@ -93,6 +94,62 @@ function normalizeNumber(value: unknown): number | null {
   return Math.max(0, Math.min(MAX_BOUND, Math.round(value)));
 }
 
+function normalizeRatio(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, value));
+}
+
+function normalizeLayoutMetrics(value: unknown): Partial<LayoutMetrics> | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const metrics: Partial<LayoutMetrics> = {};
+
+  if (candidate.sidebarWidth !== undefined) {
+    const sidebarWidth = normalizeNumber(candidate.sidebarWidth);
+    if (sidebarWidth === null) {
+      return null;
+    }
+    metrics.sidebarWidth = sidebarWidth;
+  }
+
+  if (candidate.sidebarCollapsed !== undefined) {
+    if (typeof candidate.sidebarCollapsed !== "boolean") {
+      return null;
+    }
+    metrics.sidebarCollapsed = candidate.sidebarCollapsed;
+  }
+
+  if (candidate.splitOpen !== undefined) {
+    if (typeof candidate.splitOpen !== "boolean") {
+      return null;
+    }
+    metrics.splitOpen = candidate.splitOpen;
+  }
+
+  if (candidate.splitRatio !== undefined) {
+    const splitRatio = normalizeRatio(candidate.splitRatio);
+    if (splitRatio === null) {
+      return null;
+    }
+    metrics.splitRatio = splitRatio;
+  }
+
+  if (candidate.findOpen !== undefined) {
+    if (typeof candidate.findOpen !== "boolean") {
+      return null;
+    }
+    metrics.findOpen = candidate.findOpen;
+  }
+
+  return metrics;
+}
+
 function setHandler(
   channel: string,
   listener: (event: IpcMainInvokeEvent, payload?: unknown) => void
@@ -165,6 +222,17 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     manager.setTabMuted(candidate.tabId, candidate.muted);
   });
 
+  setHandler("browser:sleepTab", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const tabId = (payload as { tabId?: unknown } | null)?.tabId;
+    if (typeof tabId !== "string" || !tabId) {
+      throw new Error("Invalid tab id");
+    }
+
+    manager.sleepTab(tabId);
+  });
+
   setHandler("browser:goBack", (event, payload: unknown) => {
     assertTrustedSender(event, window);
     manager.goBack(normalizePane((payload as { pane?: unknown } | null)?.pane));
@@ -194,6 +262,22 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     }
 
     manager.resize(layout);
+  });
+
+  setHandler("browser:setLayoutMetrics", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const metrics = normalizeLayoutMetrics(payload);
+    if (!metrics) {
+      throw new Error("Invalid layout metrics");
+    }
+
+    manager.setLayoutMetrics(metrics);
+  });
+
+  setHandler("browser:syncLayout", (event) => {
+    assertTrustedSender(event, window);
+    manager.syncLayoutFromWindow();
   });
 
   setHandler("browser:setActivePane", (event, payload: unknown) => {

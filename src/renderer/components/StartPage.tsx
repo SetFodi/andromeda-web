@@ -104,12 +104,6 @@ function StartPage({
 
   return (
     <main className="start-page">
-      <div className="start-ambient" aria-hidden="true">
-        <span className="ambient-orb" />
-        <span className="ambient-veil" />
-        <AndromedaWaves />
-      </div>
-
       <div className="start-scroll">
         <section className="start-stage">
           <header className="start-head reveal" style={{ "--reveal-delay": "40ms" } as React.CSSProperties}>
@@ -209,8 +203,7 @@ function StartPage({
               </div>
             ) : (
               <button type="button" className="quick-empty" onClick={onOpenCommand}>
-                <Icon name="plus" size={15} />
-                Add a site with the ☆ in the toolbar, or search with ⌘T
+                Save sites with the ☆ in the toolbar, or search with ⌘T
               </button>
             )}
           </section>
@@ -247,33 +240,6 @@ function StartPage({
         </section>
       </div>
     </main>
-  );
-}
-
-function AndromedaWaves() {
-  return (
-    <svg className="ambient-waves" viewBox="0 0 1200 360" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="waveCream" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="var(--wave-cream-a)" />
-          <stop offset="100%" stopColor="var(--wave-cream-b)" />
-        </linearGradient>
-        <linearGradient id="waveCoral" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="var(--wave-coral-a)" />
-          <stop offset="100%" stopColor="var(--wave-coral-b)" />
-        </linearGradient>
-      </defs>
-      <path
-        className="ambient-wave"
-        d="M0 250 C220 180 420 300 640 250 C860 200 1020 150 1200 196 L1200 360 L0 360 Z"
-        fill="url(#waveCream)"
-      />
-      <path
-        className="ambient-wave"
-        d="M0 300 C260 248 460 330 700 300 C920 272 1050 246 1200 270 L1200 360 L0 360 Z"
-        fill="url(#waveCoral)"
-      />
-    </svg>
   );
 }
 

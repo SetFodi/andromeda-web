@@ -14,6 +14,14 @@ type ContentLayout = {
   split?: ContentBounds | null;
 };
 
+type LayoutMetrics = {
+  sidebarWidth?: number;
+  sidebarCollapsed?: boolean;
+  splitOpen?: boolean;
+  splitRatio?: number;
+  findOpen?: boolean;
+};
+
 type NavigationPayload = {
   pane: BrowserPane;
   url: string;
@@ -88,6 +96,47 @@ function sanitizeLayout(layout: ContentBounds | ContentLayout): ContentLayout {
   return {
     main: sanitizeBounds(layout)
   };
+}
+
+function sanitizeLayoutMetrics(metrics: LayoutMetrics): LayoutMetrics {
+  const sanitized: LayoutMetrics = {};
+
+  if (metrics.sidebarWidth !== undefined) {
+    if (!isFiniteNumber(metrics.sidebarWidth)) {
+      throw new Error("Invalid sidebar width");
+    }
+    sanitized.sidebarWidth = metrics.sidebarWidth;
+  }
+
+  if (metrics.sidebarCollapsed !== undefined) {
+    if (typeof metrics.sidebarCollapsed !== "boolean") {
+      throw new Error("Invalid sidebar collapsed state");
+    }
+    sanitized.sidebarCollapsed = metrics.sidebarCollapsed;
+  }
+
+  if (metrics.splitOpen !== undefined) {
+    if (typeof metrics.splitOpen !== "boolean") {
+      throw new Error("Invalid split state");
+    }
+    sanitized.splitOpen = metrics.splitOpen;
+  }
+
+  if (metrics.splitRatio !== undefined) {
+    if (!isFiniteNumber(metrics.splitRatio)) {
+      throw new Error("Invalid split ratio");
+    }
+    sanitized.splitRatio = metrics.splitRatio;
+  }
+
+  if (metrics.findOpen !== undefined) {
+    if (typeof metrics.findOpen !== "boolean") {
+      throw new Error("Invalid find state");
+    }
+    sanitized.findOpen = metrics.findOpen;
+  }
+
+  return sanitized;
 }
 
 function isNavigationPayload(payload: unknown): payload is NavigationPayload {
@@ -169,6 +218,7 @@ contextBridge.exposeInMainWorld("andromeda", {
   pruneTabs: (ids: string[]) => ipcRenderer.invoke("browser:pruneTabs", { ids }),
   setTabMuted: (tabId: string, muted: boolean) =>
     ipcRenderer.invoke("browser:setTabMuted", { tabId, muted }),
+  sleepTab: (tabId: string) => ipcRenderer.invoke("browser:sleepTab", { tabId }),
   openDownload: (path: string) => ipcRenderer.invoke("browser:openDownload", { path }),
   revealDownload: (path: string) => ipcRenderer.invoke("browser:revealDownload", { path }),
   goBack: (pane?: BrowserPane) => ipcRenderer.invoke("browser:goBack", { pane: sanitizePane(pane) }),
@@ -198,6 +248,9 @@ contextBridge.exposeInMainWorld("andromeda", {
     ipcRenderer.invoke("browser:setZoom", { pane: sanitizePane(pane), direction }),
   resizeContentView: (layout: ContentBounds | ContentLayout) =>
     ipcRenderer.invoke("browser:resizeContentView", sanitizeLayout(layout)),
+  setLayoutMetrics: (metrics: LayoutMetrics) =>
+    ipcRenderer.invoke("browser:setLayoutMetrics", sanitizeLayoutMetrics(metrics)),
+  syncLayout: () => ipcRenderer.invoke("browser:syncLayout"),
   closeWindow: () => ipcRenderer.invoke("window:close"),
   minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
   toggleMaximizeWindow: () => ipcRenderer.invoke("window:toggleMaximize"),

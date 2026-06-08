@@ -25,6 +25,9 @@ type ToolbarProps = {
   canBookmark: boolean;
   isBookmarked: boolean;
   hasActiveDownload: boolean;
+  profileInitial: string;
+  currentUrl: string;
+  isSiteInfoOpen: boolean;
   addressSuggestions: Array<{ id: string; title: string; url: string }>;
   showAddressSuggestions: boolean;
   onAddressChange: (value: string) => void;
@@ -35,10 +38,10 @@ type ToolbarProps = {
   onBack: () => void;
   onForward: () => void;
   onReload: () => void;
-  onNewTab: () => void;
   onOpenSplitView: () => void;
   onToggleBookmark: () => void;
   onToggleDownloads: () => void;
+  onToggleSiteInfo: () => void;
   onToggleTheme: () => void;
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
@@ -62,6 +65,9 @@ function Toolbar({
   canBookmark,
   isBookmarked,
   hasActiveDownload,
+  profileInitial,
+  currentUrl,
+  isSiteInfoOpen,
   addressSuggestions,
   showAddressSuggestions,
   onAddressChange,
@@ -72,10 +78,10 @@ function Toolbar({
   onBack,
   onForward,
   onReload,
-  onNewTab,
   onOpenSplitView,
   onToggleBookmark,
   onToggleDownloads,
+  onToggleSiteInfo,
   onToggleTheme,
   onToggleSidebar,
   onOpenSettings,
@@ -210,9 +216,6 @@ function Toolbar({
         >
           <Icon name="star" size={17} fill={isBookmarked ? "currentColor" : "none"} />
         </button>
-        <button className="toolbar-icon" type="button" aria-label="New tab" onClick={onNewTab}>
-          <Icon name="plus" size={18} />
-        </button>
         <button
           className="toolbar-icon"
           type="button"
@@ -229,7 +232,20 @@ function Toolbar({
         >
           <Icon name="download" size={18} />
         </button>
-        <button className="toolbar-icon" type="button" aria-label="Security">
+        <button
+          className={
+            isSiteInfoOpen
+              ? "toolbar-icon is-active"
+              : !isStartPage && currentUrl.startsWith("http://")
+                ? "toolbar-icon is-insecure"
+                : "toolbar-icon"
+          }
+          type="button"
+          aria-label="Site information"
+          aria-expanded={isSiteInfoOpen}
+          title="Site information"
+          onClick={onToggleSiteInfo}
+        >
           <Icon name="shield" size={18} />
         </button>
         <span className="toolbar-sep" aria-hidden="true" />
@@ -243,7 +259,7 @@ function Toolbar({
           <Icon name={themeIcon} size={17} />
         </button>
         <button className="profile-badge" type="button" aria-label="Profile">
-          A
+          {profileInitial}
         </button>
         <button
           className="toolbar-icon"

@@ -14,6 +14,14 @@ type ContentLayout = {
   split?: ContentBounds | null;
 };
 
+type LayoutMetrics = {
+  sidebarWidth?: number;
+  sidebarCollapsed?: boolean;
+  splitOpen?: boolean;
+  splitRatio?: number;
+  findOpen?: boolean;
+};
+
 type NavigationPayload = {
   pane: BrowserPane;
   url: string;
@@ -70,6 +78,7 @@ interface Window {
     showTab: (tabId: string, url: string) => Promise<void>;
     pruneTabs: (ids: string[]) => Promise<void>;
     setTabMuted: (tabId: string, muted: boolean) => Promise<void>;
+    sleepTab: (tabId: string) => Promise<void>;
     openDownload: (path: string) => Promise<void>;
     revealDownload: (path: string) => Promise<void>;
     goBack: (pane?: BrowserPane) => Promise<void>;
@@ -87,6 +96,8 @@ interface Window {
     stopFind: (pane: BrowserPane) => Promise<void>;
     setZoom: (pane: BrowserPane, direction: "in" | "out" | "reset") => Promise<void>;
     resizeContentView: (layout: ContentBounds | ContentLayout) => Promise<void>;
+    setLayoutMetrics: (metrics: LayoutMetrics) => Promise<void>;
+    syncLayout: () => Promise<void>;
     closeWindow: () => Promise<void>;
     minimizeWindow: () => Promise<void>;
     toggleMaximizeWindow: () => Promise<void>;

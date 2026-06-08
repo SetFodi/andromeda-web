@@ -14,6 +14,14 @@ export type ContentLayout = {
   split?: ContentBounds | null;
 };
 
+export type LayoutMetrics = {
+  sidebarWidth: number;
+  sidebarCollapsed: boolean;
+  splitOpen: boolean;
+  splitRatio: number;
+  findOpen: boolean;
+};
+
 type NavState = {
   canGoBack: boolean;
   canGoForward: boolean;
@@ -24,6 +32,7 @@ type MainTab = {
   view: WebContentsView;
   loadedUrl: string;
   attached: boolean;
+  applied: ContentBounds | null;
   lastNav: NavState | null;
 };
 
@@ -41,6 +50,19 @@ const DEFAULT_BOUNDS: ContentBounds = {
   width: 860,
   height: 640
 };
+const DEFAULT_LAYOUT_METRICS: LayoutMetrics = {
+  sidebarWidth: 286,
+  sidebarCollapsed: false,
+  splitOpen: false,
+  splitRatio: 0.5,
+  findOpen: false
+};
+const TOOLBAR_HEIGHT = 56;
+const FIND_BAR_HEIGHT = 46;
+const SPLIT_HEADER_HEIGHT = 34;
+const SPLIT_GAP = 10;
+const MIN_SPLIT_RATIO = 0.25;
+const MAX_SPLIT_RATIO = 0.75;
 
 function hasSameBounds(left: ContentBounds, right: ContentBounds): boolean {
   return (
@@ -93,9 +115,18 @@ export class WebContentsViewManager {
   private activePane: BrowserPane = "main";
   private overlayOpen = false;
   private downloadSeq = 0;
+  private layoutMetrics: LayoutMetrics = { ...DEFAULT_LAYOUT_METRICS };
+  private resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly window: BrowserWindow) {
     this.registerDownloads();
+    this.window.on("resize", () => this.scheduleWindowLayoutSync());
+    this.window.on("closed", () => {
+      if (this.resizeTimer) {
+        clearTimeout(this.resizeTimer);
+        this.resizeTimer = null;
+      }
+    });
   }
 
   private registerDownloads(): void {
@@ -144,7 +175,7 @@ export class WebContentsViewManager {
     let entry = this.mainTabs.get(tabId);
     if (!entry) {
       const view = this.createMainView(tabId);
-      entry = { view, loadedUrl: url, attached: false, lastNav: null };
+      entry = { view, loadedUrl: url, attached: false, applied: null, lastNav: null };
       this.mainTabs.set(tabId, entry);
       void view.webContents.loadURL(url);
     } else if (entry.loadedUrl !== url) {
@@ -222,6 +253,26 @@ export class WebContentsViewManager {
       if (this.activeMainTabId === id) {
         this.activeMainTabId = null;
       }
+    }
+  }
+
+  sleepTab(tabId: string): void {
+    const entry = this.mainTabs.get(tabId);
+    if (!entry) {
+      return;
+    }
+
+    if (entry.attached) {
+      this.window.contentView.removeChildView(entry.view);
+    }
+    entry.view.webContents.close();
+    this.mainTabs.delete(tabId);
+    this.mediaPlaying.delete(tabId);
+    this.window.webContents.send("browser:tabAudio", { tabId, audible: false });
+
+    if (this.activeMainTabId === tabId) {
+      this.activeMainTabId = null;
+      this.activePane = "main";
     }
   }
 
@@ -320,7 +371,16 @@ export class WebContentsViewManager {
       this.window.contentView.addChildView(entry.view);
       entry.attached = true;
     }
+    this.applyMainBounds(entry);
+  }
+
+  private applyMainBounds(entry: MainTab): void {
+    if (entry.applied && hasSameBounds(entry.applied, this.mainBounds)) {
+      return;
+    }
+
     entry.view.setBounds(this.mainBounds);
+    entry.applied = { ...this.mainBounds };
   }
 
   private activeMainView(): WebContentsView | null {
@@ -571,13 +631,90 @@ export class WebContentsViewManager {
     this.mainBounds = layout.main;
     const activeView = this.activeMainView();
     if (activeView && !this.overlayOpen) {
-      activeView.setBounds(this.mainBounds);
+      const activeEntry = this.activeMainTabId ? this.mainTabs.get(this.activeMainTabId) : null;
+      if (activeEntry) {
+        this.applyMainBounds(activeEntry);
+      }
     }
 
     if (layout.split) {
       this.split.bounds = layout.split;
       this.applySplitBounds();
     }
+  }
+
+  setLayoutMetrics(metrics: Partial<LayoutMetrics>): void {
+    this.layoutMetrics = {
+      sidebarWidth: clampRounded(metrics.sidebarWidth ?? this.layoutMetrics.sidebarWidth, 0, 10000),
+      sidebarCollapsed: metrics.sidebarCollapsed ?? this.layoutMetrics.sidebarCollapsed,
+      splitOpen: metrics.splitOpen ?? this.layoutMetrics.splitOpen,
+      splitRatio: clamp(
+        metrics.splitRatio ?? this.layoutMetrics.splitRatio,
+        MIN_SPLIT_RATIO,
+        MAX_SPLIT_RATIO
+      ),
+      findOpen: metrics.findOpen ?? this.layoutMetrics.findOpen
+    };
+    this.syncLayoutFromWindow();
+  }
+
+  syncLayoutFromWindow(): void {
+    if (this.window.isDestroyed()) {
+      return;
+    }
+
+    const bounds = this.window.getContentBounds();
+    this.resize(this.computeLayout(bounds.width, bounds.height));
+  }
+
+  private scheduleWindowLayoutSync(): void {
+    if (this.resizeTimer) {
+      return;
+    }
+
+    this.resizeTimer = setTimeout(() => {
+      this.resizeTimer = null;
+      this.syncLayoutFromWindow();
+    }, 0);
+  }
+
+  private computeLayout(width: number, height: number): ContentLayout {
+    const findInset = this.layoutMetrics.findOpen ? FIND_BAR_HEIGHT : 0;
+    const contentX = Math.round(this.layoutMetrics.sidebarCollapsed ? 8 : this.layoutMetrics.sidebarWidth);
+    const contentY = TOOLBAR_HEIGHT;
+    const contentWidth = Math.max(0, Math.round(width - contentX));
+    const contentHeight = Math.max(0, Math.round(height - TOOLBAR_HEIGHT));
+
+    if (!this.layoutMetrics.splitOpen) {
+      return {
+        main: {
+          x: contentX,
+          y: contentY + findInset,
+          width: contentWidth,
+          height: Math.max(0, contentHeight - findInset)
+        }
+      };
+    }
+
+    const leftWidth = Math.round((contentWidth - SPLIT_GAP) * this.layoutMetrics.splitRatio);
+    const rightWidth = Math.max(0, contentWidth - leftWidth - SPLIT_GAP);
+    const paneY = contentY + SPLIT_HEADER_HEIGHT + findInset;
+    const paneHeight = Math.max(0, contentHeight - SPLIT_HEADER_HEIGHT - findInset);
+
+    return {
+      main: {
+        x: contentX,
+        y: paneY,
+        width: leftWidth,
+        height: paneHeight
+      },
+      split: {
+        x: contentX + leftWidth + SPLIT_GAP,
+        y: paneY,
+        width: rightWidth,
+        height: paneHeight
+      }
+    };
   }
 
   setCommandBarOpen(isOpen: boolean): void {
@@ -606,4 +743,16 @@ export class WebContentsViewManager {
       this.applySplitBounds();
     }
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampRounded(value: number, min: number, max: number): number {
+  return Math.round(clamp(value, min, max));
 }

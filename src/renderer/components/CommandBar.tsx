@@ -7,7 +7,18 @@ type HistoryItem = {
   id: string;
   title: string;
   url: string;
+  faviconUrl?: string;
+  visitCount?: number;
+  typedCount?: number;
+  lastVisited?: number;
 };
+
+function frecencyScore(item: HistoryItem): number {
+  const base = (item.visitCount ?? 0) + (item.typedCount ?? 0) * 2;
+  const ageDays = item.lastVisited ? (Date.now() - item.lastVisited) / 86_400_000 : 999;
+  const recency = ageDays < 1 ? 3 : ageDays < 4 ? 2 : ageDays < 14 ? 1 : 0.4;
+  return base * recency + 0.001;
+}
 
 type CommandBarProps = {
   isOpen: boolean;
@@ -139,13 +150,13 @@ export default function CommandBar({
     const historyResults: QuickOpenResult[] = historyItems
       .map((item, index) => ({ item, index, rank: getMatchRank(item, normalizedQuery) }))
       .filter(({ rank }) => Number.isFinite(rank))
-      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .sort((a, b) => a.rank - b.rank || frecencyScore(b.item) - frecencyScore(a.item))
       .slice(0, 5)
       .map(({ item, rank }) => ({
         id: `history-${item.id}`,
         title: item.title || getHostname(item.url),
         subtitle: getDisplayUrl(item.url),
-        faviconUrl: getFaviconSrc(item.url),
+        faviconUrl: getFaviconSrc(item.url, item.faviconUrl),
         icon: "history",
         matchRank: rank,
         run: () => onOpenUrl(item.url, navigationTarget)

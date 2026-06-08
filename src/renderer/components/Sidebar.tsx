@@ -12,6 +12,8 @@ import {
   ColorSwatchPicker
 } from "./ui/heroui-color-picker";
 
+const DEFAULT_SPACE_COLOR = "#f28366";
+
 const SPACE_COLORS = [
   "#ff7a5c",
   "#f4a23b",
@@ -39,6 +41,7 @@ type SidebarProps = {
   spaces: BrowserSpace[];
   selectedSpaceId: SpaceId;
   onMouseLeave?: () => void;
+  onResizeStart?: (event: ReactMouseEvent) => void;
   onSelectSpace: (spaceId: SpaceId) => void;
   onCreateSpace: () => SpaceId;
   onRenameSpace: (spaceId: SpaceId, name: string) => void;
@@ -55,6 +58,7 @@ type SidebarProps = {
   onTogglePinTab: (spaceId: SpaceId, tabId: string) => void;
   onDuplicateTab: (spaceId: SpaceId, tabId: string) => void;
   onCloseOtherTabs: (spaceId: SpaceId, tabId: string) => void;
+  onSleepTab: (spaceId: SpaceId, tabId: string) => void;
   onMoveTabToSpace: (fromSpaceId: SpaceId, tabId: string, toSpaceId: SpaceId) => void;
   loadingTabId: string | null;
   tabAudio: Record<string, { audible: boolean; muted: boolean }>;
@@ -67,6 +71,10 @@ type SidebarProps = {
 };
 
 function getTabSubtitle(tab: BrowserTab): string {
+  if (tab.isSleeping) {
+    return "Sleeping - click to wake";
+  }
+
   if (tab.isStartPage || !tab.url) {
     return "Local start page";
   }
@@ -115,6 +123,8 @@ function TabFavicon({ tab, isLoading }: { tab: BrowserTab; isLoading: boolean })
     <span className={isLoading ? "tab-favicon is-loading" : "tab-favicon"}>
       {isLoading ? (
         <span className="tab-spinner" aria-label="Loading" />
+      ) : tab.isSleeping ? (
+        <Icon name="moon" size={15} />
       ) : src && !failed ? (
         <img alt="" src={src} loading="lazy" onError={() => setFailed(true)} />
       ) : (
@@ -128,6 +138,7 @@ function Sidebar({
   spaces,
   selectedSpaceId,
   onMouseLeave,
+  onResizeStart,
   onSelectSpace,
   onCreateSpace,
   onRenameSpace,
@@ -141,6 +152,7 @@ function Sidebar({
   onTogglePinTab,
   onDuplicateTab,
   onCloseOtherTabs,
+  onSleepTab,
   onMoveTabToSpace,
   loadingTabId,
   tabAudio,
@@ -390,6 +402,7 @@ function Sidebar({
       "tab-row",
       isActive ? "is-selected" : "",
       draggedTabId === tab.id ? "is-dragging" : "",
+      tab.isSleeping ? "is-sleeping" : "",
       canDrag ? "" : "is-static"
     ]
       .filter(Boolean)
@@ -496,6 +509,16 @@ function Sidebar({
       onContextMenu={handleSidebarContextMenu}
       onMouseLeave={onMouseLeave}
     >
+      {onResizeStart ? (
+        <div
+          className="sidebar-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          title="Drag to resize"
+          onMouseDown={onResizeStart}
+        />
+      ) : null}
       <div className="sidebar-body">
         <section className="sidebar-section new-tab-section">
           <button type="button" className="sidebar-new-tab" onClick={onNewTab}>
@@ -632,6 +655,24 @@ function Sidebar({
               <span>Duplicate tab</span>
             </button>
           ) : null}
+          {tabMenu.tab.url && !tabMenu.tab.isStartPage ? (
+            <button
+              type="button"
+              className="tab-context-item"
+              role="menuitem"
+              onClick={() => {
+                if (tabMenu.tab.isSleeping) {
+                  onSelectTab(selectedSpace.id, tabMenu.tab.id);
+                } else {
+                  onSleepTab(selectedSpace.id, tabMenu.tab.id);
+                }
+                closeTabMenu();
+              }}
+            >
+              <Icon name={tabMenu.tab.isSleeping ? "reload" : "moon"} size={15} />
+              <span>{tabMenu.tab.isSleeping ? "Wake tab" : "Sleep tab"}</span>
+            </button>
+          ) : null}
           {tabMenu.tab.url ? (
             <button
               type="button"
@@ -732,6 +773,20 @@ function Sidebar({
             <Icon name="pencil" size={15} />
             <span>Rename space</span>
           </button>
+          {menuSpace.colors.length > 1 || menuSpace.colors[0].toLowerCase() !== DEFAULT_SPACE_COLOR ? (
+            <button
+              type="button"
+              className="tab-context-item"
+              role="menuitem"
+              onClick={() => {
+                onUpdateSpace(menuSpace.id, { colors: [DEFAULT_SPACE_COLOR] });
+                closeSpaceMenu();
+              }}
+            >
+              <Icon name="reload" size={15} />
+              <span>Reset appearance</span>
+            </button>
+          ) : null}
           {spaces.length > 1 ? (
             <>
               <div className="tab-context-sep" />

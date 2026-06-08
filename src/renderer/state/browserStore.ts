@@ -11,6 +11,7 @@ export type BrowserTab = {
   isStartPage: boolean;
   faviconUrl?: string;
   pinned?: boolean;
+  isSleeping?: boolean;
 };
 
 export type BrowserSpace = {
@@ -215,7 +216,8 @@ function sanitizeTab(value: unknown): BrowserTab | null {
     url: tab.url ?? null,
     isStartPage: tab.isStartPage,
     faviconUrl: isSafeFaviconUrl(tab.faviconUrl) ? tab.faviconUrl : undefined,
-    pinned: tab.pinned === true ? true : undefined
+    pinned: tab.pinned === true ? true : undefined,
+    isSleeping: tab.isSleeping === true && typeof tab.url === "string" && !tab.isStartPage ? true : undefined
   };
 }
 
@@ -507,12 +509,17 @@ export function useBrowserStore() {
 
         const reusableTab = findReusableTab(space.tabs, url);
         if (reusableTab) {
-          if (space.activeTabId === reusableTab.id) {
+          if (space.activeTabId === reusableTab.id && !reusableTab.isSleeping) {
             return space;
           }
 
           didChange = true;
-          return { ...space, activeTabId: reusableTab.id };
+          const tabs = reusableTab.isSleeping
+            ? space.tabs.map((tab) =>
+                tab.id === reusableTab.id ? { ...tab, isSleeping: undefined } : tab
+              )
+            : space.tabs;
+          return { ...space, tabs, activeTabId: reusableTab.id };
         }
 
         // Reuse the current blank start tab instead of leaving it behind.
@@ -521,7 +528,14 @@ export function useBrowserStore() {
           didChange = true;
           const tabs = space.tabs.map((tab) =>
             tab.id === activeTab.id
-              ? { ...tab, url, title: getTitleFromUrl(url), isStartPage: false, faviconUrl: undefined }
+              ? {
+                  ...tab,
+                  url,
+                  title: getTitleFromUrl(url),
+                  isStartPage: false,
+                  faviconUrl: undefined,
+                  isSleeping: undefined
+                }
               : tab
           );
           return { ...space, tabs };
@@ -583,7 +597,15 @@ export function useBrowserStore() {
           ...current,
           selectedSpaceId: spaceId,
           spaces: current.spaces.map((space) =>
-            space.id === spaceId ? { ...space, activeTabId: tabId } : space
+            space.id === spaceId
+              ? {
+                  ...space,
+                  activeTabId: tabId,
+                  tabs: space.tabs.map((tab) =>
+                    tab.id === tabId && tab.isSleeping ? { ...tab, isSleeping: undefined } : tab
+                  )
+                }
+              : space
           )
         };
       });
@@ -608,7 +630,10 @@ export function useBrowserStore() {
 
       const closingTab = targetSpace.tabs.find((tab) => tab.id === tabId);
       if (closingTab && closingTab.url && !closingTab.isStartPage) {
-        setClosedTabs((stack) => [...stack.slice(-9), { spaceId, tab: closingTab }]);
+        setClosedTabs((stack) => [
+          ...stack.slice(-9),
+          { spaceId, tab: { ...closingTab, isSleeping: undefined } }
+        ]);
       }
 
       const closingIndex = targetSpace.tabs.findIndex((tab) => tab.id === tabId);
@@ -666,7 +691,12 @@ export function useBrowserStore() {
           return space;
         }
 
-        const copy: BrowserTab = { ...source, id: randomId("tab"), pinned: undefined };
+        const copy: BrowserTab = {
+          ...source,
+          id: randomId("tab"),
+          pinned: undefined,
+          isSleeping: undefined
+        };
         const tabs = [...space.tabs];
         tabs.splice(index + 1, 0, copy);
         didChange = true;
@@ -701,6 +731,42 @@ export function useBrowserStore() {
 
       return didChange ? { ...current, spaces } : current;
     });
+  }, []);
+
+  const sleepTab = useCallback((spaceId: SpaceId, tabId: string) => {
+    setState((current) => {
+      let didChange = false;
+      const spaces = current.spaces.map((space) => {
+        if (space.id !== spaceId) {
+          return space;
+        }
+
+        const target = space.tabs.find((tab) => tab.id === tabId);
+        if (!target || target.isStartPage || !target.url || target.isSleeping) {
+          return space;
+        }
+
+        didChange = true;
+        const tabs = space.tabs.map((tab) =>
+          tab.id === tabId ? { ...tab, isSleeping: true } : tab
+        );
+
+        if (space.activeTabId !== tabId) {
+          return { ...space, tabs };
+        }
+
+        const existingStart = getReusableStartTab(tabs);
+        if (existingStart) {
+          return { ...space, tabs, activeTabId: existingStart.id };
+        }
+
+        const startTab = createStartTab();
+        return { ...space, tabs: [startTab, ...tabs], activeTabId: startTab.id };
+      });
+
+      return didChange ? { ...current, spaces } : current;
+    });
+    setSplitState(resetSplitState);
   }, []);
 
   const moveTabToSpace = useCallback((fromSpaceId: SpaceId, tabId: string, toSpaceId: SpaceId) => {
@@ -753,7 +819,7 @@ export function useBrowserStore() {
       const targetSpaceId = current.spaces.some((space) => space.id === entry.spaceId)
         ? entry.spaceId
         : current.selectedSpaceId;
-      const reopened: BrowserTab = { ...entry.tab, id: randomId("tab") };
+      const reopened: BrowserTab = { ...entry.tab, id: randomId("tab"), isSleeping: undefined };
 
       return {
         ...current,
@@ -845,12 +911,19 @@ export function useBrowserStore() {
             return tab;
           }
 
-          if (tab.url === url && !tab.isStartPage) {
+          if (tab.url === url && !tab.isStartPage && !tab.isSleeping) {
             return tab;
           }
 
           didChange = true;
-          return { ...tab, title: getTitleFromUrl(url), url, isStartPage: false, faviconUrl: undefined };
+          return {
+            ...tab,
+            title: getTitleFromUrl(url),
+            url,
+            isStartPage: false,
+            faviconUrl: undefined,
+            isSleeping: undefined
+          };
         });
 
         return { ...space, tabs };
@@ -1166,6 +1239,7 @@ export function useBrowserStore() {
     closeTab,
     duplicateTab,
     closeOtherTabs,
+    sleepTab,
     moveTabToSpace,
     reopenClosedTab,
     canReopenTab: closedTabs.length > 0,
