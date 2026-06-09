@@ -43,8 +43,18 @@ function useNow(): Date {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const tick = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(tick);
+    let timer = 0;
+
+    const scheduleNextMinute = () => {
+      const delay = 60_000 - (Date.now() % 60_000) + 50;
+      timer = window.setTimeout(() => {
+        setNow(new Date());
+        scheduleNextMinute();
+      }, delay);
+    };
+
+    scheduleNextMinute();
+    return () => window.clearTimeout(timer);
   }, []);
 
   return now;

@@ -21,52 +21,52 @@
 
 [data-theme="light"] .app-shell {
   --bg-base: color-mix(in srgb, var(--accent) 9%, #fbf7f1);
-  --bg-shell: radial-gradient(130% 92% at 86% -12%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 58%), var(--bg-base);
-  --surface-glass: color-mix(in srgb, var(--accent) 8%, rgba(255, 252, 247, 0.9));
-  --surface-glass-strong: color-mix(in srgb, var(--accent) 10%, rgba(255, 252, 247, 0.94));
-  --surface-raised: color-mix(in srgb, var(--accent) 9%, rgba(255, 253, 249, 0.92));
+  --bg-shell: var(--bg-base);
+  --surface-glass: color-mix(in srgb, var(--accent) 8%, #fffaf3);
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 10%, #fffaf3);
+  --surface-raised: color-mix(in srgb, var(--accent) 9%, #fffdf9);
   --surface-solid: color-mix(in srgb, var(--accent) 7%, #fffdf9);
   --surface-sunken: color-mix(in srgb, var(--accent) 8%, rgba(28, 42, 56, 0.035));
   --hover: color-mix(in srgb, var(--accent) 9%, rgba(24, 40, 56, 0.05));
   --hover-strong: color-mix(in srgb, var(--accent) 13%, rgba(24, 40, 56, 0.08));
   --selected: color-mix(in srgb, var(--accent) 19%, transparent);
-  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 9%, rgba(255, 250, 244, 0.34)));
+  --selected-wash: color-mix(in srgb, var(--accent) 15%, #fffaf3);
   --border: color-mix(in srgb, var(--accent) 10%, rgba(45, 34, 25, 0.085));
   --border-soft: color-mix(in srgb, var(--accent) 8%, rgba(45, 34, 25, 0.05));
   --border-strong: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.14));
-  --field: color-mix(in srgb, var(--accent) 7%, rgba(255, 252, 247, 0.66));
+  --field: color-mix(in srgb, var(--accent) 7%, #fffaf3);
   --field-border: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.09));
 }
 
 [data-theme="dark"] .app-shell {
   --bg-base: color-mix(in srgb, var(--accent) 20%, #05080f);
-  --bg-shell: radial-gradient(130% 92% at 86% -12%, color-mix(in srgb, var(--accent) 30%, transparent) 0%, transparent 60%), var(--bg-base);
-  --surface-glass: color-mix(in srgb, var(--accent) 15%, rgba(12, 16, 24, 0.9));
-  --surface-glass-strong: color-mix(in srgb, var(--accent) 17%, rgba(12, 16, 24, 0.94));
-  --surface-raised: color-mix(in srgb, var(--accent) 17%, rgba(20, 27, 40, 0.9));
+  --bg-shell: var(--bg-base);
+  --surface-glass: color-mix(in srgb, var(--accent) 15%, #0b1019);
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 17%, #0d121d);
+  --surface-raised: color-mix(in srgb, var(--accent) 17%, #141b28);
   --surface-solid: color-mix(in srgb, var(--accent) 20%, #18273c);
   --surface-sunken: color-mix(in srgb, var(--accent) 15%, rgba(4, 10, 20, 0.46));
   --hover: color-mix(in srgb, var(--accent) 13%, rgba(160, 196, 240, 0.07));
   --hover-strong: color-mix(in srgb, var(--accent) 18%, rgba(160, 196, 240, 0.12));
   --selected: color-mix(in srgb, var(--accent) 27%, transparent);
-  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 9%, transparent));
+  --selected-wash: color-mix(in srgb, var(--accent) 18%, #111827);
   --border: color-mix(in srgb, var(--accent) 13%, rgba(160, 196, 240, 0.11));
   --border-soft: color-mix(in srgb, var(--accent) 10%, rgba(160, 196, 240, 0.06));
   --border-strong: color-mix(in srgb, var(--accent) 18%, rgba(160, 196, 240, 0.18));
-  --field: color-mix(in srgb, var(--accent) 15%, rgba(160, 196, 240, 0.055));
+  --field: color-mix(in srgb, var(--accent) 11%, #101723);
   --field-border: color-mix(in srgb, var(--accent) 20%, rgba(160, 196, 240, 0.12));
 }
 
 [data-appearance="glow"] .app-shell {
   --bg-base: color-mix(in srgb, var(--accent) 24%, #070b13);
-  --bg-shell: radial-gradient(128% 90% at 86% -10%, color-mix(in srgb, var(--accent) 40%, transparent) 0%, transparent 60%), var(--bg-base);
-  --surface-glass: color-mix(in srgb, var(--accent) 19%, rgba(13, 18, 28, 0.9));
-  --surface-glass-strong: color-mix(in srgb, var(--accent) 22%, rgba(13, 18, 28, 0.94));
-  --surface-raised: color-mix(in srgb, var(--accent) 22%, rgba(22, 31, 46, 0.9));
+  --bg-shell: var(--bg-base);
+  --surface-glass: color-mix(in srgb, var(--accent) 19%, #0d121c);
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 22%, #0e1420);
+  --surface-raised: color-mix(in srgb, var(--accent) 22%, #161f2e);
   --surface-solid: color-mix(in srgb, var(--accent) 25%, #1c2d44);
   --surface-sunken: color-mix(in srgb, var(--accent) 17%, rgba(2, 8, 18, 0.4));
   --selected: color-mix(in srgb, var(--accent) 31%, transparent);
-  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 37%, transparent), color-mix(in srgb, var(--accent) 11%, rgba(255, 255, 255, 0.025)));
+  --selected-wash: color-mix(in srgb, var(--accent) 22%, #111827);
 }
 
 .app-shell.is-pure-black {
@@ -80,7 +80,7 @@
   --hover: rgba(255, 255, 255, 0.055);
   --hover-strong: rgba(255, 255, 255, 0.09);
   --selected: rgba(255, 255, 255, 0.075);
-  --selected-wash: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  --selected-wash: rgba(255, 255, 255, 0.08);
   --border: rgba(255, 255, 255, 0.075);
   --border-soft: rgba(255, 255, 255, 0.045);
   --border-strong: rgba(255, 255, 255, 0.12);
@@ -638,11 +638,30 @@
   transition: none;
 }
 
+.app-shell.is-resizing-sidebar *,
+.app-shell.is-resizing-sidebar *::before,
+.app-shell.is-resizing-sidebar *::after,
+.app-shell.is-window-resizing *,
+.app-shell.is-window-resizing *::before,
+.app-shell.is-window-resizing *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
 .app-shell.is-resizing-sidebar,
 .app-shell.is-window-resizing,
 .app-shell.is-resizing-sidebar .start-page,
 .app-shell.is-window-resizing .start-page {
   background: var(--bg-base);
+}
+
+.app-shell.is-resizing-sidebar .toolbar,
+.app-shell.is-window-resizing .toolbar,
+.app-shell.is-resizing-sidebar .sidebar,
+.app-shell.is-window-resizing .sidebar,
+.app-shell.is-resizing-sidebar .content-view-host,
+.app-shell.is-window-resizing .content-view-host {
+  box-shadow: none;
 }
 
 .app-shell.is-resizing-sidebar .toolbar,
@@ -1843,9 +1862,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(92% 70% at 50% -14%, color-mix(in srgb, var(--accent) 17%, transparent) 0%, transparent 62%),
-    var(--bg-base);
+  background: var(--bg-base);
   contain: layout paint;
 }
 
@@ -2122,7 +2139,7 @@
 
 /* ---- Entrance reveal ------------------------------------------------- */
 .reveal {
-  animation: reveal-up 620ms var(--ease-out) both;
+  animation: reveal-up 260ms var(--ease-out) both;
   animation-delay: var(--reveal-delay, 0ms);
   will-change: transform, opacity;
 }
@@ -2130,13 +2147,11 @@
 @keyframes reveal-up {
   from {
     opacity: 0;
-    transform: translateY(14px);
-    filter: blur(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 
