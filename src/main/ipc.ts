@@ -336,6 +336,15 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     manager.setCommandBarOpen(isOpen);
   });
 
+  setHandler("browser:clearBrowsingData", async (event) => {
+    assertTrustedSender(event, window);
+    const session = window.webContents.session;
+    await session.clearCache();
+    await session.clearStorageData({
+      storages: ["cachestorage", "serviceworkers", "shadercache"]
+    });
+  });
+
   setHandler("window:close", (event) => {
     assertTrustedSender(event, window);
     window.close();

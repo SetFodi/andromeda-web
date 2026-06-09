@@ -95,6 +95,8 @@ export function buildAppMenu(window: BrowserWindow): void {
         { label: "Open Command Bar", accelerator: "CmdOrCtrl+K", click: () => send("command-bar") },
         { label: "Focus Address Bar", accelerator: "CmdOrCtrl+L", click: () => send("focus-address") },
         { type: "separator" },
+        { label: "Show History", accelerator: "CmdOrCtrl+Y", click: () => send("history") },
+        { type: "separator" },
         { role: "toggleDevTools" }
       ]
     },

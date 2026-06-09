@@ -79,6 +79,7 @@ interface Window {
     pruneTabs: (ids: string[]) => Promise<void>;
     setTabMuted: (tabId: string, muted: boolean) => Promise<void>;
     sleepTab: (tabId: string) => Promise<void>;
+    clearBrowsingData: () => Promise<void>;
     openDownload: (path: string) => Promise<void>;
     revealDownload: (path: string) => Promise<void>;
     goBack: (pane?: BrowserPane) => Promise<void>;

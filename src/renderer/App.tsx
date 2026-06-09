@@ -11,6 +11,7 @@ import {
 import CommandBar from "./components/CommandBar";
 import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
 import SiteInfoPanel from "./components/SiteInfoPanel";
+import HistoryPanel from "./components/HistoryPanel";
 import FindBar from "./components/FindBar";
 import SettingsPanel from "./components/SettingsPanel";
 import Sidebar from "./components/Sidebar";
@@ -35,6 +36,12 @@ const TOOLBAR_HEIGHT = 56;
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 460;
 const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
+// Inactive, non-pinned, silent tabs are auto-slept after this long to free
+// memory (the WebContentsView is closed; it reloads instantly when reselected).
+// Kept conservative so it only catches genuinely-abandoned tabs, not ones you
+// briefly stepped away from.
+const AUTO_SLEEP_MS = 60 * 60 * 1000;
+const AUTO_SLEEP_SWEEP_MS = 2 * 60 * 1000;
 
 type PaneNavigationState = {
   canGoBack: boolean;
@@ -105,7 +112,15 @@ export default function App() {
   const { settings, updateSettings } = useSettings();
   const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink } =
     useQuickLinks();
-  const { items: historyEntries, recordVisit, recordTyped, updateMeta: recordMeta } = useHistory();
+  const {
+    items: historyEntries,
+    recent: historyRecent,
+    recordVisit,
+    recordTyped,
+    updateMeta: recordMeta,
+    deleteEntry: deleteHistoryEntry,
+    clearAll: clearHistory
+  } = useHistory();
   const contentRef = useRef<HTMLDivElement>(null);
   const lastMainUrlRef = useRef<string | null>(null);
   const appShellRef = useRef<HTMLDivElement>(null);
@@ -141,6 +156,7 @@ export default function App() {
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [isDownloadsOpen, setDownloadsOpen] = useState(false);
   const [isSiteInfoOpen, setSiteInfoOpen] = useState(false);
+  const [isHistoryOpen, setHistoryOpen] = useState(false);
   const [downloads, setDownloads] = useState<DownloadEntry[]>([]);
   const [addressFocused, setAddressFocused] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
@@ -700,7 +716,7 @@ export default function App() {
 
   // Large renderer overlays need the native web views detached. Lightweight
   // toolbar popovers stay non-destructive so the page does not blink away.
-  const shouldDetachContentViews = isCommandBarOpen || isSettingsOpen;
+  const shouldDetachContentViews = isCommandBarOpen || isSettingsOpen || isHistoryOpen;
   useEffect(() => {
     if (lastCommandBarOpenRef.current === shouldDetachContentViews) {
       return;
@@ -709,6 +725,62 @@ export default function App() {
     lastCommandBarOpenRef.current = shouldDetachContentViews;
     void window.andromeda.setCommandBarOpen(shouldDetachContentViews);
   }, [shouldDetachContentViews]);
+
+  // ---- Auto-sleep idle tabs ----
+  // Refs mirror the latest render values so the sweep interval (created once)
+  // always reads fresh state without re-subscribing every render.
+  const tabActivityRef = useRef<Map<string, number>>(new Map());
+  const shownTabRef = useRef<string | null>(null);
+  const spacesRef = useRef(state.spaces);
+  const tabAudioRef = useRef(tabAudio);
+  const sleepTabRef = useRef(sleepTab);
+  spacesRef.current = state.spaces;
+  tabAudioRef.current = tabAudio;
+  sleepTabRef.current = sleepTab;
+
+  const currentShownTabId = showReactStartPage ? null : selectedSpace?.activeTabId ?? null;
+  useEffect(() => {
+    const now = Date.now();
+    const previous = shownTabRef.current;
+    // Stamp the tab we just left so its idle clock starts now.
+    if (previous && previous !== currentShownTabId) {
+      tabActivityRef.current.set(previous, now);
+    }
+    if (currentShownTabId) {
+      tabActivityRef.current.set(currentShownTabId, now);
+    }
+    shownTabRef.current = currentShownTabId;
+  }, [currentShownTabId]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      for (const space of spacesRef.current) {
+        for (const tab of space.tabs) {
+          // Never sleep a space's active tab, pinned tabs, start pages,
+          // already-sleeping tabs, or anything playing audio.
+          if (
+            tab.id === space.activeTabId ||
+            tab.pinned ||
+            tab.isSleeping ||
+            tab.isStartPage ||
+            !tab.url ||
+            tabAudioRef.current[tab.id]?.audible
+          ) {
+            continue;
+          }
+          const lastActive = tabActivityRef.current.get(tab.id);
+          if (lastActive === undefined || now - lastActive < AUTO_SLEEP_MS) {
+            continue;
+          }
+          sleepTabRef.current(space.id, tab.id);
+          void window.andromeda.sleepTab(tab.id);
+          tabActivityRef.current.delete(tab.id);
+        }
+      }
+    }, AUTO_SLEEP_SWEEP_MS);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const navigateTo = useCallback(
     (url: string) => {
@@ -967,6 +1039,15 @@ export default function App() {
 
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const openHistory = useCallback(() => {
+    setSettingsOpen(false);
+    setHistoryOpen(true);
+  }, []);
+  const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  const handleClearBrowsingData = useCallback(() => {
+    clearHistory();
+    void window.andromeda.clearBrowsingData();
+  }, [clearHistory]);
 
   // Live, jank-free space recoloring: paint the shell vars directly on the DOM
   // (no React re-render) and drop the blur/transition while picking, then commit
@@ -1352,6 +1433,9 @@ export default function App() {
         case "settings":
           openSettings();
           break;
+        case "history":
+          openHistory();
+          break;
         case "zoom-in":
           adjustZoom("in");
           break;
@@ -1395,6 +1479,7 @@ export default function App() {
       isSplitOpen,
       openCommandBar,
       openFind,
+      openHistory,
       openSettings,
       openSplitCommandBar,
       reopenClosedTab,
@@ -1646,6 +1731,14 @@ export default function App() {
           url={bookmarkUrl ?? ""}
           onClose={closeSiteInfo}
           onReload={handleReload}
+        />
+        <HistoryPanel
+          isOpen={isHistoryOpen}
+          entries={historyRecent}
+          onOpenUrl={navigateTo}
+          onDelete={deleteHistoryEntry}
+          onClear={handleClearBrowsingData}
+          onClose={closeHistory}
         />
       </div>
     </div>

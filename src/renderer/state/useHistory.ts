@@ -169,6 +169,13 @@ export function useHistory() {
     });
   }, []);
 
+  const deleteEntry = useCallback((url: string) => {
+    const key = keyFor(url);
+    setEntries((current) => current.filter((entry) => keyFor(entry.url) !== key));
+  }, []);
+
+  const clearAll = useCallback(() => setEntries([]), []);
+
   // Ranked by frecency (visits + typed + recency) so the omnibar surfaces the
   // sites you actually use most.
   const items = useMemo(
@@ -176,5 +183,8 @@ export function useHistory() {
     [entries]
   );
 
-  return { items, recordVisit, recordTyped, updateMeta };
+  // Chronological (newest first) for the history view.
+  const recent = useMemo(() => [...entries].sort((a, b) => b.lastVisited - a.lastVisited), [entries]);
+
+  return { items, recent, recordVisit, recordTyped, updateMeta, deleteEntry, clearAll };
 }
