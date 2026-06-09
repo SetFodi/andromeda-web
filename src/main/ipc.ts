@@ -345,6 +345,11 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     });
   });
 
+  setHandler("browser:extractReadable", async (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    return manager.extractReadable(normalizePane((payload as { pane?: unknown } | null)?.pane));
+  });
+
   setHandler("window:close", (event) => {
     assertTrustedSender(event, window);
     window.close();

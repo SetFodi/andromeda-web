@@ -28,6 +28,7 @@ type ToolbarProps = {
   profileInitial: string;
   currentUrl: string;
   isSiteInfoOpen: boolean;
+  isReaderOpen: boolean;
   addressSuggestions: Array<{ id: string; title: string; url: string }>;
   showAddressSuggestions: boolean;
   onAddressChange: (value: string) => void;
@@ -42,6 +43,7 @@ type ToolbarProps = {
   onToggleBookmark: () => void;
   onToggleDownloads: () => void;
   onToggleSiteInfo: () => void;
+  onToggleReader: () => void;
   onToggleTheme: () => void;
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
@@ -68,6 +70,7 @@ function Toolbar({
   profileInitial,
   currentUrl,
   isSiteInfoOpen,
+  isReaderOpen,
   addressSuggestions,
   showAddressSuggestions,
   onAddressChange,
@@ -82,6 +85,7 @@ function Toolbar({
   onToggleBookmark,
   onToggleDownloads,
   onToggleSiteInfo,
+  onToggleReader,
   onToggleTheme,
   onToggleSidebar,
   onOpenSettings,
@@ -231,6 +235,17 @@ function Toolbar({
           onClick={onToggleDownloads}
         >
           <Icon name="download" size={18} />
+        </button>
+        <button
+          className={isReaderOpen ? "toolbar-icon is-active" : "toolbar-icon"}
+          type="button"
+          aria-label="Reader mode"
+          aria-pressed={isReaderOpen}
+          title="Reader mode"
+          disabled={isStartPage}
+          onClick={onToggleReader}
+        >
+          <Icon name="reader" size={18} />
         </button>
         <button
           className={

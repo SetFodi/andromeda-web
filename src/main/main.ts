@@ -4,6 +4,7 @@ import { app, BrowserWindow } from "electron";
 import { WebContentsViewManager } from "./webContentsViewManager";
 import { registerIpc } from "./ipc";
 import { buildAppMenu } from "./menu";
+import { setupAdblocker } from "./adblocker";
 
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -124,6 +125,7 @@ function applyDockIcon(): void {
 
 app.whenReady().then(() => {
   applyDockIcon();
+  void setupAdblocker();
   createMainWindow();
 
   app.on("activate", () => {

@@ -6,7 +6,7 @@ const commonOptions = {
   target: "node22",
   format: "cjs",
   sourcemap: true,
-  external: ["electron"]
+  external: ["electron", "@ghostery/adblocker-electron"]
 };
 
 await Promise.all([

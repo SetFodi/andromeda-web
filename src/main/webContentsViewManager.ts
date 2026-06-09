@@ -1,4 +1,14 @@
-import { BrowserWindow, WebContentsView } from "electron";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import {
+  BrowserWindow,
+  Menu,
+  WebContentsView,
+  clipboard,
+  type ContextMenuParams,
+  type MenuItemConstructorOptions,
+  type WebContents
+} from "electron";
 
 export type ContentBounds = {
   x: number;
@@ -22,11 +32,155 @@ export type LayoutMetrics = {
   findOpen: boolean;
 };
 
+export type ReaderArticle = {
+  title: string;
+  byline: string;
+  html: string;
+  url: string;
+};
+
 type NavState = {
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
 };
+
+// Runs in the page context (via executeJavaScript). Heuristic article
+// extraction: strip chrome/ads, score blocks by text length vs. link density,
+// and serialize the winner down to a small allow-list of formatting tags with
+// absolutized image/link URLs. Returns null when no readable body is found.
+const READER_EXTRACTOR = `(function(){
+  try {
+    var clone = document.cloneNode(true);
+    var junk = clone.querySelectorAll('script,style,noscript,iframe,nav,header,footer,aside,form,button,svg,video,[role=banner],[role=navigation],[aria-hidden=true],.ad,.ads,.advert,.advertisement,.sidebar,.comments,.related,.share,.social,.newsletter,.promo,.cookie,.popup');
+    for (var i=0;i<junk.length;i++){ junk[i].remove(); }
+    function textLen(el){ return (el.textContent||'').replace(/\\s+/g,' ').trim().length; }
+    function linkDensity(el){ var t=textLen(el); if(!t) return 1; var l=0,as=el.querySelectorAll('a'); for(var j=0;j<as.length;j++){ l+=textLen(as[j]); } return l/t; }
+    var nodes = clone.querySelectorAll('article, main, [role=main], div, section');
+    var best=null, bestScore=0;
+    for (var k=0;k<nodes.length;k++){
+      var el=nodes[k], t=textLen(el);
+      if (t<200) continue;
+      var score = t * (1 - Math.min(linkDensity(el),0.9)) + el.querySelectorAll('p').length*28;
+      var tag=el.tagName.toLowerCase();
+      if (tag==='article') score*=1.5; else if (tag==='main') score*=1.25;
+      if (score>bestScore){ bestScore=score; best=el; }
+    }
+    var container = best || clone.body;
+    if (!container) return null;
+    var allowed = {P:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,UL:1,OL:1,LI:1,BLOCKQUOTE:1,PRE:1,CODE:1,FIGURE:1,FIGCAPTION:1,IMG:1,A:1,STRONG:1,EM:1,B:1,I:1,BR:1,HR:1,SPAN:1,TABLE:1,THEAD:1,TBODY:1,TR:1,TD:1,TH:1};
+    function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function abs(u){ try { return new URL(u, location.href).href; } catch(e){ return u; } }
+    function clean(node){
+      var out='';
+      for (var n=0;n<node.childNodes.length;n++){
+        var c=node.childNodes[n];
+        if (c.nodeType===3){ out += esc(c.textContent); continue; }
+        if (c.nodeType!==1) continue;
+        var tag=c.tagName, tg=tag.toLowerCase();
+        if (tag==='IMG'){ var s=c.getAttribute('src')||c.getAttribute('data-src')||''; if(s) out+='<img src="'+esc(abs(s))+'" loading="lazy">'; continue; }
+        if (tag==='A'){ out += '<a href="'+esc(abs(c.getAttribute('href')||'#'))+'" target="_blank" rel="noreferrer">'+clean(c)+'</a>'; continue; }
+        if (allowed[tag]){ out += '<'+tg+'>'+clean(c)+'</'+tg+'>'; }
+        else { out += clean(c); }
+      }
+      return out;
+    }
+    var html = clean(container);
+    if (html.replace(/<[^>]+>/g,'').replace(/\\s+/g,' ').trim().length < 140) return null;
+    var ogt = document.querySelector('meta[property="og:title"]');
+    var title = (ogt && ogt.getAttribute('content')) || document.title || location.hostname;
+    var am = document.querySelector('meta[name="author"]');
+    var byline = (am && am.getAttribute('content')) || '';
+    return { title: title, byline: byline, html: html, url: location.href };
+  } catch(e){ return null; }
+})()`;
+
+function htmlEscape(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// A clean, branded offline/error page loaded into the web view when a main-frame
+// navigation fails — replaces Chromium's raw error screen.
+function buildErrorPageUrl(failedUrl: string, description: string): string {
+  let host = failedUrl;
+  try {
+    host = new URL(failedUrl).hostname || failedUrl;
+  } catch {
+    /* keep raw */
+  }
+  const jsUrl = JSON.stringify(failedUrl).replace(/</g, "\\u003c");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEscape(host)} didn't load</title><style>
+    :root{color-scheme:dark}
+    *{margin:0;box-sizing:border-box}
+    body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0f1a;color:#e8eef7;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+    .card{max-width:440px;padding:40px;text-align:center;animation:in .4s cubic-bezier(.16,1,.3,1) both}
+    @keyframes in{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
+    .glyph{width:62px;height:62px;margin:0 auto 22px;border-radius:18px;display:flex;align-items:center;justify-content:center;background:rgba(242,131,102,.14);font-size:28px}
+    h1{font-size:22px;font-weight:640;letter-spacing:-.02em;margin-bottom:10px}
+    p{color:#8c9bb3;font-size:14.5px;line-height:1.55}
+    .host{color:#c4d0e3;font-weight:600}
+    .desc{font-size:12px;color:#586981;margin-top:8px;font-family:ui-monospace,SFMono-Regular,monospace}
+    .row{margin-top:28px;display:flex;gap:10px;justify-content:center}
+    button{font:inherit;font-size:13.5px;font-weight:620;padding:10px 20px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#e8eef7;cursor:pointer;transition:all .15s}
+    button:hover{border-color:rgba(255,255,255,.26);background:rgba(255,255,255,.04)}
+    .primary{background:#f28366;border-color:#f28366;color:#241009}
+    .primary:hover{filter:brightness(1.07);background:#f28366}
+  </style></head><body><div class="card">
+    <div class="glyph">⚡</div>
+    <h1>This page didn't load</h1>
+    <p>Andromeda couldn't reach <span class="host">${htmlEscape(host)}</span>.</p>
+    <p class="desc">${htmlEscape(description || "The connection failed")}</p>
+    <div class="row">
+      <button class="primary" id="retry">Try again</button>
+      <button id="back">Go back</button>
+    </div>
+  </div>
+  <script>
+    var U=${jsUrl};
+    document.getElementById('retry').onclick=function(){location.replace(U);};
+    document.getElementById('back').onclick=function(){history.length>1?history.back():location.replace(U);};
+  </script></body></html>`;
+  return "data:text/html;charset=utf-8," + encodeURIComponent(html);
+}
+
+// Mozilla Readability gives far cleaner article parsing than the heuristic
+// fallback. We can't bundle it into the page, so we read its source once and
+// inject it (string concatenation, not a template literal, since the source
+// itself contains backticks). Returns null if the package can't be located.
+let readabilityInjection: string | null | undefined;
+function getReadabilityInjection(): string | null {
+  if (readabilityInjection !== undefined) {
+    return readabilityInjection;
+  }
+  const candidates = [
+    path.join(__dirname, "..", "..", "node_modules", "@mozilla", "readability", "Readability.js"),
+    path.join(process.cwd(), "node_modules", "@mozilla", "readability", "Readability.js")
+  ];
+  for (const candidate of candidates) {
+    try {
+      const source = readFileSync(candidate, "utf8");
+      readabilityInjection =
+        "(function(){" +
+        source +
+        ";try{" +
+        "var article=new Readability(document.cloneNode(true)).parse();" +
+        "if(!article||!article.content)return null;" +
+        "var text=(article.textContent||'').replace(/\\s+/g,' ').trim();" +
+        "if(text.length<140)return null;" +
+        "return{title:article.title||document.title||'',byline:article.byline||'',html:article.content,url:location.href};" +
+        "}catch(e){return null;}})()";
+      return readabilityInjection;
+    } catch {
+      /* try next candidate */
+    }
+  }
+  readabilityInjection = null;
+  return null;
+}
 
 type MainTab = {
   view: WebContentsView;
@@ -276,6 +430,81 @@ export class WebContentsViewManager {
     }
   }
 
+  private showWebContextMenu(wc: WebContents, params: ContextMenuParams): void {
+    const items: MenuItemConstructorOptions[] = [];
+    const openTab = (url: string) => this.window.webContents.send("browser:openTab", { url });
+
+    if (params.linkURL) {
+      const link = params.linkURL;
+      items.push(
+        { label: "Open Link in New Tab", click: () => openTab(link) },
+        { label: "Copy Link", click: () => clipboard.writeText(link) },
+        { type: "separator" }
+      );
+    }
+
+    if (params.mediaType === "image" && params.srcURL) {
+      const src = params.srcURL;
+      items.push(
+        { label: "Open Image in New Tab", click: () => openTab(src) },
+        { label: "Copy Image", click: () => wc.copyImageAt(params.x, params.y) },
+        { label: "Save Image…", click: () => wc.downloadURL(src) },
+        { type: "separator" }
+      );
+    }
+
+    if (params.isEditable) {
+      const flags = params.editFlags;
+      items.push(
+        { label: "Cut", enabled: flags.canCut, click: () => wc.cut() },
+        { label: "Copy", enabled: flags.canCopy, click: () => wc.copy() },
+        { label: "Paste", enabled: flags.canPaste, click: () => wc.paste() },
+        { label: "Select All", click: () => wc.selectAll() },
+        { type: "separator" }
+      );
+    } else if (params.selectionText && params.selectionText.trim()) {
+      const selection = params.selectionText.trim();
+      const short = selection.length > 26 ? `${selection.slice(0, 26)}…` : selection;
+      items.push(
+        { label: "Copy", click: () => wc.copy() },
+        {
+          label: `Search for “${short}”`,
+          click: () => openTab(`https://www.google.com/search?q=${encodeURIComponent(selection)}`)
+        },
+        { type: "separator" }
+      );
+    }
+
+    items.push(
+      { label: "Back", enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
+      {
+        label: "Forward",
+        enabled: wc.navigationHistory.canGoForward(),
+        click: () => wc.navigationHistory.goForward()
+      },
+      { label: "Reload", click: () => wc.reload() },
+      { type: "separator" },
+      { label: "Copy Page URL", click: () => clipboard.writeText(params.pageURL || wc.getURL()) }
+    );
+
+    Menu.buildFromTemplate(items).popup({ window: this.window });
+  }
+
+  private maybeLoadErrorPage(
+    wc: WebContents,
+    errorCode: number,
+    errorDescription: string,
+    validatedURL: string,
+    isMainFrame: boolean
+  ): void {
+    // -3 is ERR_ABORTED (normal cancels/redirects); ignore non-main-frame and
+    // non-http failures so we never replace the page spuriously.
+    if (!isMainFrame || errorCode === -3 || !/^https?:/i.test(validatedURL)) {
+      return;
+    }
+    void wc.loadURL(buildErrorPageUrl(validatedURL, errorDescription)).catch(() => {});
+  }
+
   private createMainView(tabId: string): WebContentsView {
     const view = new WebContentsView({
       webPreferences: {
@@ -291,6 +520,10 @@ export class WebContentsViewManager {
       }
       return { action: "deny" };
     });
+
+    view.webContents.on("context-menu", (_event, params) =>
+      this.showWebContextMenu(view.webContents, params)
+    );
 
     view.webContents.on("before-input-event", (_event, input) => {
       if (input.type === "keyDown") {
@@ -320,7 +553,13 @@ export class WebContentsViewManager {
     view.webContents.on("did-navigate-in-page", (_event, url) => handleNavigation(url));
     view.webContents.on("did-start-loading", () => this.emitMainNavState(tabId));
     view.webContents.on("did-stop-loading", () => this.emitMainNavState(tabId));
-    view.webContents.on("did-fail-load", () => this.emitMainNavState(tabId));
+    view.webContents.on(
+      "did-fail-load",
+      (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        this.emitMainNavState(tabId);
+        this.maybeLoadErrorPage(view.webContents, errorCode, errorDescription, validatedURL, isMainFrame);
+      }
+    );
 
     view.webContents.on("page-title-updated", (_event, title) => {
       this.window.webContents.send("browser:tabTitle", { tabId, title });
@@ -474,6 +713,10 @@ export class WebContentsViewManager {
       return { action: "deny" };
     });
 
+    view.webContents.on("context-menu", (_event, params) =>
+      this.showWebContextMenu(view.webContents, params)
+    );
+
     view.webContents.on("before-input-event", (_event, input) => {
       if (input.type === "keyDown") {
         this.activePane = "split";
@@ -495,7 +738,13 @@ export class WebContentsViewManager {
     });
     view.webContents.on("did-start-loading", () => this.sendSplitNavState());
     view.webContents.on("did-stop-loading", () => this.sendSplitNavState());
-    view.webContents.on("did-fail-load", () => this.sendSplitNavState());
+    view.webContents.on(
+      "did-fail-load",
+      (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        this.sendSplitNavState();
+        this.maybeLoadErrorPage(view.webContents, errorCode, errorDescription, validatedURL, isMainFrame);
+      }
+    );
     view.webContents.on("page-title-updated", (_event, title) => {
       this.window.webContents.send("browser:titleUpdated", { pane: "split", title });
     });
@@ -594,6 +843,41 @@ export class WebContentsViewManager {
       this.activePane = pane;
       view.webContents.reload();
     }
+  }
+
+  async extractReadable(pane: BrowserPane): Promise<ReaderArticle | null> {
+    const view = this.paneView(pane);
+    if (!view) {
+      return null;
+    }
+    const wc = view.webContents;
+    const run = async (code: string | null): Promise<ReaderArticle | null> => {
+      if (!code) {
+        return null;
+      }
+      try {
+        const result = (await wc.executeJavaScript(code, true)) as ReaderArticle | null;
+        if (
+          result &&
+          typeof result.html === "string" &&
+          typeof result.title === "string" &&
+          typeof result.url === "string"
+        ) {
+          return {
+            title: result.title,
+            byline: typeof result.byline === "string" ? result.byline : "",
+            html: result.html,
+            url: result.url
+          };
+        }
+      } catch {
+        /* fall through to fallback */
+      }
+      return null;
+    };
+
+    // Prefer Mozilla Readability; fall back to the built-in heuristic.
+    return (await run(getReadabilityInjection())) ?? (await run(READER_EXTRACTOR));
   }
 
   findInPage(pane: BrowserPane, text: string, options: { forward: boolean; findNext: boolean }): void {

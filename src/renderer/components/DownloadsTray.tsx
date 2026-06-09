@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import Icon from "./Icon";
 
 export type DownloadEntry = {
@@ -48,6 +48,20 @@ function statusLabel(entry: DownloadEntry): string {
 }
 
 function DownloadsTray({ isOpen, downloads, onClose, onOpen, onReveal, onClear }: DownloadsTrayProps) {
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) {
     return null;
   }

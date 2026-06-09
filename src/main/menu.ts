@@ -96,6 +96,7 @@ export function buildAppMenu(window: BrowserWindow): void {
         { label: "Focus Address Bar", accelerator: "CmdOrCtrl+L", click: () => send("focus-address") },
         { type: "separator" },
         { label: "Show History", accelerator: "CmdOrCtrl+Y", click: () => send("history") },
+        { label: "Toggle Reader Mode", accelerator: "CmdOrCtrl+Shift+R", click: () => send("reader") },
         { type: "separator" },
         { role: "toggleDevTools" }
       ]
@@ -103,6 +104,8 @@ export function buildAppMenu(window: BrowserWindow): void {
     {
       label: "Tabs",
       submenu: [
+        { label: "Search Tabs", accelerator: "CmdOrCtrl+Shift+A", click: () => send("tab-switcher") },
+        { type: "separator" },
         { label: "Next Tab", accelerator: "CmdOrCtrl+Shift+]", click: () => send("next-tab") },
         {
           label: "Previous Tab",

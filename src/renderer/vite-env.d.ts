@@ -80,6 +80,9 @@ interface Window {
     setTabMuted: (tabId: string, muted: boolean) => Promise<void>;
     sleepTab: (tabId: string) => Promise<void>;
     clearBrowsingData: () => Promise<void>;
+    extractReadable: (
+      pane?: BrowserPane
+    ) => Promise<{ title: string; byline: string; html: string; url: string } | null>;
     openDownload: (path: string) => Promise<void>;
     revealDownload: (path: string) => Promise<void>;
     goBack: (pane?: BrowserPane) => Promise<void>;

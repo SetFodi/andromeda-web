@@ -12,6 +12,8 @@ import CommandBar from "./components/CommandBar";
 import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
 import SiteInfoPanel from "./components/SiteInfoPanel";
 import HistoryPanel from "./components/HistoryPanel";
+import TabSwitcher, { SwitcherTab } from "./components/TabSwitcher";
+import ReaderView, { ReaderArticle } from "./components/ReaderView";
 import FindBar from "./components/FindBar";
 import SettingsPanel from "./components/SettingsPanel";
 import Sidebar from "./components/Sidebar";
@@ -33,6 +35,9 @@ const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
 const FIND_BAR_HEIGHT = 46;
 const TOOLBAR_HEIGHT = 56;
+// Width carved off the right of the web view (instead of detaching it) so a
+// small top-right popover stays visible WITHOUT the page blanking out.
+const POPOVER_GUTTER = 376;
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 460;
 const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
@@ -157,6 +162,10 @@ export default function App() {
   const [isDownloadsOpen, setDownloadsOpen] = useState(false);
   const [isSiteInfoOpen, setSiteInfoOpen] = useState(false);
   const [isHistoryOpen, setHistoryOpen] = useState(false);
+  const [isTabSwitcherOpen, setTabSwitcherOpen] = useState(false);
+  const [isReaderOpen, setReaderOpen] = useState(false);
+  const [readerLoading, setReaderLoading] = useState(false);
+  const [readerArticle, setReaderArticle] = useState<ReaderArticle | null>(null);
   const [downloads, setDownloads] = useState<DownloadEntry[]>([]);
   const [addressFocused, setAddressFocused] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
@@ -207,6 +216,10 @@ export default function App() {
   } = useBrowserStore();
 
   const showReactStartPage = activeTab.isStartPage;
+  // Small top-right popovers carve a gutter out of the live web view rather than
+  // detaching it (no blank). On the start page there's no web view to inset.
+  const contentRightInset =
+    !showReactStartPage && (isDownloadsOpen || isSiteInfoOpen) ? POPOVER_GUTTER : 0;
   const shellColors =
     selectedSpace?.colors && selectedSpace.colors.length > 0
       ? selectedSpace.colors
@@ -312,6 +325,27 @@ export default function App() {
     return items.slice(0, 60);
   }, [historyEntries, quickLinks]);
 
+  const openTabItems = useMemo<SwitcherTab[]>(() => {
+    const items: SwitcherTab[] = [];
+    for (const space of state.spaces) {
+      for (const tab of space.tabs) {
+        items.push({
+          spaceId: space.id,
+          spaceName: space.name,
+          spaceIcon: space.icon,
+          id: tab.id,
+          title: tab.title,
+          url: tab.url,
+          faviconUrl: tab.faviconUrl,
+          isStartPage: tab.isStartPage,
+          isSleeping: Boolean(tab.isSleeping),
+          isActive: space.id === state.selectedSpaceId && tab.id === space.activeTabId
+        });
+      }
+    }
+    return items;
+  }, [state.spaces, state.selectedSpaceId]);
+
   const addressSuggestions = useMemo(() => {
     const query = addressValue.trim().toLowerCase();
     if (!query) {
@@ -374,10 +408,11 @@ export default function App() {
 
       const rect = content.getBoundingClientRect();
       const findInset = isFindOpen ? FIND_BAR_HEIGHT : 0;
+      const usableWidth = Math.max(0, rect.width - contentRightInset);
       const mainBounds: ContentBounds = {
         x: Math.round(rect.x),
         y: Math.round(rect.y + findInset),
-        width: Math.round(rect.width),
+        width: Math.round(usableWidth),
         height: Math.max(0, Math.round(rect.height - findInset))
       };
 
@@ -385,7 +420,7 @@ export default function App() {
         return mainBounds;
       }
 
-      const width = Math.round(rect.width);
+      const width = Math.round(usableWidth);
       const leftWidth = Math.round((width - SPLIT_GAP) * splitRatioRef.current);
       const rightWidth = Math.max(0, width - leftWidth - SPLIT_GAP);
       const y = Math.round(rect.y + SPLIT_HEADER_HEIGHT + findInset);
@@ -406,7 +441,7 @@ export default function App() {
         }
       };
     },
-    [isFindOpen]
+    [contentRightInset, isFindOpen]
   );
 
   const sendContentLayout = useCallback((layout: ContentBounds | ContentLayout | null, force = false) => {
@@ -494,11 +529,12 @@ export default function App() {
     sendLayoutMetrics({ sidebarWidth, splitRatio });
   }, [sendLayoutMetrics, sidebarWidth, splitRatio]);
 
-  // Re-inset the web view when the find bar opens/closes (the DOM size of the
-  // content host does not change, so the ResizeObserver won't fire on its own).
+  // Re-inset the web view when the find bar or a right-gutter popover opens or
+  // closes (the DOM size of the content host does not change, so the
+  // ResizeObserver won't fire on its own).
   useEffect(() => {
     flushContentLayout(isSplitOpen, true);
-  }, [flushContentLayout, isFindOpen, isSplitOpen]);
+  }, [flushContentLayout, isFindOpen, isSplitOpen, contentRightInset]);
 
   useEffect(() => {
     if (!didCompleteLaunchResetRef.current) {
@@ -714,9 +750,17 @@ export default function App() {
     });
   }, []);
 
-  // Large renderer overlays need the native web views detached. Lightweight
-  // toolbar popovers stay non-destructive so the page does not blink away.
-  const shouldDetachContentViews = isCommandBarOpen || isSettingsOpen || isHistoryOpen;
+  // Full-screen / navigation overlays detach the native web views entirely
+  // (they composite ABOVE the renderer, so otherwise they'd be hidden behind
+  // the page). Small chrome popovers (downloads, site-info) instead carve a
+  // right gutter via `contentRightInset` so the page stays visible — see above.
+  const shouldDetachContentViews =
+    isCommandBarOpen ||
+    isSettingsOpen ||
+    isHistoryOpen ||
+    isTabSwitcherOpen ||
+    isReaderOpen ||
+    showAddressSuggestions;
   useEffect(() => {
     if (lastCommandBarOpenRef.current === shouldDetachContentViews) {
       return;
@@ -1044,6 +1088,43 @@ export default function App() {
     setHistoryOpen(true);
   }, []);
   const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  const openTabSwitcher = useCallback(() => setTabSwitcherOpen(true), []);
+  const closeTabSwitcher = useCallback(() => setTabSwitcherOpen(false), []);
+  const handleSelectSwitcherTab = useCallback(
+    (spaceId: SpaceId, tabId: string) => {
+      flushContentLayout();
+      selectTab(spaceId, tabId);
+    },
+    [flushContentLayout, selectTab]
+  );
+  const closeReader = useCallback(() => {
+    setReaderOpen(false);
+    setReaderArticle(null);
+    setReaderLoading(false);
+  }, []);
+  const toggleReader = useCallback(() => {
+    if (isReaderOpen) {
+      closeReader();
+      return;
+    }
+    if (showReactStartPage) {
+      return;
+    }
+    setReaderArticle(null);
+    setReaderLoading(true);
+    setReaderOpen(true);
+    void window.andromeda.extractReadable(activePane).then((article) => {
+      setReaderArticle(article);
+      setReaderLoading(false);
+    });
+  }, [activePane, closeReader, isReaderOpen, showReactStartPage]);
+
+  // Reader content is a one-time snapshot; drop it whenever the page behind it
+  // changes so we never show stale text.
+  useEffect(() => {
+    setReaderOpen(false);
+    setReaderArticle(null);
+  }, [activeTab.id]);
   const handleClearBrowsingData = useCallback(() => {
     clearHistory();
     void window.andromeda.clearBrowsingData();
@@ -1436,6 +1517,12 @@ export default function App() {
         case "history":
           openHistory();
           break;
+        case "tab-switcher":
+          openTabSwitcher();
+          break;
+        case "reader":
+          toggleReader();
+          break;
         case "zoom-in":
           adjustZoom("in");
           break;
@@ -1482,6 +1569,8 @@ export default function App() {
       openHistory,
       openSettings,
       openSplitCommandBar,
+      openTabSwitcher,
+      toggleReader,
       reopenClosedTab,
       selectTab,
       selectedSpace,
@@ -1550,6 +1639,7 @@ export default function App() {
           profileInitial={(settings.name.trim().charAt(0) || "A").toUpperCase()}
           currentUrl={bookmarkUrl ?? ""}
           isSiteInfoOpen={isSiteInfoOpen}
+          isReaderOpen={isReaderOpen}
           addressSuggestions={addressSuggestions}
           showAddressSuggestions={showAddressSuggestions}
           onAddressChange={handleAddressChange}
@@ -1564,6 +1654,7 @@ export default function App() {
           onToggleBookmark={handleToggleBookmark}
           onToggleDownloads={toggleDownloads}
           onToggleSiteInfo={toggleSiteInfo}
+          onToggleReader={toggleReader}
           onToggleTheme={toggleTheme}
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
@@ -1739,6 +1830,22 @@ export default function App() {
           onDelete={deleteHistoryEntry}
           onClear={handleClearBrowsingData}
           onClose={closeHistory}
+        />
+        <TabSwitcher
+          isOpen={isTabSwitcherOpen}
+          tabs={openTabItems}
+          onSelect={handleSelectSwitcherTab}
+          onClose={closeTabSwitcher}
+        />
+        <ReaderView
+          isOpen={isReaderOpen}
+          loading={readerLoading}
+          article={readerArticle}
+          onClose={closeReader}
+          onOpenLink={(url) => {
+            closeReader();
+            navigateTo(url);
+          }}
         />
       </div>
     </div>

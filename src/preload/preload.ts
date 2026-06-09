@@ -220,6 +220,8 @@ contextBridge.exposeInMainWorld("andromeda", {
     ipcRenderer.invoke("browser:setTabMuted", { tabId, muted }),
   sleepTab: (tabId: string) => ipcRenderer.invoke("browser:sleepTab", { tabId }),
   clearBrowsingData: () => ipcRenderer.invoke("browser:clearBrowsingData"),
+  extractReadable: (pane?: BrowserPane) =>
+    ipcRenderer.invoke("browser:extractReadable", { pane: sanitizePane(pane) }),
   openDownload: (path: string) => ipcRenderer.invoke("browser:openDownload", { path }),
   revealDownload: (path: string) => ipcRenderer.invoke("browser:revealDownload", { path }),
   goBack: (pane?: BrowserPane) => ipcRenderer.invoke("browser:goBack", { pane: sanitizePane(pane) }),
