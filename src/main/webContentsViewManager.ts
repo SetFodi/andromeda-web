@@ -6,7 +6,9 @@ import {
   WebContentsView,
   clipboard,
   type ContextMenuParams,
+  type DownloadItem,
   type MenuItemConstructorOptions,
+  type Session,
   type WebContents
 } from "electron";
 
@@ -222,6 +224,7 @@ const SPLIT_GAP = 10;
 const MIN_SPLIT_RATIO = 0.25;
 const MAX_SPLIT_RATIO = 0.75;
 const UNRESPONSIVE_RECOVERY_DELAY_MS = 3500;
+const DEBUG_WEB_CONTENTS = process.env.ANDROMEDA_DEBUG_WEBCONTENTS === "1";
 
 function hasSameBounds(left: ContentBounds, right: ContentBounds): boolean {
   return (
@@ -260,6 +263,7 @@ function getFaviconUrl(favicons: string[]): string | null {
  * switching tabs shows a kept-alive page instead of reloading it.
  */
 export class WebContentsViewManager {
+  private readonly session: Session;
   private mainTabs = new Map<string, MainTab>();
   private mediaPlaying = new Set<string>();
   private activeMainTabId: string | null = null;
@@ -277,44 +281,198 @@ export class WebContentsViewManager {
   private layoutMetrics: LayoutMetrics = { ...DEFAULT_LAYOUT_METRICS };
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private recoveryTimers = new WeakMap<WebContents, ReturnType<typeof setTimeout>>();
+  private disposed = false;
 
   constructor(private readonly window: BrowserWindow) {
+    this.session = window.webContents.session;
     this.registerDownloads();
-    this.window.on("resize", () => this.scheduleWindowLayoutSync());
-    this.window.on("closed", () => {
-      if (this.resizeTimer) {
-        clearTimeout(this.resizeTimer);
-        this.resizeTimer = null;
+    this.window.on("resize", this.handleWindowResize);
+    this.window.once("closed", this.handleWindowClosed);
+  }
+
+  private readonly handleWindowResize = (): void => {
+    this.scheduleWindowLayoutSync();
+  };
+
+  private readonly handleWindowClosed = (): void => {
+    this.dispose();
+  };
+
+  private readonly handleDownload = (_event: unknown, item: DownloadItem): void => {
+    if (this.disposed) {
+      return;
+    }
+
+    const id = `dl-${Date.now().toString(36)}-${this.downloadSeq++}`;
+    const emit = (state: string) => {
+      if (this.window.isDestroyed()) {
+        return;
       }
+      this.window.webContents.send("browser:download", {
+        id,
+        filename: item.getFilename(),
+        url: item.getURL(),
+        savePath: item.getSavePath(),
+        receivedBytes: item.getReceivedBytes(),
+        totalBytes: item.getTotalBytes(),
+        state
+      });
+    };
+
+    item.on("updated", (_updateEvent, state) => emit(state));
+    item.once("done", (_doneEvent, state) => emit(state));
+    emit("progressing");
+  };
+
+  private registerDownloads(): void {
+    this.session.on("will-download", this.handleDownload);
+  }
+
+  private unregisterDownloads(): void {
+    this.session.off("will-download", this.handleDownload);
+  }
+
+  private debugViews(label: string): void {
+    if (!DEBUG_WEB_CONTENTS) {
+      return;
+    }
+
+    const attachedMain = [...this.mainTabs.values()].filter((entry) => entry.attached).length;
+    console.info("[andromeda:webcontents]", label, {
+      mainTabs: this.mainTabs.size,
+      attachedMain,
+      activeMainTabId: this.activeMainTabId,
+      split: Boolean(this.split.view),
+      splitAttached: this.split.attached,
+      activePane: this.activePane
     });
   }
 
-  private registerDownloads(): void {
-    this.window.webContents.session.on("will-download", (_event, item) => {
-      const id = `dl-${Date.now().toString(36)}-${this.downloadSeq++}`;
-      const emit = (state: string) => {
-        if (this.window.isDestroyed()) {
-          return;
-        }
-        this.window.webContents.send("browser:download", {
-          id,
-          filename: item.getFilename(),
-          url: item.getURL(),
-          savePath: item.getSavePath(),
-          receivedBytes: item.getReceivedBytes(),
-          totalBytes: item.getTotalBytes(),
-          state
-        });
-      };
+  private sendToRenderer(channel: string, payload: unknown): void {
+    if (this.window.isDestroyed()) {
+      return;
+    }
 
-      item.on("updated", (_updateEvent, state) => emit(state));
-      item.once("done", (_doneEvent, state) => emit(state));
-      emit("progressing");
-    });
+    this.window.webContents.send(channel, payload);
+  }
+
+  private removeChildView(view: WebContentsView): void {
+    if (this.window.isDestroyed()) {
+      return;
+    }
+
+    try {
+      this.window.contentView.removeChildView(view);
+    } catch (error) {
+      if (DEBUG_WEB_CONTENTS) {
+        console.warn("[andromeda:webcontents] removeChildView failed", error);
+      }
+    }
+  }
+
+  private addChildView(view: WebContentsView): boolean {
+    if (this.window.isDestroyed()) {
+      return false;
+    }
+
+    try {
+      this.window.contentView.addChildView(view);
+      return true;
+    } catch (error) {
+      if (DEBUG_WEB_CONTENTS) {
+        console.warn("[andromeda:webcontents] addChildView failed", error);
+      }
+      return false;
+    }
+  }
+
+  private detachMainEntry(entry: MainTab): void {
+    if (!entry.attached) {
+      return;
+    }
+
+    this.removeChildView(entry.view);
+    entry.attached = false;
+    entry.applied = null;
+  }
+
+  private closeMainEntry(tabId: string, entry: MainTab, emitAudioStopped = false): void {
+    this.detachMainEntry(entry);
+    this.clearRecoveryTimer(entry.view.webContents);
+    if (!entry.view.webContents.isDestroyed()) {
+      entry.view.webContents.close();
+    }
+
+    this.mainTabs.delete(tabId);
+    this.mediaPlaying.delete(tabId);
+    if (this.activeMainTabId === tabId) {
+      this.activeMainTabId = null;
+      this.activePane = "main";
+    }
+
+    if (emitAudioStopped) {
+      this.sendToRenderer("browser:tabAudio", { tabId, audible: false });
+    }
+  }
+
+  private detachSplitEntry(): void {
+    if (!this.split.view || !this.split.attached) {
+      return;
+    }
+
+    this.removeChildView(this.split.view);
+    this.split.attached = false;
+    this.split.applied = null;
+  }
+
+  private closeSplitEntry(): void {
+    if (!this.split.view) {
+      return;
+    }
+
+    const view = this.split.view;
+    this.detachSplitEntry();
+    this.clearRecoveryTimer(view.webContents);
+    if (!view.webContents.isDestroyed()) {
+      view.webContents.close();
+    }
+
+    this.split.view = null;
+    this.split.attached = false;
+    this.split.applied = null;
+    this.split.lastNav = null;
+  }
+
+  private dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+    if (this.resizeTimer) {
+      clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
+    }
+
+    this.unregisterDownloads();
+    this.window.off("resize", this.handleWindowResize);
+    this.window.off("closed", this.handleWindowClosed);
+
+    for (const [tabId, entry] of [...this.mainTabs]) {
+      this.closeMainEntry(tabId, entry);
+    }
+    this.closeSplitEntry();
+    this.activeMainTabId = null;
+    this.activePane = "main";
+    this.debugViews("disposed");
   }
 
   // ---- Main tabs --------------------------------------------------------
   showTab(tabId: string, url: string): void {
+    if (this.disposed) {
+      return;
+    }
+
     if (!isLoadableUrl(url)) {
       return;
     }
@@ -326,9 +484,8 @@ export class WebContentsViewManager {
 
     // Detach every other main view so only the target tab is ever visible.
     for (const [id, entry] of this.mainTabs) {
-      if (id !== tabId && entry.attached) {
-        this.window.contentView.removeChildView(entry.view);
-        entry.attached = false;
+      if (id !== tabId) {
+        this.detachMainEntry(entry);
       }
     }
 
@@ -337,6 +494,7 @@ export class WebContentsViewManager {
       const view = this.createMainView(tabId);
       entry = { view, loadedUrl: url, attached: false, applied: null, lastNav: null };
       this.mainTabs.set(tabId, entry);
+      this.debugViews("created-main-view");
       void view.webContents.loadURL(url);
     } else if (entry.loadedUrl !== url) {
       entry.loadedUrl = url;
@@ -352,6 +510,10 @@ export class WebContentsViewManager {
   }
 
   showStartPage(): void {
+    if (this.disposed) {
+      return;
+    }
+
     if (this.activeMainTabId && this.mediaPlaying.has(this.activeMainTabId)) {
       this.requestPictureInPicture(this.activeMainTabId);
     }
@@ -359,10 +521,7 @@ export class WebContentsViewManager {
     // Detach every main view (not just the tracked active one) so the React
     // start page is never left with a stray page floating over it.
     for (const [, entry] of this.mainTabs) {
-      if (entry.attached) {
-        this.window.contentView.removeChildView(entry.view);
-        entry.attached = false;
-      }
+      this.detachMainEntry(entry);
     }
     this.activeMainTabId = null;
     this.activePane = "main";
@@ -398,44 +557,34 @@ export class WebContentsViewManager {
   }
 
   pruneTabs(validTabIds: string[]): void {
+    if (this.disposed) {
+      return;
+    }
+
     const valid = new Set(validTabIds);
     for (const [id, entry] of this.mainTabs) {
       if (valid.has(id)) {
         continue;
       }
 
-      if (entry.attached) {
-        this.window.contentView.removeChildView(entry.view);
-      }
-      this.clearRecoveryTimer(entry.view.webContents);
-      entry.view.webContents.close();
-      this.mainTabs.delete(id);
-      this.mediaPlaying.delete(id);
-      if (this.activeMainTabId === id) {
-        this.activeMainTabId = null;
-      }
+      this.closeMainEntry(id, entry);
     }
+    this.debugViews("pruned-main-views");
   }
 
   sleepTab(tabId: string): void {
+    if (this.disposed) {
+      return;
+    }
+
     const entry = this.mainTabs.get(tabId);
     if (!entry) {
       return;
     }
 
-    if (entry.attached) {
-      this.window.contentView.removeChildView(entry.view);
-    }
-    this.clearRecoveryTimer(entry.view.webContents);
-    entry.view.webContents.close();
-    this.mainTabs.delete(tabId);
-    this.mediaPlaying.delete(tabId);
-    this.window.webContents.send("browser:tabAudio", { tabId, audible: false });
+    this.closeMainEntry(tabId, entry, true);
 
-    if (this.activeMainTabId === tabId) {
-      this.activeMainTabId = null;
-      this.activePane = "main";
-    }
+    this.debugViews("slept-main-view");
   }
 
   private showWebContextMenu(wc: WebContents, params: ContextMenuParams): void {
@@ -682,7 +831,9 @@ export class WebContentsViewManager {
     }
 
     if (!entry.attached) {
-      this.window.contentView.addChildView(entry.view);
+      if (!this.addChildView(entry.view)) {
+        return;
+      }
       entry.attached = true;
     }
     this.applyMainBounds(entry);
@@ -731,6 +882,10 @@ export class WebContentsViewManager {
 
   // ---- Split pane (single view) ----------------------------------------
   navigate(url: string, pane: BrowserPane = "split"): void {
+    if (this.disposed) {
+      return;
+    }
+
     if (pane !== "split") {
       return;
     }
@@ -749,26 +904,16 @@ export class WebContentsViewManager {
   }
 
   closeSplitView(): void {
-    if (this.split.view) {
-      if (this.split.attached) {
-        this.window.contentView.removeChildView(this.split.view);
-      }
-      this.clearRecoveryTimer(this.split.view.webContents);
-      this.split.view.webContents.close();
-      this.split.view = null;
-      this.split.attached = false;
-      this.split.applied = null;
-      this.split.lastNav = null;
-    }
+    this.closeSplitEntry();
     this.activePane = "main";
     this.sendSplitNavState();
+    this.debugViews("closed-split-view");
   }
 
   private ensureSplitView(): WebContentsView {
     if (this.split.view) {
       if (!this.split.attached && !this.overlayOpen) {
-        this.window.contentView.addChildView(this.split.view);
-        this.split.attached = true;
+        this.split.attached = this.addChildView(this.split.view);
         this.applySplitBounds();
       }
       return this.split.view;
@@ -846,10 +991,10 @@ export class WebContentsViewManager {
       }
     });
 
-    this.window.contentView.addChildView(view);
     this.split.view = view;
-    this.split.attached = true;
+    this.split.attached = this.addChildView(view);
     this.sendSplitNavState();
+    this.debugViews("created-split-view");
     return view;
   }
 
@@ -1025,7 +1170,7 @@ export class WebContentsViewManager {
   }
 
   syncLayoutFromWindow(): void {
-    if (this.window.isDestroyed()) {
+    if (this.disposed || this.window.isDestroyed()) {
       return;
     }
 
@@ -1034,7 +1179,7 @@ export class WebContentsViewManager {
   }
 
   private scheduleWindowLayoutSync(): void {
-    if (this.resizeTimer) {
+    if (this.disposed || this.resizeTimer) {
       return;
     }
 
@@ -1084,19 +1229,17 @@ export class WebContentsViewManager {
   }
 
   setCommandBarOpen(isOpen: boolean): void {
+    if (this.disposed) {
+      return;
+    }
+
     this.overlayOpen = isOpen;
 
     if (isOpen) {
       for (const [, entry] of this.mainTabs) {
-        if (entry.attached) {
-          this.window.contentView.removeChildView(entry.view);
-          entry.attached = false;
-        }
+        this.detachMainEntry(entry);
       }
-      if (this.split.view && this.split.attached) {
-        this.window.contentView.removeChildView(this.split.view);
-        this.split.attached = false;
-      }
+      this.detachSplitEntry();
       return;
     }
 
@@ -1104,8 +1247,7 @@ export class WebContentsViewManager {
       this.attachMain(this.activeMainTabId);
     }
     if (this.split.view && !this.split.attached) {
-      this.window.contentView.addChildView(this.split.view);
-      this.split.attached = true;
+      this.split.attached = this.addChildView(this.split.view);
       this.applySplitBounds();
     }
   }
