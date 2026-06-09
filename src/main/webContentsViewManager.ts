@@ -105,7 +105,7 @@ function htmlEscape(value: string): string {
 
 // A clean, branded offline/error page loaded into the web view when a main-frame
 // navigation fails — replaces Chromium's raw error screen.
-function buildErrorPageUrl(failedUrl: string, description: string): string {
+function buildRecoveryPageUrl(failedUrl: string, title: string, description: string): string {
   let host = failedUrl;
   try {
     host = new URL(failedUrl).hostname || failedUrl;
@@ -113,7 +113,7 @@ function buildErrorPageUrl(failedUrl: string, description: string): string {
     /* keep raw */
   }
   const jsUrl = JSON.stringify(failedUrl).replace(/</g, "\\u003c");
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEscape(host)} didn't load</title><style>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEscape(title)}</title><style>
     :root{color-scheme:dark}
     *{margin:0;box-sizing:border-box}
     body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0f1a;color:#e8eef7;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -131,8 +131,8 @@ function buildErrorPageUrl(failedUrl: string, description: string): string {
     .primary:hover{filter:brightness(1.07);background:#f28366}
   </style></head><body><div class="card">
     <div class="glyph">⚡</div>
-    <h1>This page didn't load</h1>
-    <p>Andromeda couldn't reach <span class="host">${htmlEscape(host)}</span>.</p>
+    <h1>${htmlEscape(title)}</h1>
+    <p>The page at <span class="host">${htmlEscape(host)}</span> needs a quick recovery.</p>
     <p class="desc">${htmlEscape(description || "The connection failed")}</p>
     <div class="row">
       <button class="primary" id="retry">Try again</button>
@@ -145,6 +145,10 @@ function buildErrorPageUrl(failedUrl: string, description: string): string {
     document.getElementById('back').onclick=function(){history.length>1?history.back():location.replace(U);};
   </script></body></html>`;
   return "data:text/html;charset=utf-8," + encodeURIComponent(html);
+}
+
+function buildErrorPageUrl(failedUrl: string, description: string): string {
+  return buildRecoveryPageUrl(failedUrl, "This page didn't load", description);
 }
 
 // Mozilla Readability gives far cleaner article parsing than the heuristic
@@ -217,6 +221,7 @@ const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
 const MIN_SPLIT_RATIO = 0.25;
 const MAX_SPLIT_RATIO = 0.75;
+const UNRESPONSIVE_RECOVERY_DELAY_MS = 3500;
 
 function hasSameBounds(left: ContentBounds, right: ContentBounds): boolean {
   return (
@@ -271,6 +276,7 @@ export class WebContentsViewManager {
   private downloadSeq = 0;
   private layoutMetrics: LayoutMetrics = { ...DEFAULT_LAYOUT_METRICS };
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private recoveryTimers = new WeakMap<WebContents, ReturnType<typeof setTimeout>>();
 
   constructor(private readonly window: BrowserWindow) {
     this.registerDownloads();
@@ -401,6 +407,7 @@ export class WebContentsViewManager {
       if (entry.attached) {
         this.window.contentView.removeChildView(entry.view);
       }
+      this.clearRecoveryTimer(entry.view.webContents);
       entry.view.webContents.close();
       this.mainTabs.delete(id);
       this.mediaPlaying.delete(id);
@@ -419,6 +426,7 @@ export class WebContentsViewManager {
     if (entry.attached) {
       this.window.contentView.removeChildView(entry.view);
     }
+    this.clearRecoveryTimer(entry.view.webContents);
     entry.view.webContents.close();
     this.mainTabs.delete(tabId);
     this.mediaPlaying.delete(tabId);
@@ -505,6 +513,63 @@ export class WebContentsViewManager {
     void wc.loadURL(buildErrorPageUrl(validatedURL, errorDescription)).catch(() => {});
   }
 
+  private clearRecoveryTimer(wc: WebContents): void {
+    const timer = this.recoveryTimers.get(wc);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    this.recoveryTimers.delete(wc);
+  }
+
+  private loadRecoveryPage(wc: WebContents, url: string, title: string, description: string): void {
+    if (wc.isDestroyed() || !isLoadableUrl(url)) {
+      return;
+    }
+
+    void wc.loadURL(buildRecoveryPageUrl(url, title, description)).catch(() => {});
+  }
+
+  private registerRecoveryHandlers(
+    wc: WebContents,
+    getRecoverableUrl: () => string | null,
+    onRecover: () => void
+  ): void {
+    wc.on("render-process-gone", (_event, details) => {
+      this.clearRecoveryTimer(wc);
+      onRecover();
+      this.loadRecoveryPage(
+        wc,
+        getRecoverableUrl() ?? wc.getURL(),
+        "This page crashed",
+        `The renderer stopped unexpectedly (${details.reason}).`
+      );
+    });
+
+    wc.on("unresponsive", () => {
+      this.clearRecoveryTimer(wc);
+      const timer = setTimeout(() => {
+        this.recoveryTimers.delete(wc);
+        if (wc.isDestroyed()) {
+          return;
+        }
+
+        onRecover();
+        this.loadRecoveryPage(
+          wc,
+          getRecoverableUrl() ?? wc.getURL(),
+          "This page stopped responding",
+          "The page froze for a few seconds, so Andromeda paused it here."
+        );
+      }, UNRESPONSIVE_RECOVERY_DELAY_MS);
+      this.recoveryTimers.set(wc, timer);
+    });
+
+    wc.on("responsive", () => this.clearRecoveryTimer(wc));
+    wc.on("destroyed", () => this.clearRecoveryTimer(wc));
+  }
+
   private createMainView(tabId: string): WebContentsView {
     const view = new WebContentsView({
       webPreferences: {
@@ -520,6 +585,16 @@ export class WebContentsViewManager {
       }
       return { action: "deny" };
     });
+
+    this.registerRecoveryHandlers(
+      view.webContents,
+      () => this.mainTabs.get(tabId)?.loadedUrl ?? view.webContents.getURL(),
+      () => {
+        this.mediaPlaying.delete(tabId);
+        this.window.webContents.send("browser:tabAudio", { tabId, audible: false });
+        this.emitMainNavState(tabId);
+      }
+    );
 
     view.webContents.on("context-menu", (_event, params) =>
       this.showWebContextMenu(view.webContents, params)
@@ -678,6 +753,7 @@ export class WebContentsViewManager {
       if (this.split.attached) {
         this.window.contentView.removeChildView(this.split.view);
       }
+      this.clearRecoveryTimer(this.split.view.webContents);
       this.split.view.webContents.close();
       this.split.view = null;
       this.split.attached = false;
@@ -712,6 +788,12 @@ export class WebContentsViewManager {
       }
       return { action: "deny" };
     });
+
+    this.registerRecoveryHandlers(
+      view.webContents,
+      () => view.webContents.getURL(),
+      () => this.sendSplitNavState()
+    );
 
     view.webContents.on("context-menu", (_event, params) =>
       this.showWebContextMenu(view.webContents, params)

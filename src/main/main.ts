@@ -5,6 +5,7 @@ import { WebContentsViewManager } from "./webContentsViewManager";
 import { registerIpc } from "./ipc";
 import { buildAppMenu } from "./menu";
 import { setupAdblocker } from "./adblocker";
+import { setupSecurityPolicy } from "./security";
 
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -76,6 +77,7 @@ function createMainWindow(): BrowserWindow {
     }
   });
 
+  setupSecurityPolicy(window);
   const manager = new WebContentsViewManager(window);
   registerIpc(manager, window);
   buildAppMenu(window);
