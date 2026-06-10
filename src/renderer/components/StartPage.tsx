@@ -6,11 +6,19 @@ import type { QuickLink } from "../state/useQuickLinks";
 
 type StartPageProps = {
   quickLinks: QuickLink[];
+  userName?: string;
   onOpenCommand: () => void;
   onOpenLink: (url: string) => void;
   onRemoveQuickLink: (id: string) => void;
   onReorderQuickLink: (sourceId: string, targetId: string) => void;
 };
+
+function getGreeting(now: Date, userName?: string): string {
+  const hour = now.getHours();
+  const base = hour < 5 ? "Up late" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const name = userName?.trim();
+  return name ? `${base}, ${name}` : base;
+}
 
 function getHostname(url: string): string {
   try {
@@ -62,6 +70,7 @@ function useNow(): Date {
 
 function StartPage({
   quickLinks,
+  userName,
   onOpenCommand,
   onOpenLink,
   onRemoveQuickLink,
@@ -76,6 +85,7 @@ function StartPage({
       <div className="start-scroll">
         <section className="start-stage">
           <header className="start-head reveal" style={{ "--reveal-delay": "40ms" } as React.CSSProperties}>
+            <p className="start-greeting">{getGreeting(now, userName)}</p>
             <div className="start-clock">{formatClock(now)}</div>
             <p className="start-date">{formatLongDate(now)}</p>
           </header>

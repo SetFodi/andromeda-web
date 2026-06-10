@@ -4,6 +4,7 @@ import Icon from "./Icon";
 type SiteInfoPanelProps = {
   isOpen: boolean;
   url: string;
+  pane: BrowserPane;
   onClose: () => void;
   onReload: () => void;
 };
@@ -12,6 +13,22 @@ type ParsedSite = {
   host: string;
   secure: boolean;
 };
+
+const PERMISSION_LABELS: Record<string, string> = {
+  media: "Camera & microphone",
+  geolocation: "Location",
+  notifications: "Notifications",
+  "clipboard-read": "Clipboard",
+  "display-capture": "Screen recording",
+  fullscreen: "Fullscreen",
+  pointerLock: "Pointer lock",
+  midi: "MIDI devices",
+  midiSysex: "MIDI devices (SysEx)"
+};
+
+function permissionLabel(permission: string): string {
+  return PERMISSION_LABELS[permission] ?? permission.replace(/-/g, " ");
+}
 
 function parseSite(url: string): ParsedSite | null {
   try {
@@ -25,14 +42,42 @@ function parseSite(url: string): ParsedSite | null {
   }
 }
 
-function SiteInfoPanel({ isOpen, url, onClose, onReload }: SiteInfoPanelProps) {
+function SiteInfoPanel({ isOpen, url, pane, onClose, onReload }: SiteInfoPanelProps) {
   const [copied, setCopied] = useState(false);
+  const [shield, setShield] = useState<ShieldStats | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isOpen) {
       setCopied(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    void window.andromeda.getShieldStats(pane).then((stats) => {
+      if (!cancelled) {
+        setShield(stats);
+      }
+    });
+    if (url) {
+      void window.andromeda.getSitePermissions(url).then((result) => {
+        if (!cancelled) {
+          setPermissions(result.permissions);
+        }
+      });
+    } else {
+      setPermissions([]);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, pane, url]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -63,6 +108,11 @@ function SiteInfoPanel({ isOpen, url, onClose, onReload }: SiteInfoPanelProps) {
     window.setTimeout(() => setCopied(false), 1400);
   };
 
+  const handleRevoke = (permission: string) => {
+    void window.andromeda.revokeSitePermission(url, permission);
+    setPermissions((current) => current.filter((entry) => entry !== permission));
+  };
+
   return (
     <div className="siteinfo-layer" role="presentation" onMouseDown={onClose}>
       <section
@@ -89,9 +139,49 @@ function SiteInfoPanel({ isOpen, url, onClose, onReload }: SiteInfoPanelProps) {
 
         {info ? (
           <>
+            {shield?.active ? (
+              <div className={shield.enabled ? "siteinfo-shield" : "siteinfo-shield is-off"}>
+                <span className="siteinfo-shield-count">
+                  {shield.enabled ? shield.blockedOnPage : "—"}
+                </span>
+                <span className="siteinfo-shield-copy">
+                  {shield.enabled ? (
+                    <>
+                      <span>Ads &amp; trackers blocked on this page</span>
+                      <small>{shield.blockedTotal.toLocaleString()} blocked since launch</small>
+                    </>
+                  ) : (
+                    <>
+                      <span>Shield is off</span>
+                      <small>Turn it back on in Settings</small>
+                    </>
+                  )}
+                </span>
+              </div>
+            ) : null}
+
             <div className="siteinfo-url" title={url}>
               {url}
             </div>
+
+            {permissions.length > 0 ? (
+              <div className="siteinfo-perms">
+                <span className="siteinfo-perms-label">Allowed this session</span>
+                {permissions.map((permission) => (
+                  <div key={permission} className="siteinfo-perm-row">
+                    <span>{permissionLabel(permission)}</span>
+                    <button
+                      type="button"
+                      className="siteinfo-perm-revoke"
+                      onClick={() => handleRevoke(permission)}
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="siteinfo-actions">
               <button type="button" className="siteinfo-action" onClick={handleCopy}>
                 <Icon name="copy" size={15} />

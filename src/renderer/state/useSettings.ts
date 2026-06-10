@@ -20,7 +20,7 @@ export const APPEARANCE_ACCENTS = [
 ];
 
 const DEFAULT_SETTINGS: Settings = {
-  name: "Alex",
+  name: "",
   searchEngine: "google",
   appearanceAccent: "#f28366"
 };
@@ -39,7 +39,7 @@ function loadSettings(): Settings {
     }
 
     const parsed = JSON.parse(raw) as Partial<Settings>;
-    const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name : DEFAULT_SETTINGS.name;
+    const name = typeof parsed.name === "string" ? parsed.name : DEFAULT_SETTINGS.name;
     const searchEngine =
       typeof parsed.searchEngine === "string" && parsed.searchEngine in SEARCH_ENGINES
         ? (parsed.searchEngine as SearchEngineId)

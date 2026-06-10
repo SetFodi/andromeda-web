@@ -72,6 +72,18 @@ type BenchmarkNavigatePayload = {
   loadDelayMs: number;
 };
 
+type ShieldStats = {
+  active: boolean;
+  enabled: boolean;
+  blockedTotal: number;
+  blockedOnPage: number;
+};
+
+type SitePermissions = {
+  origin: string | null;
+  permissions: string[];
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string, pane?: BrowserPane) => Promise<void>;
@@ -98,7 +110,14 @@ interface Window {
       options?: { forward?: boolean; findNext?: boolean }
     ) => Promise<void>;
     stopFind: (pane: BrowserPane) => Promise<void>;
-    setZoom: (pane: BrowserPane, direction: "in" | "out" | "reset") => Promise<void>;
+    setZoom: (pane: BrowserPane, direction: "in" | "out" | "reset") => Promise<number>;
+    getZoom: (pane?: BrowserPane) => Promise<number>;
+    printPage: (pane?: BrowserPane) => Promise<void>;
+    getShieldStats: (pane?: BrowserPane) => Promise<ShieldStats>;
+    setAdblockEnabled: (enabled: boolean) => Promise<void>;
+    getSitePermissions: (url: string) => Promise<SitePermissions>;
+    revokeSitePermission: (url: string, permission: string) => Promise<void>;
+    getAppInfo: () => Promise<{ version: string }>;
     resizeContentView: (layout: ContentBounds | ContentLayout) => Promise<void>;
     setLayoutMetrics: (metrics: LayoutMetrics) => Promise<void>;
     syncLayout: () => Promise<void>;

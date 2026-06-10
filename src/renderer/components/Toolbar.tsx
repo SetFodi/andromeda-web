@@ -31,9 +31,12 @@ type ToolbarProps = {
   isReaderOpen: boolean;
   addressSuggestions: Array<{ id: string; title: string; url: string }>;
   showAddressSuggestions: boolean;
+  zoomPercent: number | null;
+  onResetZoom: () => void;
   onAddressChange: (value: string) => void;
   onAddressFocus: () => void;
   onAddressBlur: () => void;
+  onAddressEscape: () => void;
   onPickSuggestion: (url: string) => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -73,9 +76,12 @@ function Toolbar({
   isReaderOpen,
   addressSuggestions,
   showAddressSuggestions,
+  zoomPercent,
+  onResetZoom,
   onAddressChange,
   onAddressFocus,
   onAddressBlur,
+  onAddressEscape,
   onPickSuggestion,
   onSubmit,
   onBack,
@@ -95,6 +101,7 @@ function Toolbar({
 }: ToolbarProps) {
   const pageLabel = currentPageTitle.trim() || (isStartPage ? "Start" : "Browsing");
   const [failedFaviconUrl, setFailedFaviconUrl] = useState<string | null>(null);
+  const [suggestIndex, setSuggestIndex] = useState(-1);
   const showFavicon = Boolean(
     currentPageFaviconUrl && !isStartPage && currentPageFaviconUrl !== failedFaviconUrl
   );
@@ -103,6 +110,11 @@ function Toolbar({
   useEffect(() => {
     setFailedFaviconUrl(null);
   }, [currentPageFaviconUrl]);
+
+  // No suggestion is pre-selected; plain Enter keeps navigating to what was typed.
+  useEffect(() => {
+    setSuggestIndex(-1);
+  }, [addressValue, showAddressSuggestions]);
 
   return (
     <header className="toolbar">
@@ -184,20 +196,52 @@ function Toolbar({
           onBlur={onAddressBlur}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
+              onAddressEscape();
               event.currentTarget.blur();
+              return;
+            }
+
+            if (!showAddressSuggestions || addressSuggestions.length === 0) {
+              return;
+            }
+
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setSuggestIndex((current) => (current + 1) % addressSuggestions.length);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setSuggestIndex((current) =>
+                current <= 0 ? addressSuggestions.length - 1 : current - 1
+              );
+            } else if (event.key === "Enter" && suggestIndex >= 0) {
+              event.preventDefault();
+              const target = addressSuggestions[suggestIndex];
+              if (target) {
+                onPickSuggestion(target.url);
+              }
             }
           }}
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
         />
+        {zoomPercent !== null && zoomPercent !== 100 ? (
+          <button type="button" className="zoom-chip" title="Reset zoom" onClick={onResetZoom}>
+            {zoomPercent}%
+          </button>
+        ) : null}
         {showAddressSuggestions ? (
           <div className="address-suggest" onMouseDown={(event) => event.preventDefault()}>
-            {addressSuggestions.map((suggestion) => (
+            {addressSuggestions.map((suggestion, index) => (
               <button
                 key={suggestion.id}
                 type="button"
-                className="address-suggest-item"
+                className={
+                  index === suggestIndex
+                    ? "address-suggest-item is-selected"
+                    : "address-suggest-item"
+                }
+                onMouseEnter={() => setSuggestIndex(index)}
                 onClick={() => onPickSuggestion(suggestion.url)}
               >
                 <Icon name="history" size={14} />

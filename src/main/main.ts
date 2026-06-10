@@ -10,6 +10,16 @@ import { setupSecurityPolicy } from "./security";
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
 let mainWindow: BrowserWindow | null = null;
 
+// Two-finger overscroll history navigation (Windows/Linux; no-op on macOS,
+// where the window-level swipe event below handles it).
+app.commandLine.appendSwitch("enable-features", "TouchpadOverscrollHistoryNavigation");
+
+// Sites (notably Google sign-in) reject user agents that advertise Electron as
+// "insecure browsers". Present as the plain Chrome build we actually are.
+app.userAgentFallback = app.userAgentFallback
+  .replace(/\sandromeda\/\S+/i, "")
+  .replace(/\sElectron\/\S+/, "");
+
 function getBenchmarkUrls(): string[] {
   if (!process.env.ANDROMEDA_BENCHMARK_URLS) {
     return [];
@@ -82,6 +92,16 @@ function createMainWindow(): BrowserWindow {
   registerIpc(manager, window);
   buildAppMenu(window);
   scheduleBenchmarkNavigation(window);
+
+  // macOS trackpad swipe navigation (fires per the system "Swipe between
+  // pages" gesture setting). Fingers right reveals the previous page.
+  window.on("swipe", (_event, direction) => {
+    if (direction === "right") {
+      manager.goBack();
+    } else if (direction === "left") {
+      manager.goForward();
+    }
+  });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const showWindow = () => {

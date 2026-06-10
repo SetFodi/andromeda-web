@@ -10,6 +10,7 @@ import {
 } from "react";
 import CommandBar from "./components/CommandBar";
 import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
+import OnboardingModal from "./components/OnboardingModal";
 import SiteInfoPanel from "./components/SiteInfoPanel";
 import HistoryPanel from "./components/HistoryPanel";
 import TabSwitcher, { SwitcherTab } from "./components/TabSwitcher";
@@ -24,7 +25,7 @@ import { useTheme } from "./state/useTheme";
 import { useSettings } from "./state/useSettings";
 import { useQuickLinks } from "./state/useQuickLinks";
 import { useHistory } from "./state/useHistory";
-import { getUrlDisplayValue, resolveNavigationInput } from "./utils/url";
+import { getUrlDisplayValue, resolveNavigationInput, type SearchEngineId } from "./utils/url";
 import type { IconName } from "./components/Icon";
 
 const SPLIT_RATIO_KEY = "andromeda.splitRatio";
@@ -47,6 +48,8 @@ const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
 // briefly stepped away from.
 const AUTO_SLEEP_MS = 60 * 60 * 1000;
 const AUTO_SLEEP_SWEEP_MS = 2 * 60 * 1000;
+const DOWNLOADS_KEY = "andromeda.downloads.v1";
+const ONBOARDED_KEY = "andromeda.onboarded";
 
 type PaneNavigationState = {
   canGoBack: boolean;
@@ -100,6 +103,37 @@ function isBlackAccent(hex: string): boolean {
   return normalized === "#000" || normalized === "#0000" || normalized === "#000000" || normalized === "#000000ff";
 }
 
+function loadStoredDownloads(): DownloadEntry[] {
+  try {
+    const raw = localStorage.getItem(DOWNLOADS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((entry): entry is DownloadEntry =>
+        Boolean(
+          entry &&
+            typeof entry === "object" &&
+            typeof (entry as DownloadEntry).id === "string" &&
+            typeof (entry as DownloadEntry).filename === "string" &&
+            typeof (entry as DownloadEntry).savePath === "string"
+        )
+      )
+      .map((entry) => ({
+        ...entry,
+        // Anything still in flight when the app last quit cannot resume.
+        state: entry.state === "progressing" || entry.state === "paused" ? "interrupted" : entry.state
+      }))
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
 function loadSplitRatio(): number {
   try {
     const raw = Number.parseFloat(localStorage.getItem(SPLIT_RATIO_KEY) ?? "");
@@ -113,7 +147,7 @@ function loadSplitRatio(): number {
 }
 
 export default function App() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, setTheme } = useTheme();
   const { settings, updateSettings } = useSettings();
   const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink } =
     useQuickLinks();
@@ -143,7 +177,14 @@ export default function App() {
   const sidebarResizeFrameRef = useRef<number | null>(null);
   const windowResizeIdleRef = useRef<number | null>(null);
   const spaceSwitchIdleRef = useRef<number | null>(null);
-  const seenDownloadIdsRef = useRef<Set<string>>(new Set());
+  const initialDownloadsRef = useRef<DownloadEntry[] | null>(null);
+  if (initialDownloadsRef.current === null) {
+    initialDownloadsRef.current = loadStoredDownloads();
+  }
+  const seenDownloadIdsRef = useRef<Set<string>>(
+    new Set(initialDownloadsRef.current.map((entry) => entry.id))
+  );
+  const prefocusAddressRef = useRef("");
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
   const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
@@ -166,7 +207,15 @@ export default function App() {
   const [isReaderOpen, setReaderOpen] = useState(false);
   const [readerLoading, setReaderLoading] = useState(false);
   const [readerArticle, setReaderArticle] = useState<ReaderArticle | null>(null);
-  const [downloads, setDownloads] = useState<DownloadEntry[]>([]);
+  const [isOnboardingOpen, setOnboardingOpen] = useState(() => {
+    try {
+      return localStorage.getItem(ONBOARDED_KEY) !== "1";
+    } catch {
+      return false;
+    }
+  });
+  const [zoomLevel, setZoomLevel] = useState(0);
+  const [downloads, setDownloads] = useState<DownloadEntry[]>(initialDownloadsRef.current);
   const [addressFocused, setAddressFocused] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
   const [splitRatio, setSplitRatio] = useState<number>(() => splitRatioRef.current);
@@ -352,28 +401,56 @@ export default function App() {
       return [] as Array<{ id: string; title: string; url: string }>;
     }
 
+    const hostOf = (url: string) => {
+      try {
+        return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+      } catch {
+        return url.toLowerCase();
+      }
+    };
+    // Same ranking the command bar uses: host prefix beats URL prefix beats
+    // title prefix beats substring matches.
+    const rankOf = (title: string, url: string) => {
+      const host = hostOf(url);
+      const display = url.replace(/^https?:\/\//i, "").toLowerCase();
+      const lowerTitle = title.toLowerCase();
+      if (host.startsWith(query)) return 0;
+      if (display.startsWith(query)) return 1;
+      if (lowerTitle.startsWith(query)) return 2;
+      if (host.includes(query) || display.includes(query)) return 3;
+      if (lowerTitle.includes(query)) return 4;
+      return Number.POSITIVE_INFINITY;
+    };
+
     const seen = new Set<string>();
-    const out: Array<{ id: string; title: string; url: string }> = [];
+    const ranked: Array<{ id: string; title: string; url: string; rank: number; order: number }> = [];
+    let order = 0;
     const consider = (id: string, title: string, url: string) => {
       const key = url.toLowerCase();
       if (seen.has(key)) {
         return;
       }
-      if (`${title} ${url}`.toLowerCase().includes(query)) {
-        seen.add(key);
-        out.push({ id, title: title || url, url });
+      const rank = rankOf(title || url, url);
+      if (!Number.isFinite(rank)) {
+        return;
       }
+      seen.add(key);
+      ranked.push({ id, title: title || url, url, rank, order: order++ });
     };
 
-    for (const link of quickLinks) {
-      consider(`ql-${link.id}`, link.label, link.url);
+    // Frecency-ranked history (plus curated quick links) first, then open tabs.
+    for (const item of quickOpenItems) {
+      consider(item.id, item.title, item.url);
     }
     for (const site of recentSites) {
       consider(`rs-${site.id}`, site.title, site.url);
     }
 
-    return out.slice(0, 6);
-  }, [addressValue, quickLinks, recentSites]);
+    return ranked
+      .sort((a, b) => a.rank - b.rank || a.order - b.order)
+      .slice(0, 6)
+      .map(({ id, title, url }) => ({ id, title, url }));
+  }, [addressValue, quickOpenItems, recentSites]);
 
   const showAddressSuggestions =
     addressFocused && addressDirty && addressValue.trim().length > 0 && addressSuggestions.length > 0;
@@ -760,6 +837,7 @@ export default function App() {
     isHistoryOpen ||
     isTabSwitcherOpen ||
     isReaderOpen ||
+    isOnboardingOpen ||
     showAddressSuggestions;
   useEffect(() => {
     if (lastCommandBarOpenRef.current === shouldDetachContentViews) {
@@ -889,11 +967,19 @@ export default function App() {
   }, []);
 
   const handleAddressFocus = useCallback(() => {
+    prefocusAddressRef.current = addressValue;
     setAddressFocused(true);
     setAddressDirty(false);
-  }, []);
+  }, [addressValue]);
 
   const handleAddressBlur = useCallback(() => {
+    setAddressFocused(false);
+  }, []);
+
+  // Esc in the address bar restores whatever was there before editing began.
+  const handleAddressEscape = useCallback(() => {
+    setAddressValue(prefocusAddressRef.current);
+    setAddressDirty(false);
     setAddressFocused(false);
   }, []);
 
@@ -1076,10 +1162,37 @@ export default function App() {
 
   const adjustZoom = useCallback(
     (direction: "in" | "out" | "reset") => {
-      void window.andromeda.setZoom(activePane, direction);
+      void window.andromeda.setZoom(activePane, direction).then((level) => {
+        setZoomLevel(typeof level === "number" ? level : 0);
+      });
     },
     [activePane]
   );
+
+  const handleResetZoom = useCallback(() => {
+    adjustZoom("reset");
+  }, [adjustZoom]);
+
+  // Reflect the active page's zoom whenever focus moves to another tab/pane.
+  useEffect(() => {
+    if (showReactStartPage && activePane === "main") {
+      setZoomLevel(0);
+      return;
+    }
+
+    let cancelled = false;
+    void window.andromeda.getZoom(activePane).then((level) => {
+      if (!cancelled) {
+        setZoomLevel(typeof level === "number" ? level : 0);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePane, activeTab.id, showReactStartPage]);
+
+  const zoomPercent =
+    showReactStartPage && activePane === "main" ? null : Math.round(Math.pow(1.2, zoomLevel) * 100);
 
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
@@ -1174,6 +1287,32 @@ export default function App() {
     [updateSpace]
   );
 
+  // ---- First-run onboarding ----
+  const completeOnboarding = useCallback(() => {
+    try {
+      localStorage.setItem(ONBOARDED_KEY, "1");
+    } catch {
+      // ignore storage failures
+    }
+    setOnboardingOpen(false);
+  }, []);
+  const handleOnboardingName = useCallback(
+    (value: string) => updateSettings({ name: value }),
+    [updateSettings]
+  );
+  const handleOnboardingEngine = useCallback(
+    (id: SearchEngineId) => updateSettings({ searchEngine: id }),
+    [updateSettings]
+  );
+  const handleOnboardingAccent = useCallback(
+    (hex: string) => {
+      if (selectedSpace) {
+        handleSpaceColorPreview(selectedSpace.id, hex);
+      }
+    },
+    [handleSpaceColorPreview, selectedSpace]
+  );
+
   const toggleDownloads = useCallback(() => {
     setSiteInfoOpen(false);
     setDownloadsOpen((open) => !open);
@@ -1196,6 +1335,16 @@ export default function App() {
   }, []);
   const handleClearDownloads = useCallback(() => setDownloads([]), []);
   const hasActiveDownload = downloads.some((entry) => entry.state === "progressing");
+
+  // Finished downloads survive restarts; in-flight ones can't resume so they
+  // are stored as interrupted by loadStoredDownloads on the next launch.
+  useEffect(() => {
+    try {
+      localStorage.setItem(DOWNLOADS_KEY, JSON.stringify(downloads.slice(0, 20)));
+    } catch {
+      // ignore storage failures
+    }
+  }, [downloads]);
 
   const handleToggleBookmark = useCallback(() => {
     if (!bookmarkUrl) {
@@ -1523,6 +1672,9 @@ export default function App() {
         case "reader":
           toggleReader();
           break;
+        case "print":
+          void window.andromeda.printPage(activePane);
+          break;
         case "zoom-in":
           adjustZoom("in");
           break;
@@ -1642,9 +1794,12 @@ export default function App() {
           isReaderOpen={isReaderOpen}
           addressSuggestions={addressSuggestions}
           showAddressSuggestions={showAddressSuggestions}
+          zoomPercent={zoomPercent}
+          onResetZoom={handleResetZoom}
           onAddressChange={handleAddressChange}
           onAddressFocus={handleAddressFocus}
           onAddressBlur={handleAddressBlur}
+          onAddressEscape={handleAddressEscape}
           onPickSuggestion={handlePickSuggestion}
           onSubmit={handleSubmitAddress}
           onBack={handleBack}
@@ -1788,6 +1943,7 @@ export default function App() {
           {showReactStartPage ? (
             <StartPage
               quickLinks={quickLinks}
+              userName={settings.name}
               onOpenCommand={handleNewTab}
               onOpenLink={navigateTo}
               onRemoveQuickLink={removeQuickLink}
@@ -1807,6 +1963,7 @@ export default function App() {
           isOpen={isSettingsOpen}
           settings={settings}
           onUpdateSettings={updateSettings}
+          onClearBrowsingData={handleClearBrowsingData}
           onClose={closeSettings}
         />
         <DownloadsTray
@@ -1820,6 +1977,7 @@ export default function App() {
         <SiteInfoPanel
           isOpen={isSiteInfoOpen}
           url={bookmarkUrl ?? ""}
+          pane={activePane}
           onClose={closeSiteInfo}
           onReload={handleReload}
         />
@@ -1846,6 +2004,18 @@ export default function App() {
             closeReader();
             navigateTo(url);
           }}
+        />
+        <OnboardingModal
+          isOpen={isOnboardingOpen}
+          name={settings.name}
+          theme={theme}
+          accent={shellAccent}
+          searchEngine={settings.searchEngine}
+          onSetName={handleOnboardingName}
+          onPickTheme={setTheme}
+          onPickAccent={handleOnboardingAccent}
+          onPickSearchEngine={handleOnboardingEngine}
+          onFinish={completeOnboarding}
         />
       </div>
     </div>

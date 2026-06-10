@@ -249,6 +249,22 @@ contextBridge.exposeInMainWorld("andromeda", {
     ipcRenderer.invoke("browser:stopFind", { pane: sanitizePane(pane) }),
   setZoom: (pane: BrowserPane, direction: "in" | "out" | "reset") =>
     ipcRenderer.invoke("browser:setZoom", { pane: sanitizePane(pane), direction }),
+  getZoom: (pane?: BrowserPane) =>
+    ipcRenderer.invoke("browser:getZoom", { pane: sanitizePane(pane) }),
+  printPage: (pane?: BrowserPane) =>
+    ipcRenderer.invoke("browser:print", { pane: sanitizePane(pane) }),
+  getShieldStats: (pane?: BrowserPane) =>
+    ipcRenderer.invoke("browser:getShieldStats", { pane: sanitizePane(pane) }),
+  setAdblockEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke("browser:setAdblockEnabled", { enabled: enabled === true }),
+  getSitePermissions: (url: string) =>
+    ipcRenderer.invoke("browser:getSitePermissions", { url: String(url) }),
+  revokeSitePermission: (url: string, permission: string) =>
+    ipcRenderer.invoke("browser:revokeSitePermission", {
+      url: String(url),
+      permission: String(permission)
+    }),
+  getAppInfo: () => ipcRenderer.invoke("browser:getAppInfo"),
   resizeContentView: (layout: ContentBounds | ContentLayout) =>
     ipcRenderer.invoke("browser:resizeContentView", sanitizeLayout(layout)),
   setLayoutMetrics: (metrics: LayoutMetrics) =>

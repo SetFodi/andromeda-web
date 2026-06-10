@@ -1,4 +1,4 @@
-import { BrowserWindow, IpcMainInvokeEvent, ipcMain, shell } from "electron";
+import { BrowserWindow, IpcMainInvokeEvent, app, ipcMain, shell } from "electron";
 import {
   BrowserPane,
   ContentBounds,
@@ -6,6 +6,12 @@ import {
   LayoutMetrics,
   WebContentsViewManager
 } from "./webContentsViewManager";
+import {
+  getAdblockStats,
+  getBlockedCountForWebContents,
+  setAdblockEnabled
+} from "./adblocker";
+import { getOriginFromUrl, listPermissionGrants, revokePermissionGrant } from "./security";
 
 const MAX_BOUND = 10000;
 
@@ -322,7 +328,72 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
       throw new Error("Invalid zoom direction");
     }
 
-    manager.adjustZoom(normalizePane((payload as { pane?: unknown } | null)?.pane), direction);
+    return manager.adjustZoom(normalizePane((payload as { pane?: unknown } | null)?.pane), direction);
+  });
+
+  setHandler("browser:getZoom", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    return manager.getZoom(normalizePane((payload as { pane?: unknown } | null)?.pane));
+  });
+
+  setHandler("browser:print", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    manager.print(normalizePane((payload as { pane?: unknown } | null)?.pane));
+  });
+
+  setHandler("browser:getShieldStats", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const stats = getAdblockStats();
+    const webContentsId = manager.getPaneWebContentsId(
+      normalizePane((payload as { pane?: unknown } | null)?.pane)
+    );
+    return {
+      active: stats.active,
+      enabled: stats.enabled,
+      blockedTotal: stats.blocked,
+      blockedOnPage: webContentsId === null ? 0 : getBlockedCountForWebContents(webContentsId)
+    };
+  });
+
+  setHandler("browser:setAdblockEnabled", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const enabled = (payload as { enabled?: unknown } | null)?.enabled;
+    if (typeof enabled !== "boolean") {
+      throw new Error("Invalid adblock state");
+    }
+
+    setAdblockEnabled(enabled);
+  });
+
+  setHandler("browser:getSitePermissions", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const url = (payload as { url?: unknown } | null)?.url;
+    const origin = typeof url === "string" ? getOriginFromUrl(url) : null;
+    if (!origin) {
+      return { origin: null, permissions: [] };
+    }
+
+    return { origin, permissions: listPermissionGrants(origin) };
+  });
+
+  setHandler("browser:revokeSitePermission", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const candidate = (payload ?? {}) as { url?: unknown; permission?: unknown };
+    const origin = typeof candidate.url === "string" ? getOriginFromUrl(candidate.url) : null;
+    if (!origin || typeof candidate.permission !== "string") {
+      throw new Error("Invalid permission revocation");
+    }
+
+    revokePermissionGrant(origin, candidate.permission);
+  });
+
+  setHandler("browser:getAppInfo", (event) => {
+    assertTrustedSender(event, window);
+    return { version: app.getVersion() };
   });
 
   setHandler("browser:setCommandBarOpen", (event, payload: unknown) => {

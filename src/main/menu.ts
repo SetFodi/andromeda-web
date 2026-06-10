@@ -51,6 +51,8 @@ export function buildAppMenu(window: BrowserWindow): void {
         },
         { label: "New Space", accelerator: "CmdOrCtrl+Shift+N", click: () => send("new-space") },
         { type: "separator" },
+        { label: "Print…", accelerator: "CmdOrCtrl+P", click: () => send("print") },
+        { type: "separator" },
         { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => send("close-tab") },
         {
           label: "Close Window",

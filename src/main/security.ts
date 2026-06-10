@@ -37,6 +37,19 @@ function grantKey(origin: string, permission: string): string {
   return `${origin}:${permission}`;
 }
 
+export function getOriginFromUrl(rawUrl?: string): string | null {
+  return originFromUrl(rawUrl);
+}
+
+export function listPermissionGrants(origin: string): string[] {
+  const prefix = `${origin}:`;
+  return [...grants].filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length));
+}
+
+export function revokePermissionGrant(origin: string, permission: string): void {
+  grants.delete(grantKey(origin, permission));
+}
+
 function describePermission(permission: string, details: Electron.PermissionRequest): string {
   const mediaTypes = "mediaTypes" in details ? details.mediaTypes : undefined;
   if (permission === "media" && Array.isArray(mediaTypes) && mediaTypes.length > 0) {
@@ -69,13 +82,13 @@ async function askUser(
   const prompt = dialog
     .showMessageBox(window, {
       type: "question",
-      buttons: ["Allow Once", "Deny"],
+      buttons: ["Allow", "Deny"],
       defaultId: 1,
       cancelId: 1,
       noLink: true,
       title: "Permission request",
       message: `${origin} wants ${describePermission(permission, details)}.`,
-      detail: "Only allow this if you trust the site."
+      detail: "Andromeda remembers this until you quit. Only allow it if you trust the site."
     })
     .then(({ response }) => response === 0)
     .finally(() => pendingPrompts.delete(key));

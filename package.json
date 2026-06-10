@@ -1,7 +1,9 @@
 {
   "name": "andromeda",
+  "productName": "Andromeda",
   "version": "0.1.0",
-  "description": "A personal macOS browser shell built with Electron, React, TypeScript, and Vite.",
+  "description": "A calm, fast macOS browser built with Electron, React, TypeScript, and Vite.",
+  "author": "Luka Fartenadze <pixelweb2026@gmail.com>",
   "main": "dist/main/main.cjs",
   "type": "module",
   "scripts": {
@@ -9,21 +11,66 @@
     "typecheck": "tsc --noEmit",
     "build": "pnpm typecheck && vite build && node scripts/build-electron.mjs",
     "start": "electron dist/main/main.cjs",
+    "dist": "pnpm build && electron-builder --mac dmg",
     "perf:browsers": "node scripts/browser-perf-compare.mjs"
+  },
+  "build": {
+    "appId": "dev.lukafartenadze.andromeda",
+    "productName": "Andromeda",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "Andromeda.png",
+      "!dist/**/*.map"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Andromeda",
+      "contents": [
+        {
+          "x": 140,
+          "y": 200
+        },
+        {
+          "x": 400,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.18.0",
-    "@mozilla/readability": "^0.6.0",
-    "lucide-react": "^0.468.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "@mozilla/readability": "^0.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "electron": "42.3.2",
+    "electron-builder": "^26.15.2",
     "esbuild": "^0.24.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"
   }

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { resetBlockedCountForWebContents } from "./adblocker";
 import {
   BrowserWindow,
   Menu,
@@ -277,6 +278,7 @@ export class WebContentsViewManager {
   };
   private activePane: BrowserPane = "main";
   private overlayOpen = false;
+  private fullscreenView: WebContentsView | null = null;
   private downloadSeq = 0;
   private layoutMetrics: LayoutMetrics = { ...DEFAULT_LAYOUT_METRICS };
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -591,6 +593,19 @@ export class WebContentsViewManager {
     const items: MenuItemConstructorOptions[] = [];
     const openTab = (url: string) => this.window.webContents.send("browser:openTab", { url });
 
+    if (params.misspelledWord) {
+      for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+        items.push({ label: suggestion, click: () => wc.replaceMisspelling(suggestion) });
+      }
+      items.push(
+        {
+          label: "Add to Dictionary",
+          click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+        },
+        { type: "separator" }
+      );
+    }
+
     if (params.linkURL) {
       const link = params.linkURL;
       items.push(
@@ -641,7 +656,17 @@ export class WebContentsViewManager {
       },
       { label: "Reload", click: () => wc.reload() },
       { type: "separator" },
-      { label: "Copy Page URL", click: () => clipboard.writeText(params.pageURL || wc.getURL()) }
+      { label: "Copy Page URL", click: () => clipboard.writeText(params.pageURL || wc.getURL()) },
+      { type: "separator" },
+      {
+        label: "Inspect Element",
+        click: () => {
+          if (!wc.isDevToolsOpened()) {
+            wc.openDevTools({ mode: "detach" });
+          }
+          wc.inspectElement(params.x, params.y);
+        }
+      }
     );
 
     Menu.buildFromTemplate(items).popup({ window: this.window });
@@ -719,6 +744,48 @@ export class WebContentsViewManager {
     wc.on("destroyed", () => this.clearRecoveryTimer(wc));
   }
 
+  // HTML fullscreen (e.g. a YouTube video) must cover the whole window — the
+  // view otherwise stays carved into the content rect with the shell visible
+  // around it. Expand while fullscreen, restore the normal layout on exit.
+  private registerFullscreenHandlers(view: WebContentsView): void {
+    const wc = view.webContents;
+    wc.on("enter-html-full-screen", () => {
+      this.fullscreenView = view;
+      this.applyFullscreenBounds();
+    });
+    wc.on("leave-html-full-screen", () => {
+      if (this.fullscreenView !== view) {
+        return;
+      }
+      this.fullscreenView = null;
+      for (const entry of this.mainTabs.values()) {
+        entry.applied = null;
+      }
+      this.split.applied = null;
+      if (this.activeMainTabId) {
+        const entry = this.mainTabs.get(this.activeMainTabId);
+        if (entry?.attached) {
+          this.applyMainBounds(entry);
+        }
+      }
+      this.applySplitBounds();
+    });
+    wc.on("destroyed", () => {
+      if (this.fullscreenView === view) {
+        this.fullscreenView = null;
+      }
+    });
+  }
+
+  private applyFullscreenBounds(): void {
+    if (!this.fullscreenView || this.window.isDestroyed()) {
+      return;
+    }
+
+    const { width, height } = this.window.getContentBounds();
+    this.fullscreenView.setBounds({ x: 0, y: 0, width, height });
+  }
+
   private createMainView(tabId: string): WebContentsView {
     const view = new WebContentsView({
       webPreferences: {
@@ -744,6 +811,7 @@ export class WebContentsViewManager {
         this.emitMainNavState(tabId);
       }
     );
+    this.registerFullscreenHandlers(view);
 
     view.webContents.on("context-menu", (_event, params) =>
       this.showWebContextMenu(view.webContents, params)
@@ -773,7 +841,10 @@ export class WebContentsViewManager {
       this.emitMainNavState(tabId);
     };
 
-    view.webContents.on("did-navigate", (_event, url) => handleNavigation(url));
+    view.webContents.on("did-navigate", (_event, url) => {
+      resetBlockedCountForWebContents(view.webContents.id);
+      handleNavigation(url);
+    });
     view.webContents.on("did-navigate-in-page", (_event, url) => handleNavigation(url));
     view.webContents.on("did-start-loading", () => this.emitMainNavState(tabId));
     view.webContents.on("did-stop-loading", () => this.emitMainNavState(tabId));
@@ -840,6 +911,11 @@ export class WebContentsViewManager {
   }
 
   private applyMainBounds(entry: MainTab): void {
+    if (this.fullscreenView === entry.view) {
+      this.applyFullscreenBounds();
+      return;
+    }
+
     if (entry.applied && hasSameBounds(entry.applied, this.mainBounds)) {
       return;
     }
@@ -939,6 +1015,7 @@ export class WebContentsViewManager {
       () => view.webContents.getURL(),
       () => this.sendSplitNavState()
     );
+    this.registerFullscreenHandlers(view);
 
     view.webContents.on("context-menu", (_event, params) =>
       this.showWebContextMenu(view.webContents, params)
@@ -956,6 +1033,7 @@ export class WebContentsViewManager {
     });
 
     view.webContents.on("did-navigate", (_event, url) => {
+      resetBlockedCountForWebContents(view.webContents.id);
       this.sendSplitNavigation(url);
       this.sendSplitNavState();
     });
@@ -1000,6 +1078,10 @@ export class WebContentsViewManager {
 
   private applySplitBounds(): void {
     if (!this.split.view || !this.split.attached) {
+      return;
+    }
+    if (this.fullscreenView === this.split.view) {
+      this.applyFullscreenBounds();
       return;
     }
     if (this.split.applied && hasSameBounds(this.split.applied, this.split.bounds)) {
@@ -1121,21 +1203,34 @@ export class WebContentsViewManager {
     this.paneView(pane)?.webContents.stopFindInPage("clearSelection");
   }
 
-  adjustZoom(pane: BrowserPane, direction: "in" | "out" | "reset"): void {
+  adjustZoom(pane: BrowserPane, direction: "in" | "out" | "reset"): number {
     const view = this.paneView(pane);
     if (!view) {
-      return;
+      return 0;
     }
 
     const webContents = view.webContents;
     if (direction === "reset") {
       webContents.setZoomLevel(0);
-      return;
+      return 0;
     }
 
     const step = direction === "in" ? 0.5 : -0.5;
     const next = Math.max(-3, Math.min(5, webContents.getZoomLevel() + step));
     webContents.setZoomLevel(next);
+    return next;
+  }
+
+  getZoom(pane: BrowserPane = this.activePane): number {
+    return this.paneView(pane)?.webContents.getZoomLevel() ?? 0;
+  }
+
+  print(pane: BrowserPane = this.activePane): void {
+    this.paneView(pane)?.webContents.print();
+  }
+
+  getPaneWebContentsId(pane: BrowserPane = this.activePane): number | null {
+    return this.paneView(pane)?.webContents.id ?? null;
   }
 
   resize(layout: ContentLayout): void {
