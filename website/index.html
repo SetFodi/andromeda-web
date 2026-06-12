@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Andromeda — the calm, fast browser for macOS</title>
+  <meta name="description" content="Andromeda is a small, beautiful macOS browser that refuses ads at the network, naps your forgotten tabs, and sets every article in quiet serif type.">
+  <meta property="og:title" content="Andromeda — the calm, fast browser for macOS">
+  <meta property="og:description" content="Spaces with their own colors. Network-level ad blocking. Reader mode. Tabs that nap. Free, for Apple Silicon Macs.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='26' r='9.4' fill='%23ff7a5c'/%3E%3Cg stroke='%231d2b3a' stroke-width='2.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M9 33 Q16 29 23 33 T37 33'/%3E%3Cpath d='M11 38 Q18 34.6 25 38 T39 38'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="sunarc" aria-hidden="true"></div>
+
+  <!-- ================= Nav ================= -->
+  <header class="nav">
+    <a class="nav-brand" href="#top" aria-label="Andromeda home">
+      <svg class="mark" width="28" height="28" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <circle cx="24" cy="26" r="9.4" fill="var(--coral)"/>
+        <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none">
+          <g transform="rotate(-24 24 23)"><ellipse cx="24" cy="21" rx="16" ry="5.4"/></g>
+        </g>
+        <g transform="rotate(-24 24 23)"><circle cx="40" cy="21" r="1.9" fill="currentColor"/></g>
+        <g stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none">
+          <path d="M9 33 Q16 29 23 33 T37 33"/><path d="M11 38 Q18 34.6 25 38 T39 38"/>
+        </g>
+      </svg>
+      <span>Andromeda</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#spaces">Spaces</a>
+      <a href="#shield">Shield</a>
+      <a href="#reader">Reader</a>
+      <a href="#commands">Commands</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="theme-btn" id="themeBtn" type="button" aria-label="Toggle light and dark theme">
+        <span class="theme-label" data-light="DAY" data-dark="NIGHT"></span>
+      </button>
+      <a class="btn-ink" href="#download">Download</a>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ================= Hero ================= -->
+    <section class="hero">
+      <svg class="constellation" viewBox="0 0 900 430" aria-hidden="true">
+        <g class="const-lines" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M96 332 L228 282 L378 244 L548 198 L678 156"/>
+          <path d="M378 244 L352 168 L330 112"/>
+        </g>
+        <g class="const-stars">
+          <circle class="star s1" cx="96"  cy="332" r="4.2"/>
+          <circle class="star s2" cx="228" cy="282" r="2.6"/>
+          <circle class="star s3" cx="378" cy="244" r="4.6"/>
+          <circle class="star s4" cx="548" cy="198" r="2.4"/>
+          <circle class="star s5" cx="678" cy="156" r="4.4"/>
+          <circle class="star s6" cx="352" cy="168" r="2.2"/>
+          <circle class="star s7" cx="330" cy="112" r="2.4"/>
+          <circle class="star s8" cx="500" cy="86"  r="1.6"/>
+          <circle class="star s9" cx="760" cy="250" r="1.6"/>
+          <circle class="star s10" cx="170" cy="160" r="1.4"/>
+          <circle class="star s11" cx="620" cy="320" r="1.5"/>
+          <circle class="star s12" cx="800" cy="90"  r="1.8"/>
+        </g>
+        <g class="const-galaxy" transform="rotate(-28 300 78)">
+          <ellipse cx="300" cy="78" rx="26" ry="9"/>
+          <ellipse cx="300" cy="78" rx="11" ry="3.6"/>
+        </g>
+        <g class="const-labels">
+          <text x="84"  y="358">α Alpheratz</text>
+          <text x="368" y="270">β Mirach</text>
+          <text x="668" y="182">γ Almach</text>
+          <text x="334" y="56">M31 — the Andromeda galaxy</text>
+        </g>
+      </svg>
+
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <p class="kicker reveal">Andromeda · a browser for macOS</p>
+          <h1 class="reveal" style="--d:70ms">
+            The web,<br><em>without the noise.</em>
+          </h1>
+          <p class="lede reveal" style="--d:140ms">
+            A small, fast browser that refuses ads at the network, naps the tabs
+            you forget, and sets every article in quiet serif type. Made by one
+            person who notices the details.
+          </p>
+          <div class="hero-cta reveal" style="--d:200ms">
+            <a class="btn-coral" href="https://github.com/SetFodi/andromeda-web/releases/latest">
+              Download for Mac
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v13m0 0 5.5-5.5M12 17l-5.5-5.5"/></svg>
+            </a>
+            <a class="link-mono" href="https://github.com/SetFodi/andromeda-web">Read the source ↗</a>
+          </div>
+        </div>
+
+        <aside class="spec reveal" style="--d:180ms" aria-label="Specifications">
+          <div class="spec-row"><span>Version</span><b>0.1.0</b></div>
+          <div class="spec-row"><span>Platform</span><b>macOS 14+ · arm64</b></div>
+          <div class="spec-row"><span>Engine</span><b>Chromium, kept quiet</b></div>
+          <div class="spec-row"><span>Telemetry</span><b>None</b></div>
+          <div class="spec-row"><span>Price</span><b>Free</b></div>
+        </aside>
+      </div>
+
+      <!-- ============ Browser mockup ============ -->
+      <div class="stage reveal" style="--d:240ms">
+        <div class="stage-glow" aria-hidden="true"></div>
+        <div class="mock" id="mock" role="img" aria-label="The Andromeda browser window showing the start page">
+          <div class="mock-titlebar">
+            <span class="mock-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="mock-navbtns" aria-hidden="true">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              <svg class="is-dim" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+            </span>
+            <span class="mock-address">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.7 9a.6.6 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+              andromeda.app
+            </span>
+            <span class="mock-toolicons" aria-hidden="true">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 3.6a.6.6 0 0 1 1 0l2.3 4.7 5.2.8a.6.6 0 0 1 .3 1l-3.7 3.7.9 5.2a.6.6 0 0 1-.9.6L12 17.3l-4.6 2.4a.6.6 0 0 1-.9-.7l.9-5.1L3.7 10a.6.6 0 0 1 .3-1l5.2-.8z"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
+              <span class="mock-shieldwrap">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.7 9a.6.6 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+                <i class="mock-shieldbadge">7</i>
+              </span>
+            </span>
+          </div>
+          <div class="mock-body">
+            <aside class="mock-sidebar">
+              <span class="mock-newtab">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                New Tab
+              </span>
+              <div class="mock-tabs">
+                <span class="mock-tab is-active">
+                  <i class="mock-fav" style="--f:var(--maccent)">A</i>
+                  <span class="mock-tab-copy"><b>Andromeda — calm browsing</b><small>andromeda.app</small></span>
+                </span>
+                <span class="mock-tab">
+                  <i class="mock-fav" style="--f:#4f7df4">F</i>
+                  <span class="mock-tab-copy"><b>Figma — Landing draft</b><small>figma.com</small></span>
+                </span>
+                <span class="mock-tab">
+                  <i class="mock-fav" style="--f:#e0567f">Y</i>
+                  <span class="mock-tab-copy"><b>Lo-fi beats to ship to</b><small>youtube.com</small></span>
+                  <span class="mock-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+                </span>
+                <span class="mock-tab is-sleeping">
+                  <i class="mock-fav is-moon">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+                  </i>
+                  <span class="mock-tab-copy"><b>That article for later</b><small>sleeping — click to wake</small></span>
+                </span>
+              </div>
+              <div class="mock-dock" aria-hidden="true">
+                <span class="mock-space is-active" data-color="#f28366" style="--tile:#f28366"></span>
+                <span class="mock-space" data-color="#4f7df4" style="--tile:#4f7df4"></span>
+                <span class="mock-space" data-color="#e0567f" style="--tile:#e0567f"></span>
+                <span class="mock-space" data-color="#41a96c" style="--tile:#41a96c"></span>
+                <span class="mock-space-add">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                </span>
+              </div>
+            </aside>
+            <div class="mock-content">
+              <p class="mock-greeting" id="mockGreeting">Good evening</p>
+              <div class="mock-clock" id="mockClock">21:42</div>
+              <p class="mock-date" id="mockDate">Thursday, June 11</p>
+              <div class="mock-search">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <span>Search the web or type a URL</span>
+                <kbd>⌘T</kbd>
+              </div>
+              <div class="mock-quick" aria-hidden="true">
+                <span class="mock-quicktile"><i style="--f:#4f7df4">G</i><small>GitHub</small></span>
+                <span class="mock-quicktile"><i style="--f:#e0567f">Y</i><small>YouTube</small></span>
+                <span class="mock-quicktile"><i style="--f:#41a96c">S</i><small>Spotify</small></span>
+                <span class="mock-quicktile"><i style="--f:#f4a23b">H</i><small>News</small></span>
+                <span class="mock-quicktile is-add">
+                  <i><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></i>
+                  <small>Add</small>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spacesbar reveal" style="--d:80ms">
+          <span class="spacesbar-label">Spaces — click one, the whole shell follows</span>
+          <div class="chips" role="group" aria-label="Space theme picker">
+            <button type="button" class="chip is-active" data-color="#f28366"><i style="--c:#f28366"></i>Home</button>
+            <button type="button" class="chip" data-color="#4f7df4"><i style="--c:#4f7df4"></i>Deep Work</button>
+            <button type="button" class="chip" data-color="#e0567f"><i style="--c:#e0567f"></i>Play</button>
+            <button type="button" class="chip" data-color="#41a96c"><i style="--c:#41a96c"></i>Field Notes</button>
+            <button type="button" class="chip" data-color="#7c5cff"><i style="--c:#7c5cff"></i>Late Night</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Ticker ================= -->
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track">
+        <span>Spaces ✦ Network-level shield ✦ Reader mode ✦ Split view ✦ Tabs that nap ✦ ⌘K launcher ✦ Picture-in-picture ✦ Trackpad swipes ✦ Frecency omnibar ✦ </span><span>Spaces ✦ Network-level shield ✦ Reader mode ✦ Split view ✦ Tabs that nap ✦ ⌘K launcher ✦ Picture-in-picture ✦ Trackpad swipes ✦ Frecency omnibar ✦ </span>
+      </div>
+    </div>
+
+    <!-- ================= 01 · Spaces ================= -->
+    <section class="spread" id="spaces">
+      <div class="spread-head reveal">
+        <span class="spread-num">01</span>
+        <span class="spread-tag">Spaces</span>
+      </div>
+      <div class="spread-body">
+        <div class="spread-copy reveal">
+          <h2>Every world gets <em>its own weather.</em></h2>
+          <p>
+            Work, play, and the side project each live in a separate space with
+            their own tabs and their own color — and the entire shell re-tints to
+            match, down to the last hairline. Swipe sideways on the sidebar to
+            move between worlds.
+          </p>
+        </div>
+        <div class="spread-art reveal" style="--d:100ms" aria-hidden="true">
+          <div class="spacecard" style="--sc:#f28366">
+            <i></i><b>Home</b><small>6 tabs</small>
+          </div>
+          <div class="spacecard" style="--sc:#4f7df4">
+            <i></i><b>Deep Work</b><small>11 tabs</small>
+          </div>
+          <div class="spacecard" style="--sc:#e0567f">
+            <i></i><b>Play</b><small>3 tabs</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 02 · Shield ================= -->
+    <section class="spread is-flipped" id="shield">
+      <div class="spread-head reveal">
+        <span class="spread-num">02</span>
+        <span class="spread-tag">Shield</span>
+      </div>
+      <div class="spread-body">
+        <div class="spread-copy reveal">
+          <h2>Ads are refused <em>at the door.</em></h2>
+          <p>
+            Most blockers hide ads after the page has already fetched them.
+            Andromeda declines the request itself — EasyList and EasyPrivacy at
+            the network layer — so pages arrive lighter, faster, and quieter.
+            The shield shows the per-page count; Settings has the off switch.
+          </p>
+        </div>
+        <div class="spread-art reveal" style="--d:100ms">
+          <div class="meter" aria-label="Demonstration counter">
+            <span class="meter-label">Requests refused</span>
+            <span class="meter-num" id="shieldNum">0</span>
+            <span class="meter-foot">and counting — EasyList + EasyPrivacy, cached offline</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 03 · Reader ================= -->
+    <section class="spread" id="reader">
+      <div class="spread-head reveal">
+        <span class="spread-num">03</span>
+        <span class="spread-tag">Reader</span>
+      </div>
+      <div class="spread-body">
+        <div class="spread-copy reveal">
+          <h2>Every article, <em>set like a book.</em></h2>
+          <p>
+            One key strips the chrome from any page and re-sets the words in a
+            quiet serif column — the same parsing engine Firefox trusts, wearing
+            far better type. Links survive. Clutter doesn't.
+          </p>
+        </div>
+        <div class="spread-art reveal" style="--d:100ms" aria-hidden="true">
+          <div class="readercard">
+            <span class="readercard-kicker">reader mode · ⌘⇧R</span>
+            <span class="readercard-title">On the quiet pleasures of a smaller web</span>
+            <p class="readercard-text has-dropcap">Somewhere between the fourth autoplay video and the ninth cookie banner, the page you wanted disappeared. Reader mode is the long walk back — just the words, the pictures that matter, and margins wide enough to think in.</p>
+            <p class="readercard-text">It turns out most articles are lovely once you can see them.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Etcetera ================= -->
+    <section class="etc">
+      <div class="etc-head reveal">
+        <span class="spread-num">04</span>
+        <span class="spread-tag">And the rest</span>
+      </div>
+      <div class="etc-rows">
+        <div class="etc-row reveal">
+          <b>Split view</b>
+          <p>Drag any tab onto the page for instant side-by-side. The divider remembers where you like it.</p>
+          <kbd>⌘D</kbd>
+        </div>
+        <div class="etc-row reveal" style="--d:60ms">
+          <b>Tabs that nap</b>
+          <p>Idle tabs free their memory after an hour and spring back the moment you return. Pinned and playing tabs never sleep.</p>
+          <kbd>auto</kbd>
+        </div>
+        <div class="etc-row reveal" style="--d:120ms">
+          <b>The launcher</b>
+          <p>⌘K opens a list ranked by where you actually go — visits, typing, recency. The address bar completes from the same memory.</p>
+          <kbd>⌘K</kbd>
+        </div>
+        <div class="etc-row reveal" style="--d:180ms">
+          <b>Picture-in-picture</b>
+          <p>Switch tabs while a video plays and it floats out on its own. Come back and it settles home again.</p>
+          <kbd>auto</kbd>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Command sheet ================= -->
+    <section class="commands" id="commands">
+      <div class="commands-head reveal">
+        <h2>The command sheet</h2>
+        <p>Hands stay on the keys. Every surface is reachable without the trackpad.</p>
+      </div>
+      <div class="cmd-table reveal" style="--d:80ms">
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>K</kbd></span><span>Command bar — search history or type a URL</span></div>
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>T</kbd></span><span>New tab</span></div>
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>A</kbd></span><span>Search open tabs across every space</span></div>
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>R</kbd></span><span>Reader mode</span></div>
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>D</kbd></span><span>Split view</span></div>
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>Y</kbd></span><span>History</span></div>
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd></span><span>Jump straight to a tab</span></div>
+        <div class="cmd-row"><span class="cmd-keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>T</kbd></span><span>Reopen the tab you just closed</span></div>
+      </div>
+    </section>
+
+    <!-- ================= Download ================= -->
+    <section class="finale" id="download">
+      <div class="finale-card reveal">
+        <svg class="finale-stars" viewBox="0 0 900 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <g class="const-lines" fill="none" stroke="currentColor" stroke-width="1">
+            <path d="M120 220 L260 180 L420 150 L600 110 L740 80"/>
+            <path d="M420 150 L390 90"/>
+          </g>
+          <g class="const-stars">
+            <circle class="star s1" cx="120" cy="220" r="3.4"/>
+            <circle class="star s3" cx="260" cy="180" r="2.2"/>
+            <circle class="star s5" cx="420" cy="150" r="3.6"/>
+            <circle class="star s2" cx="600" cy="110" r="2"/>
+            <circle class="star s4" cx="740" cy="80"  r="3.4"/>
+            <circle class="star s6" cx="390" cy="90"  r="1.8"/>
+            <circle class="star s7" cx="540" cy="240" r="1.4"/>
+            <circle class="star s8" cx="80"  cy="90"  r="1.5"/>
+            <circle class="star s9" cx="820" cy="200" r="1.5"/>
+          </g>
+        </svg>
+        <p class="kicker">Free · macOS 14+ · Apple Silicon</p>
+        <h2>Ready when <em>you are.</em></h2>
+        <p class="finale-sub">Download the DMG, drag it to Applications, and the twenty-second setup takes it from there.</p>
+        <a class="btn-coral btn-big" href="https://github.com/SetFodi/andromeda-web/releases/latest">
+          Download Andromeda
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v13m0 0 5.5-5.5M12 17l-5.5-5.5"/></svg>
+        </a>
+        <details class="gatekeeper">
+          <summary>First launch on an unsigned build</summary>
+          <p>
+            Andromeda isn't signed with an Apple Developer certificate yet, so macOS asks once
+            before the first open. On <b>macOS 15+</b>: open the app, dismiss the warning, then
+            System Settings → Privacy &amp; Security → <b>Open Anyway</b>. On <b>macOS 14 and
+            older</b>: right-click the app → <b>Open</b>. After that it opens like any other app.
+          </p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Built in the open by Luka Fartenadze</span>
+    <span class="footer-m31">M31 is 2.5 million light-years away. Your tabs are closer.</span>
+    <a href="https://github.com/SetFodi/andromeda-web">GitHub ↗</a>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
