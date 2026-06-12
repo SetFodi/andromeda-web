@@ -57,40 +57,23 @@
   tick();
   setInterval(tick, 30000);
 
-  /* ---- Accent picker: swatches + space dock tiles ----------------------- */
-  function setAccent(color, source) {
+  /* ---- Space chips: re-tint the whole mockup ---------------------------- */
+  function setAccent(color) {
     root.style.setProperty("--maccent", color);
 
-    document.querySelectorAll(".swatch").forEach(function (el) {
+    document.querySelectorAll(".chip").forEach(function (el) {
       el.classList.toggle("is-active", el.dataset.color === color);
     });
     // The dock only highlights when the chosen color matches one of its
-    // spaces; otherwise the active space keeps its own tile color.
-    var matched = false;
+    // spaces; "Late Night" has no tile, so the dock simply rests.
     document.querySelectorAll(".mock-space").forEach(function (el) {
-      var match = el.dataset.color === color;
-      el.classList.toggle("is-active", match);
-      if (match) matched = true;
+      el.classList.toggle("is-active", el.dataset.color === color);
     });
-    if (!matched && source !== "dock") {
-      var first = document.querySelector(".mock-space");
-      if (first) {
-        first.classList.add("is-active");
-        first.style.setProperty("--tile", color);
-        first.dataset.color = color;
-      }
-    }
   }
 
-  document.querySelectorAll(".swatch").forEach(function (el) {
+  document.querySelectorAll(".chip").forEach(function (el) {
     el.addEventListener("click", function () {
-      setAccent(el.dataset.color, "swatch");
-    });
-  });
-
-  document.querySelectorAll(".mock-space").forEach(function (el) {
-    el.addEventListener("click", function () {
-      setAccent(el.dataset.color, "dock");
+      setAccent(el.dataset.color);
     });
   });
 

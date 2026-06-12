@@ -32,6 +32,8 @@ type ToolbarProps = {
   addressSuggestions: Array<{ id: string; title: string; url: string }>;
   showAddressSuggestions: boolean;
   zoomPercent: number | null;
+  savePasswordPrompt: SavePasswordPromptPayload | null;
+  onRespondSavePassword: (action: "save" | "never" | "dismiss") => void;
   onResetZoom: () => void;
   onAddressChange: (value: string) => void;
   onAddressFocus: () => void;
@@ -77,6 +79,8 @@ function Toolbar({
   addressSuggestions,
   showAddressSuggestions,
   zoomPercent,
+  savePasswordPrompt,
+  onRespondSavePassword,
   onResetZoom,
   onAddressChange,
   onAddressFocus,
@@ -252,6 +256,39 @@ function Toolbar({
           </div>
         ) : null}
       </form>
+
+      {savePasswordPrompt ? (
+        <div className="pw-prompt" role="alertdialog" aria-label="Save password">
+          <Icon name="key" size={15} />
+          <span className="pw-prompt-text">
+            {savePasswordPrompt.mode === "update" ? "Update password for " : "Save password for "}
+            <b>{getHostname(savePasswordPrompt.origin)}</b>
+            {savePasswordPrompt.username ? ` · ${savePasswordPrompt.username}` : ""}
+          </span>
+          <button
+            className="pw-prompt-save"
+            type="button"
+            onClick={() => onRespondSavePassword("save")}
+          >
+            {savePasswordPrompt.mode === "update" ? "Update" : "Save"}
+          </button>
+          <button
+            className="pw-prompt-never"
+            type="button"
+            onClick={() => onRespondSavePassword("never")}
+          >
+            Never
+          </button>
+          <button
+            className="pw-prompt-dismiss"
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => onRespondSavePassword("dismiss")}
+          >
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      ) : null}
 
       <div className="toolbar-actions" aria-label="Browser actions">
         <button

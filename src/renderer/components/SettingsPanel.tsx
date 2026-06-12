@@ -28,6 +28,10 @@ function SettingsPanel({
   const [version, setVersion] = useState("");
   const [clearArmed, setClearArmed] = useState(false);
   const [didClear, setDidClear] = useState(false);
+  const [passwords, setPasswords] = useState<CredentialSummary[] | null>(null);
+  const [passwordsAvailable, setPasswordsAvailable] = useState(true);
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [revealedValue, setRevealedValue] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -35,6 +39,8 @@ function SettingsPanel({
     } else {
       setClearArmed(false);
       setDidClear(false);
+      setRevealedId(null);
+      setRevealedValue("");
     }
   }, [isOpen]);
 
@@ -52,6 +58,16 @@ function SettingsPanel({
     void window.andromeda.getAppInfo().then((info) => {
       if (!cancelled) {
         setVersion(info.version);
+      }
+    });
+    void window.andromeda.listPasswords().then((entries) => {
+      if (!cancelled) {
+        setPasswords(entries);
+      }
+    });
+    void window.andromeda.passwordsAvailable().then((available) => {
+      if (!cancelled) {
+        setPasswordsAvailable(available);
       }
     });
 
@@ -82,6 +98,36 @@ function SettingsPanel({
     setClearArmed(false);
     setDidClear(true);
     window.setTimeout(() => setDidClear(false), 2200);
+  };
+
+  const handleToggleReveal = (id: string) => {
+    if (revealedId === id) {
+      setRevealedId(null);
+      setRevealedValue("");
+      return;
+    }
+
+    void window.andromeda.revealPassword(id).then((value) => {
+      setRevealedId(id);
+      setRevealedValue(value ?? "");
+    });
+  };
+
+  const handleDeletePassword = (id: string) => {
+    void window.andromeda.deletePassword(id);
+    setPasswords((current) => current?.filter((entry) => entry.id !== id) ?? current);
+    if (revealedId === id) {
+      setRevealedId(null);
+      setRevealedValue("");
+    }
+  };
+
+  const hostFromOrigin = (origin: string) => {
+    try {
+      return new URL(origin).hostname.replace(/^www\./, "");
+    } catch {
+      return origin;
+    }
   };
 
   return (
@@ -165,6 +211,52 @@ function SettingsPanel({
                 <span className="settings-switch-knob" />
               </button>
             </div>
+          </div>
+
+          <div className="settings-field">
+            <label>Passwords</label>
+            {!passwordsAvailable ? (
+              <p className="settings-hint">
+                Saving passwords needs the system keychain, which isn&apos;t available right now.
+              </p>
+            ) : passwords && passwords.length > 0 ? (
+              <div className="settings-pw-list">
+                {passwords.map((credential) => (
+                  <div className="settings-pw-row" key={credential.id}>
+                    <span className="settings-row-copy">
+                      <span>{hostFromOrigin(credential.origin)}</span>
+                      <small>
+                        {credential.username || "No username"}
+                        {revealedId === credential.id ? (
+                          <code className="settings-pw-secret">{revealedValue}</code>
+                        ) : null}
+                      </small>
+                    </span>
+                    <span className="settings-pw-actions">
+                      <button
+                        type="button"
+                        className="settings-pw-btn"
+                        onClick={() => handleToggleReveal(credential.id)}
+                      >
+                        {revealedId === credential.id ? "Hide" : "Show"}
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-pw-btn is-danger"
+                        aria-label={`Delete password for ${hostFromOrigin(credential.origin)}`}
+                        onClick={() => handleDeletePassword(credential.id)}
+                      >
+                        <Icon name="trash" size={14} />
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="settings-hint">
+                Logins you save will appear here, encrypted with your Mac&apos;s keychain.
+              </p>
+            )}
           </div>
 
           <div className="settings-field">

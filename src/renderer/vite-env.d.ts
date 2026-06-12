@@ -84,6 +84,21 @@ type SitePermissions = {
   permissions: string[];
 };
 
+type SavePasswordPromptPayload = {
+  origin: string;
+  username: string;
+  mode: "save" | "update";
+};
+
+type CredentialSummary = {
+  id: string;
+  origin: string;
+  username: string;
+  createdAt: number;
+  updatedAt: number;
+  lastUsedAt: number;
+};
+
 interface Window {
   andromeda: {
     navigate: (url: string, pane?: BrowserPane) => Promise<void>;
@@ -118,6 +133,12 @@ interface Window {
     getSitePermissions: (url: string) => Promise<SitePermissions>;
     revokeSitePermission: (url: string, permission: string) => Promise<void>;
     getAppInfo: () => Promise<{ version: string }>;
+    respondSavePassword: (origin: string, action: "save" | "never" | "dismiss") => Promise<void>;
+    listPasswords: () => Promise<CredentialSummary[]>;
+    deletePassword: (id: string) => Promise<void>;
+    revealPassword: (id: string) => Promise<string | null>;
+    passwordsAvailable: () => Promise<boolean>;
+    onSavePasswordPrompt: (callback: (payload: SavePasswordPromptPayload) => void) => () => void;
     resizeContentView: (layout: ContentBounds | ContentLayout) => Promise<void>;
     setLayoutMetrics: (metrics: LayoutMetrics) => Promise<void>;
     syncLayout: () => Promise<void>;

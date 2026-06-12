@@ -19,5 +19,10 @@ await Promise.all([
     ...commonOptions,
     entryPoints: ["src/preload/preload.ts"],
     outfile: "dist/preload/preload.cjs"
+  }),
+  build({
+    ...commonOptions,
+    entryPoints: ["src/preload/pagePreload.ts"],
+    outfile: "dist/preload/pagePreload.cjs"
   })
 ]);

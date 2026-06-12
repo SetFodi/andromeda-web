@@ -59,6 +59,12 @@ type BenchmarkNavigatePayload = {
   loadDelayMs: number;
 };
 
+type SavePasswordPromptPayload = {
+  origin: string;
+  username: string;
+  mode: "save" | "update";
+};
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -265,6 +271,32 @@ contextBridge.exposeInMainWorld("andromeda", {
       permission: String(permission)
     }),
   getAppInfo: () => ipcRenderer.invoke("browser:getAppInfo"),
+  respondSavePassword: (origin: string, action: "save" | "never" | "dismiss") =>
+    ipcRenderer.invoke("passwords:respond", {
+      origin: String(origin),
+      action: action === "save" || action === "never" ? action : "dismiss"
+    }),
+  listPasswords: () => ipcRenderer.invoke("passwords:list"),
+  deletePassword: (id: string) => ipcRenderer.invoke("passwords:delete", { id: String(id) }),
+  revealPassword: (id: string) => ipcRenderer.invoke("passwords:reveal", { id: String(id) }),
+  passwordsAvailable: () => ipcRenderer.invoke("passwords:available"),
+  onSavePasswordPrompt: (callback: (payload: SavePasswordPromptPayload) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { origin?: unknown }).origin === "string" &&
+        typeof (payload as { username?: unknown }).username === "string" &&
+        ((payload as { mode?: unknown }).mode === "save" ||
+          (payload as { mode?: unknown }).mode === "update")
+      ) {
+        callback(payload as SavePasswordPromptPayload);
+      }
+    };
+
+    ipcRenderer.on("passwords:savePrompt", listener);
+    return () => ipcRenderer.removeListener("passwords:savePrompt", listener);
+  },
   resizeContentView: (layout: ContentBounds | ContentLayout) =>
     ipcRenderer.invoke("browser:resizeContentView", sanitizeLayout(layout)),
   setLayoutMetrics: (metrics: LayoutMetrics) =>

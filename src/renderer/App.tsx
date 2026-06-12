@@ -215,6 +215,9 @@ export default function App() {
     }
   });
   const [zoomLevel, setZoomLevel] = useState(0);
+  const [savePasswordPrompt, setSavePasswordPrompt] = useState<SavePasswordPromptPayload | null>(
+    null
+  );
   const [downloads, setDownloads] = useState<DownloadEntry[]>(initialDownloadsRef.current);
   const [addressFocused, setAddressFocused] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
@@ -930,6 +933,39 @@ export default function App() {
       timers.forEach((timer) => window.clearTimeout(timer));
     };
   }, [navigateTo]);
+
+  // Save-password prompts arrive from the main process when a login is
+  // captured in a web view. Unanswered prompts dismiss themselves so the
+  // pending password doesn't linger in memory.
+  useEffect(() => {
+    return window.andromeda.onSavePasswordPrompt((payload) => {
+      setSavePasswordPrompt(payload);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!savePasswordPrompt) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void window.andromeda.respondSavePassword(savePasswordPrompt.origin, "dismiss");
+      setSavePasswordPrompt(null);
+    }, 25000);
+    return () => window.clearTimeout(timer);
+  }, [savePasswordPrompt]);
+
+  const handleRespondSavePassword = useCallback(
+    (action: "save" | "never" | "dismiss") => {
+      if (!savePasswordPrompt) {
+        return;
+      }
+
+      void window.andromeda.respondSavePassword(savePasswordPrompt.origin, action);
+      setSavePasswordPrompt(null);
+    },
+    [savePasswordPrompt]
+  );
 
   const openSplitCommandBar = useCallback(() => {
     setCommandBarMode("split");
@@ -1795,6 +1831,8 @@ export default function App() {
           addressSuggestions={addressSuggestions}
           showAddressSuggestions={showAddressSuggestions}
           zoomPercent={zoomPercent}
+          savePasswordPrompt={savePasswordPrompt}
+          onRespondSavePassword={handleRespondSavePassword}
           onResetZoom={handleResetZoom}
           onAddressChange={handleAddressChange}
           onAddressFocus={handleAddressFocus}

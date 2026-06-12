@@ -27,6 +27,11 @@ async function buildElectronSources() {
       ...commonOptions,
       entryPoints: [path.join(root, "src/preload/preload.ts")],
       outfile: path.join(root, "dist/preload/preload.cjs")
+    }),
+    build({
+      ...commonOptions,
+      entryPoints: [path.join(root, "src/preload/pagePreload.ts")],
+      outfile: path.join(root, "dist/preload/pagePreload.cjs")
     })
   ]);
 }

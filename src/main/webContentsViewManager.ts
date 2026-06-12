@@ -13,6 +13,9 @@ import {
   type WebContents
 } from "electron";
 
+// Injected into every web view; powers password capture and autofill.
+const PAGE_PRELOAD_PATH = path.join(__dirname, "../preload/pagePreload.cjs");
+
 export type ContentBounds = {
   x: number;
   y: number;
@@ -791,7 +794,8 @@ export class WebContentsViewManager {
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: true,
+        preload: PAGE_PRELOAD_PATH
       }
     });
 
@@ -999,7 +1003,8 @@ export class WebContentsViewManager {
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: true,
+        preload: PAGE_PRELOAD_PATH
       }
     });
 
@@ -1231,6 +1236,17 @@ export class WebContentsViewManager {
 
   getPaneWebContentsId(pane: BrowserPane = this.activePane): number | null {
     return this.paneView(pane)?.webContents.id ?? null;
+  }
+
+  // True when the given webContents belongs to one of our web views — used to
+  // gate IPC channels that pages (not the shell) are allowed to call.
+  hasWebContents(webContentsId: number): boolean {
+    for (const entry of this.mainTabs.values()) {
+      if (entry.view.webContents.id === webContentsId) {
+        return true;
+      }
+    }
+    return this.split.view?.webContents.id === webContentsId;
   }
 
   resize(layout: ContentLayout): void {

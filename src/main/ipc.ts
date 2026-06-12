@@ -1,4 +1,12 @@
-import { BrowserWindow, IpcMainInvokeEvent, app, ipcMain, shell } from "electron";
+import {
+  BrowserWindow,
+  IpcMainInvokeEvent,
+  app,
+  ipcMain,
+  shell,
+  type WebContents,
+  type WebFrameMain
+} from "electron";
 import {
   BrowserPane,
   ContentBounds,
@@ -12,6 +20,18 @@ import {
   setAdblockEnabled
 } from "./adblocker";
 import { getOriginFromUrl, listPermissionGrants, revokePermissionGrant } from "./security";
+import {
+  classifyCandidate,
+  deleteCredential,
+  dropCandidate,
+  getCredentialForOrigin,
+  isVaultAvailable,
+  listCredentials,
+  neverForOrigin,
+  revealPassword,
+  saveCandidate,
+  stashCandidate
+} from "./passwords";
 
 const MAX_BOUND = 10000;
 
@@ -440,5 +460,112 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     }
 
     window.maximize();
+  });
+
+  // ---- Passwords ---------------------------------------------------------
+  // Page-callable channels. The page never supplies its own origin; it is
+  // derived from the sending frame, and only main frames of our own web
+  // views are answered.
+  const pageSenderOrigin = (event: {
+    sender: WebContents;
+    senderFrame: WebFrameMain | null | undefined;
+  }): string | null => {
+    if (!manager.hasWebContents(event.sender.id)) {
+      return null;
+    }
+
+    const frame = event.senderFrame;
+    if (!frame || frame !== event.sender.mainFrame) {
+      return null;
+    }
+
+    return getOriginFromUrl(frame.url);
+  };
+
+  ipcMain.removeAllListeners("page:passwordCandidate");
+  ipcMain.on("page:passwordCandidate", (event, payload: unknown) => {
+    const origin = pageSenderOrigin(event);
+    if (!origin || !isVaultAvailable()) {
+      return;
+    }
+
+    const candidate = payload as { username?: unknown; password?: unknown } | null;
+    const username =
+      typeof candidate?.username === "string" ? candidate.username.trim().slice(0, 200) : "";
+    const password = typeof candidate?.password === "string" ? candidate.password : "";
+    if (!password || password.length > 1024) {
+      return;
+    }
+
+    void (async () => {
+      const kind = await classifyCandidate(origin, username, password);
+      if (kind === "never" || kind === "known") {
+        return;
+      }
+
+      stashCandidate(origin, username, password);
+      if (!window.isDestroyed()) {
+        window.webContents.send("passwords:savePrompt", {
+          origin,
+          username,
+          mode: kind === "update" ? "update" : "save"
+        });
+      }
+    })();
+  });
+
+  setHandler("page:requestAutofill", async (event) => {
+    const origin = pageSenderOrigin(event);
+    if (!origin) {
+      return null;
+    }
+
+    const credential = await getCredentialForOrigin(origin);
+    return credential ? { username: credential.username, password: credential.password } : null;
+  });
+
+  // Shell-only management channels.
+  setHandler("passwords:respond", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const data = payload as { origin?: unknown; action?: unknown } | null;
+    const origin = typeof data?.origin === "string" ? getOriginFromUrl(data.origin) : null;
+    if (!origin) {
+      return;
+    }
+
+    if (data?.action === "save") {
+      return saveCandidate(origin);
+    }
+    if (data?.action === "never") {
+      return neverForOrigin(origin);
+    }
+    dropCandidate(origin);
+  });
+
+  setHandler("passwords:list", (event) => {
+    assertTrustedSender(event, window);
+    return listCredentials();
+  });
+
+  setHandler("passwords:delete", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const id = (payload as { id?: unknown } | null)?.id;
+    if (typeof id === "string") {
+      return deleteCredential(id);
+    }
+  });
+
+  setHandler("passwords:reveal", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+
+    const id = (payload as { id?: unknown } | null)?.id;
+    return typeof id === "string" ? revealPassword(id) : null;
+  });
+
+  setHandler("passwords:available", (event) => {
+    assertTrustedSender(event, window);
+    return isVaultAvailable();
   });
 }
