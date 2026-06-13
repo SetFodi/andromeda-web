@@ -1,5 +1,11 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent, WheelEvent } from "react";
+import type {
+  CSSProperties,
+  DragEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  WheelEvent
+} from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
 import { getFaviconSrc } from "../utils/favicon";
@@ -68,6 +74,7 @@ type SidebarProps = {
   onTabDragEnd: () => void;
   draggedTabId: string | null;
   onNewTab: () => void;
+  addressBar?: ReactNode;
 };
 
 function getTabSubtitle(tab: BrowserTab): string {
@@ -161,7 +168,8 @@ function Sidebar({
   onTabDragStart,
   onTabDragEnd,
   draggedTabId,
-  onNewTab
+  onNewTab,
+  addressBar
 }: SidebarProps) {
   const selectedSpace = spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0];
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
@@ -547,6 +555,7 @@ function Sidebar({
           onMouseDown={onResizeStart}
         />
       ) : null}
+      {addressBar ? <div className="sidebar-address-section">{addressBar}</div> : null}
       <div className="sidebar-body">
         <section className="sidebar-section new-tab-section">
           <button type="button" className="sidebar-new-tab" onClick={onNewTab}>

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, components } from "electron";
 import { WebContentsViewManager } from "./webContentsViewManager";
 import { registerIpc } from "./ipc";
 import { buildAppMenu } from "./menu";
@@ -127,6 +127,25 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
+// The castlabs Electron build ships a `components` module that downloads and
+// registers the Widevine CDM (for DRM playback — Netflix, Spotify, etc.). It is
+// absent in stock Electron. Registration runs in the background so it never
+// blocks startup; the CDM is cached after the first run.
+function registerWidevine(): void {
+  if (typeof components?.whenReady !== "function") {
+    return;
+  }
+
+  components
+    .whenReady()
+    .then(() => {
+      console.log("[widevine] CDM components ready");
+    })
+    .catch((error: unknown) => {
+      console.error("[widevine] CDM failed to initialize", error);
+    });
+}
+
 function applyDockIcon(): void {
   if (process.platform !== "darwin" || !app.dock) {
     return;
@@ -147,6 +166,7 @@ function applyDockIcon(): void {
 
 app.whenReady().then(() => {
   applyDockIcon();
+  registerWidevine();
   void setupAdblocker();
   createMainWindow();
 

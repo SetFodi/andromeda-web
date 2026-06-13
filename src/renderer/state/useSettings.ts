@@ -1,11 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SEARCH_ENGINES, SearchEngineId, setSearchEngine } from "../utils/url";
 
+export type AddressBarPlacement = "toolbar" | "sidebar";
+
+export type ToolbarButtonKey = "bookmark" | "split" | "downloads" | "reader" | "siteInfo";
+
+export type ToolbarButtons = Record<ToolbarButtonKey, boolean>;
+
+export type SettingsPatch = Partial<Omit<Settings, "toolbarButtons">> & {
+  toolbarButtons?: Partial<ToolbarButtons>;
+};
+
 export type Settings = {
   name: string;
   searchEngine: SearchEngineId;
   appearanceAccent: string;
+  addressBarPlacement: AddressBarPlacement;
+  toolbarButtons: ToolbarButtons;
 };
+
+export const TOOLBAR_BUTTON_KEYS: ToolbarButtonKey[] = [
+  "bookmark",
+  "split",
+  "downloads",
+  "reader",
+  "siteInfo"
+];
 
 const STORAGE_KEY = "andromeda.settings";
 export const APPEARANCE_ACCENTS = [
@@ -19,16 +39,45 @@ export const APPEARANCE_ACCENTS = [
   "#97a5bd"
 ];
 
+const DEFAULT_TOOLBAR_BUTTONS: ToolbarButtons = {
+  bookmark: true,
+  split: true,
+  downloads: true,
+  reader: true,
+  siteInfo: true
+};
+
 const DEFAULT_SETTINGS: Settings = {
   name: "",
   searchEngine: "google",
-  appearanceAccent: "#f28366"
+  appearanceAccent: "#f28366",
+  addressBarPlacement: "toolbar",
+  toolbarButtons: DEFAULT_TOOLBAR_BUTTONS
 };
 
 function sanitizeAccent(value: unknown): string {
   return typeof value === "string" && APPEARANCE_ACCENTS.includes(value)
     ? value
     : DEFAULT_SETTINGS.appearanceAccent;
+}
+
+function sanitizePlacement(value: unknown): AddressBarPlacement {
+  return value === "sidebar" ? "sidebar" : "toolbar";
+}
+
+function sanitizeToolbarButtons(value: unknown): ToolbarButtons {
+  const source = (value ?? {}) as Partial<Record<ToolbarButtonKey, unknown>>;
+  const result = { ...DEFAULT_TOOLBAR_BUTTONS };
+  for (const key of TOOLBAR_BUTTON_KEYS) {
+    if (typeof source[key] === "boolean") {
+      result[key] = source[key] as boolean;
+    }
+  }
+  return result;
+}
+
+function toolbarButtonsEqual(a: ToolbarButtons, b: ToolbarButtons): boolean {
+  return TOOLBAR_BUTTON_KEYS.every((key) => a[key] === b[key]);
 }
 
 function loadSettings(): Settings {
@@ -45,8 +94,10 @@ function loadSettings(): Settings {
         ? (parsed.searchEngine as SearchEngineId)
         : DEFAULT_SETTINGS.searchEngine;
     const appearanceAccent = sanitizeAccent(parsed.appearanceAccent);
+    const addressBarPlacement = sanitizePlacement(parsed.addressBarPlacement);
+    const toolbarButtons = sanitizeToolbarButtons(parsed.toolbarButtons);
 
-    return { name, searchEngine, appearanceAccent };
+    return { name, searchEngine, appearanceAccent, addressBarPlacement, toolbarButtons };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -54,7 +105,7 @@ function loadSettings(): Settings {
 
 export function useSettings(): {
   settings: Settings;
-  updateSettings: (patch: Partial<Settings>) => void;
+  updateSettings: (patch: SettingsPatch) => void;
 } {
   const initialRef = useRef<Settings | null>(null);
   if (!initialRef.current) {
@@ -80,19 +131,29 @@ export function useSettings(): {
     }
   }, [settings]);
 
-  const updateSettings = useCallback((patch: Partial<Settings>) => {
+  const updateSettings = useCallback((patch: SettingsPatch) => {
     setSettings((current) => {
       const next: Settings = {
         name: patch.name !== undefined ? patch.name : current.name,
         searchEngine: patch.searchEngine !== undefined ? patch.searchEngine : current.searchEngine,
         appearanceAccent:
-          patch.appearanceAccent !== undefined ? sanitizeAccent(patch.appearanceAccent) : current.appearanceAccent
+          patch.appearanceAccent !== undefined ? sanitizeAccent(patch.appearanceAccent) : current.appearanceAccent,
+        addressBarPlacement:
+          patch.addressBarPlacement !== undefined
+            ? sanitizePlacement(patch.addressBarPlacement)
+            : current.addressBarPlacement,
+        toolbarButtons:
+          patch.toolbarButtons !== undefined
+            ? sanitizeToolbarButtons({ ...current.toolbarButtons, ...patch.toolbarButtons })
+            : current.toolbarButtons
       };
 
       if (
         next.name === current.name &&
         next.searchEngine === current.searchEngine &&
-        next.appearanceAccent === current.appearanceAccent
+        next.appearanceAccent === current.appearanceAccent &&
+        next.addressBarPlacement === current.addressBarPlacement &&
+        toolbarButtonsEqual(next.toolbarButtons, current.toolbarButtons)
       ) {
         return current;
       }

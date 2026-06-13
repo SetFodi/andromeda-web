@@ -8,6 +8,7 @@ import {
   type DragEvent,
   type MouseEvent as ReactMouseEvent
 } from "react";
+import AddressBar from "./components/AddressBar";
 import CommandBar from "./components/CommandBar";
 import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
 import OnboardingModal from "./components/OnboardingModal";
@@ -35,7 +36,6 @@ const MAX_SPLIT_RATIO = 0.75;
 const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
 const FIND_BAR_HEIGHT = 46;
-const TOOLBAR_HEIGHT = 56;
 // Width carved off the right of the web view (instead of detaching it) so a
 // small top-right popover stays visible WITHOUT the page blanking out.
 const POPOVER_GUTTER = 376;
@@ -1787,6 +1787,30 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closeCommandBar, isCommandBarOpen]);
 
+  const addressBarPlacement = settings.addressBarPlacement;
+  const addressBar = (
+    <AddressBar
+      variant={addressBarPlacement === "sidebar" ? "sidebar" : "toolbar"}
+      addressValue={addressValue}
+      inputRef={addressInputRef}
+      currentPageTitle={currentPageTitle}
+      currentPageFaviconUrl={currentPageFaviconUrl}
+      currentPageIcon={currentPageIcon}
+      isStartPage={activePane === "main" && showReactStartPage}
+      isLoading={activeNavigationState.isLoading}
+      addressSuggestions={addressSuggestions}
+      showAddressSuggestions={showAddressSuggestions}
+      zoomPercent={zoomPercent}
+      onResetZoom={handleResetZoom}
+      onAddressChange={handleAddressChange}
+      onAddressFocus={handleAddressFocus}
+      onAddressBlur={handleAddressBlur}
+      onAddressEscape={handleAddressEscape}
+      onPickSuggestion={handlePickSuggestion}
+      onSubmit={handleSubmitAddress}
+    />
+  );
+
   return (
     <div className="window-frame">
       <div
@@ -1810,11 +1834,9 @@ export default function App() {
           />
         ) : null}
         <Toolbar
-          addressValue={addressValue}
-          inputRef={addressInputRef}
-          currentPageTitle={currentPageTitle}
-          currentPageFaviconUrl={currentPageFaviconUrl}
-          currentPageIcon={currentPageIcon}
+          addressBar={addressBarPlacement === "toolbar" ? addressBar : null}
+          addressBarPlacement={addressBarPlacement}
+          toolbarButtons={settings.toolbarButtons}
           isStartPage={activePane === "main" && showReactStartPage}
           canGoBack={activeNavigationState.canGoBack}
           canGoForward={activeNavigationState.canGoForward}
@@ -1824,22 +1846,11 @@ export default function App() {
           canBookmark={Boolean(bookmarkUrl)}
           isBookmarked={isBookmarked}
           hasActiveDownload={hasActiveDownload}
-          profileInitial={(settings.name.trim().charAt(0) || "A").toUpperCase()}
           currentUrl={bookmarkUrl ?? ""}
           isSiteInfoOpen={isSiteInfoOpen}
           isReaderOpen={isReaderOpen}
-          addressSuggestions={addressSuggestions}
-          showAddressSuggestions={showAddressSuggestions}
-          zoomPercent={zoomPercent}
           savePasswordPrompt={savePasswordPrompt}
           onRespondSavePassword={handleRespondSavePassword}
-          onResetZoom={handleResetZoom}
-          onAddressChange={handleAddressChange}
-          onAddressFocus={handleAddressFocus}
-          onAddressBlur={handleAddressBlur}
-          onAddressEscape={handleAddressEscape}
-          onPickSuggestion={handlePickSuggestion}
-          onSubmit={handleSubmitAddress}
           onBack={handleBack}
           onForward={handleForward}
           onReload={handleReload}
@@ -1883,6 +1894,7 @@ export default function App() {
           onTabDragEnd={handleSidebarTabDragEnd}
           draggedTabId={draggedTab?.id ?? null}
           onNewTab={handleNewTab}
+          addressBar={addressBarPlacement === "sidebar" ? addressBar : null}
         />
 
         <div

@@ -1,12 +1,17 @@
 import { memo, useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
 import { SEARCH_ENGINES, SearchEngineId } from "../utils/url";
-import type { Settings } from "../state/useSettings";
+import {
+  TOOLBAR_BUTTON_KEYS,
+  type Settings,
+  type SettingsPatch,
+  type ToolbarButtonKey
+} from "../state/useSettings";
 
 type SettingsPanelProps = {
   isOpen: boolean;
   settings: Settings;
-  onUpdateSettings: (patch: Partial<Settings>) => void;
+  onUpdateSettings: (patch: SettingsPatch) => void;
   onClearBrowsingData: () => void;
   onClose: () => void;
 };
@@ -15,6 +20,14 @@ const SEARCH_OPTIONS = (Object.keys(SEARCH_ENGINES) as SearchEngineId[]).map((id
   id,
   label: SEARCH_ENGINES[id].label
 }));
+
+const TOOLBAR_BUTTON_LABELS: Record<ToolbarButtonKey, string> = {
+  bookmark: "Bookmark",
+  split: "Split view",
+  downloads: "Downloads",
+  reader: "Reader",
+  siteInfo: "Site info"
+};
 
 function SettingsPanel({
   isOpen,
@@ -108,8 +121,12 @@ function SettingsPanel({
     }
 
     void window.andromeda.revealPassword(id).then((value) => {
+      // Null means the keychain/Touch ID prompt was cancelled — stay hidden.
+      if (value == null) {
+        return;
+      }
       setRevealedId(id);
-      setRevealedValue(value ?? "");
+      setRevealedValue(value);
     });
   };
 
@@ -185,6 +202,57 @@ function SettingsPanel({
                   {option.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="settings-field">
+            <label>Address bar</label>
+            <p className="settings-hint">Keep search in the top bar, or move it into the sidebar.</p>
+            <div className="settings-segment">
+              <button
+                type="button"
+                className={
+                  settings.addressBarPlacement === "toolbar"
+                    ? "settings-seg-btn is-active"
+                    : "settings-seg-btn"
+                }
+                onClick={() => onUpdateSettings({ addressBarPlacement: "toolbar" })}
+              >
+                Top bar
+              </button>
+              <button
+                type="button"
+                className={
+                  settings.addressBarPlacement === "sidebar"
+                    ? "settings-seg-btn is-active"
+                    : "settings-seg-btn"
+                }
+                onClick={() => onUpdateSettings({ addressBarPlacement: "sidebar" })}
+              >
+                Sidebar
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-field">
+            <label>Toolbar buttons</label>
+            <p className="settings-hint">Hide the ones you don&apos;t use for a cleaner top bar.</p>
+            <div className="settings-chips">
+              {TOOLBAR_BUTTON_KEYS.map((key) => {
+                const on = settings.toolbarButtons[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={on ? "settings-chip is-on" : "settings-chip"}
+                    aria-pressed={on}
+                    onClick={() => onUpdateSettings({ toolbarButtons: { [key]: !on } })}
+                  >
+                    {on ? <Icon name="check" size={13} /> : <Icon name="close" size={13} />}
+                    {TOOLBAR_BUTTON_LABELS[key]}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

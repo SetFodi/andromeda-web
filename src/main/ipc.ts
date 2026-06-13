@@ -24,14 +24,16 @@ import {
   classifyCandidate,
   deleteCredential,
   dropCandidate,
-  getCredentialForOrigin,
+  getFillCredentialById,
   isVaultAvailable,
+  listCredentialMetaForOrigin,
   listCredentials,
   neverForOrigin,
   revealPassword,
   saveCandidate,
   stashCandidate
 } from "./passwords";
+import { requireBiometric } from "./biometrics";
 
 const MAX_BOUND = 10000;
 
@@ -514,14 +516,29 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     })();
   });
 
+  // The page learns only id + username for its origin — never a password until
+  // it asks for a specific one through page:fillCredential.
   setHandler("page:requestAutofill", async (event) => {
+    const origin = pageSenderOrigin(event);
+    if (!origin) {
+      return [];
+    }
+
+    return listCredentialMetaForOrigin(origin);
+  });
+
+  setHandler("page:fillCredential", async (event, payload: unknown) => {
     const origin = pageSenderOrigin(event);
     if (!origin) {
       return null;
     }
 
-    const credential = await getCredentialForOrigin(origin);
-    return credential ? { username: credential.username, password: credential.password } : null;
+    const id = (payload as { id?: unknown } | null)?.id;
+    if (typeof id !== "string") {
+      return null;
+    }
+
+    return getFillCredentialById(id, origin);
   });
 
   // Shell-only management channels.
@@ -557,11 +574,20 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     }
   });
 
-  setHandler("passwords:reveal", (event, payload: unknown) => {
+  setHandler("passwords:reveal", async (event, payload: unknown) => {
     assertTrustedSender(event, window);
 
     const id = (payload as { id?: unknown } | null)?.id;
-    return typeof id === "string" ? revealPassword(id) : null;
+    if (typeof id !== "string") {
+      return null;
+    }
+
+    const authorized = await requireBiometric("reveal your saved password");
+    if (!authorized) {
+      return null;
+    }
+
+    return revealPassword(id);
   });
 
   setHandler("passwords:available", (event) => {

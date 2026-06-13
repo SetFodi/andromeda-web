@@ -104,16 +104,40 @@ export async function listCredentials(): Promise<CredentialSummary[]> {
     .sort((a, b) => a.origin.localeCompare(b.origin) || a.username.localeCompare(b.username));
 }
 
-export async function getCredentialForOrigin(origin: string): Promise<SavedCredential | null> {
+export type OriginCredentialMeta = {
+  id: string;
+  username: string;
+};
+
+/** Logins for an origin, most-recently-used first, without the passwords. */
+export async function listCredentialMetaForOrigin(
+  origin: string
+): Promise<OriginCredentialMeta[]> {
   const data = await loadVault();
-  const matches = data.credentials.filter((credential) => credential.origin === origin);
-  if (matches.length === 0) {
+  return data.credentials
+    .filter((credential) => credential.origin === origin)
+    .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
+    .map((credential) => ({ id: credential.id, username: credential.username }));
+}
+
+/**
+ * Returns one login's secret for filling, but only when the credential really
+ * belongs to the requesting origin — the page can never pull another site's
+ * password by id. Marks it used so it floats to the top next time.
+ */
+export async function getFillCredentialById(
+  id: string,
+  origin: string
+): Promise<{ username: string; password: string } | null> {
+  const data = await loadVault();
+  const credential = data.credentials.find((entry) => entry.id === id);
+  if (!credential || credential.origin !== origin) {
     return null;
   }
 
-  return matches.reduce((best, candidate) =>
-    candidate.lastUsedAt > best.lastUsedAt ? candidate : best
-  );
+  credential.lastUsedAt = Date.now();
+  persistVault();
+  return { username: credential.username, password: credential.password };
 }
 
 export async function revealPassword(id: string): Promise<string | null> {

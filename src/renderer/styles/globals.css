@@ -22,7 +22,7 @@
 
   /* ---- Layout -------------------------------------------------------- */
   --sidebar-width: 286px;
-  --toolbar-height: 56px;
+  --toolbar-height: 46px;
 
   /* ---- Brand (fixed identity color, never themed) -------------------- */
   --brand: #ff7a5c;

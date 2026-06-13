@@ -21,6 +21,8 @@
       "output": "release",
       "buildResources": "build"
     },
+    "afterPack": "build/afterPack.cjs",
+    "electronDist": "node_modules/electron/dist",
     "files": [
       "dist/**/*",
       "Andromeda.png",
@@ -65,7 +67,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "electron": "42.3.2",
+    "electron": "github:castlabs/electron-releases#v42.3.3+wvcus",
     "electron-builder": "^26.15.2",
     "esbuild": "^0.24.0",
     "lucide-react": "^0.468.0",
@@ -73,5 +75,11 @@
     "react-dom": "^19.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
   }
 }

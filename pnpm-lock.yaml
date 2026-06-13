@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@ghostery/adblocker-electron':
         specifier: ^2.18.0
-        version: 2.18.0(electron@42.3.2)
+        version: 2.18.0(electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e)
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -25,8 +25,8 @@ importers:
         specifier: ^19.0.2
         version: 19.2.3(@types/react@19.2.16)
       electron:
-        specifier: 42.3.2
-        version: 42.3.2
+        specifier: github:castlabs/electron-releases#v42.3.3+wvcus
+        version: https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e
       electron-builder:
         specifier: ^26.15.2
         version: 26.15.2(electron-builder-squirrel-windows@26.15.2)
@@ -402,11 +402,13 @@ packages:
 
   '@ghostery/adblocker-electron-preload@2.18.0':
     resolution: {integrity: sha512-dtUmIAFfiZowbW+NDQtUy+sceQYl4XfJhnKycBWEWeljQ67EVQgFKbfbkEK4Tr3jmP+GxEUp8dYKzwT05b3gdw==}
+    version: 2.18.0
     peerDependencies:
       electron: '>11'
 
   '@ghostery/adblocker-electron@2.18.0':
     resolution: {integrity: sha512-q8tvkJ247ysebswlT+Ak2OrP4rWqI1Ql4BePR6cbJHh05C0FVak9fnynFw4A5AZyk1+S3eOaoNIOID6yQ20HLA==}
+    version: 2.18.0
     peerDependencies:
       electron: '>11'
 
@@ -898,8 +900,9 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@42.3.2:
-    resolution: {integrity: sha512-R8qL6TMQ+u5r/l1mL6zWqqK3eQo6Bqi4ScmysgODcy+SNR76HQhvbZUEL/9GqNuF0fNFJxphz/bh/TC4jW8NbA==}
+  electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e:
+    resolution: {tarball: https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e}
+    version: 42.3.3
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -1928,16 +1931,16 @@ snapshots:
     dependencies:
       '@ghostery/adblocker-extended-selectors': 2.18.0
 
-  '@ghostery/adblocker-electron-preload@2.18.0(electron@42.3.2)':
+  '@ghostery/adblocker-electron-preload@2.18.0(electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e)':
     dependencies:
       '@ghostery/adblocker-content': 2.18.0
-      electron: 42.3.2
+      electron: https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e
 
-  '@ghostery/adblocker-electron@2.18.0(electron@42.3.2)':
+  '@ghostery/adblocker-electron@2.18.0(electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e)':
     dependencies:
       '@ghostery/adblocker': 2.18.0
-      '@ghostery/adblocker-electron-preload': 2.18.0(electron@42.3.2)
-      electron: 42.3.2
+      '@ghostery/adblocker-electron-preload': 2.18.0(electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e)
+      electron: https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e
       tldts-experimental: 7.4.2
 
   '@ghostery/adblocker-extended-selectors@2.18.0': {}
@@ -2477,7 +2480,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@42.3.2:
+  electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/d2397960c342a332694ab6b059520439c8cdf49e:
     dependencies:
       '@electron/get': 5.0.0
       '@types/node': 24.12.4

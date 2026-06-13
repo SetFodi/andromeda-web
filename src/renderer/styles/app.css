@@ -247,7 +247,6 @@
 }
 
 .toolbar-icon,
-.profile-badge,
 .small-round-button {
   display: inline-grid;
   place-items: center;
@@ -330,17 +329,23 @@
   color: var(--accent-on-surface);
 }
 
+/* ---- Address bar / omnibox ------------------------------------------- *
+ * One refined pill, shared by the toolbar and the sidebar. A state-aware
+ * leading glyph (search magnifier on the start page, the site favicon while
+ * browsing) sits left of the input; focus lifts the field with a soft coral
+ * ring and warms the glyph.                                               */
 .address-form {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(92px, 160px) 1px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   justify-self: center;
-  width: min(560px, 76%);
-  min-width: 340px;
-  height: 38px;
+  width: min(560px, 80%);
+  min-width: 280px;
+  height: 34px;
+  padding: 0 5px;
   border: 1px solid var(--field-border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-full);
   background: var(--field);
   box-shadow: var(--shadow-sm), var(--inset-hi);
   transition:
@@ -352,19 +357,28 @@
 
 .address-form:hover {
   border-color: var(--border-strong);
+  background: var(--surface-solid);
 }
 
+.address-form:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--field-border));
+  background: var(--surface-solid);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    var(--shadow-md);
+}
+
+/* Hairline progress shimmer hugging the bottom of the pill while loading. */
 .address-form::after {
   position: absolute;
-  right: 12px;
-  bottom: -1px;
-  left: 12px;
+  right: 16%;
+  bottom: 3px;
+  left: 16%;
   height: 2px;
   border-radius: var(--r-full);
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent-bright), transparent);
   content: "";
   opacity: 0;
-  transform: translateX(-38%) scaleX(0.3);
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 
@@ -373,62 +387,42 @@
   animation: andromeda-load-sweep 1200ms ease-in-out infinite;
 }
 
-.address-form:focus-within {
-  border-color: var(--accent);
-  background: var(--surface-solid);
-  box-shadow:
-    0 0 0 3px var(--accent-soft),
-    var(--shadow-md);
+.address-lead {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: var(--r-full);
+  color: var(--text-muted);
+  transition: color var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-spring);
 }
 
-.page-identity {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  padding: 0 11px 0 13px;
-  color: var(--text-soft);
+.address-form:focus-within .address-lead {
+  color: var(--accent);
 }
 
-.page-identity img,
-.page-identity svg {
+.address-lead img,
+.address-lead svg {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
 }
 
-.page-identity img {
+.address-lead img {
   border-radius: 4px;
-}
-
-.page-identity svg {
-  color: var(--accent);
-}
-
-.page-identity span {
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.address-divider {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
 }
 
 .address-form input {
   width: 100%;
   height: 100%;
   min-width: 0;
-  padding: 0 18px 0 13px;
+  padding: 0 10px 0 3px;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13.5px;
   letter-spacing: -0.01em;
 }
 
@@ -521,23 +515,6 @@
   justify-content: flex-end;
   gap: 5px;
   padding-left: 12px;
-}
-
-.profile-badge {
-  width: 26px;
-  height: 26px;
-  margin-left: 3px;
-  border-radius: var(--r-full);
-  background: linear-gradient(150deg, var(--brand-bright), var(--brand-strong));
-  color: #fffaf4;
-  font-size: 13px;
-  font-weight: 720;
-  line-height: 1;
-  box-shadow: var(--shadow-brand);
-}
-
-.profile-badge:hover {
-  transform: translateY(-1px);
 }
 
 /* ====================================================================== */
@@ -4284,4 +4261,73 @@
   border-color: #d96a5e;
   background: color-mix(in srgb, #d96a5e 12%, transparent);
   color: #d96a5e;
+}
+
+/* ====================================================================== */
+/* Customization: address-bar placement + toolbar button visibility       */
+/* ====================================================================== */
+
+/* Empty flexible cell that fills the address slot when the bar lives in    */
+/* the sidebar — keeps the toolbar grid balanced and stays draggable.       */
+.toolbar-flex {
+  min-width: 0;
+  height: 100%;
+}
+
+/* Address bar when hosted in the sidebar (Zen-style). Collapses to a clean  */
+/* single input — the page identity chip is dropped to save width.          */
+.sidebar-address-section {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  margin-bottom: 14px;
+  padding-right: 2px;
+}
+
+/* Sidebar (Zen) placement: same omnibox pill, stretched full-width with a
+   touch more height for presence. The leading glyph + input come along, so it
+   reads as the same component as the toolbar bar. */
+.address-form.is-sidebar {
+  justify-self: stretch;
+  width: auto;
+  min-width: 0;
+  height: 38px;
+}
+
+/* Settings: toolbar button visibility chips */
+.settings-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.settings-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.settings-chip svg {
+  opacity: 0.75;
+}
+
+.settings-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.settings-chip.is-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-on-surface);
 }
