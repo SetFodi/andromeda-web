@@ -5,6 +5,10 @@ const commonOptions = {
   platform: "node",
   target: "node22",
   format: "cjs",
+  // Minify the production main/preload bundles: smaller asar, faster startup
+  // parse for main.cjs, and a lighter pagePreload that's injected into every
+  // web view. Dev (scripts/dev.mjs) stays unminified for readable stack traces.
+  minify: true,
   sourcemap: true,
   external: ["electron", "@ghostery/adblocker-electron"]
 };

@@ -18,6 +18,10 @@ type DayGroup = {
   items: HistoryEntry[];
 };
 
+// Cap the chronological (no-search) view so opening the panel never renders the
+// full history at once — search still spans every stored entry.
+const MAX_VISIBLE_ENTRIES = 300;
+
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -97,7 +101,7 @@ function HistoryPanel({ isOpen, entries, onOpenUrl, onDelete, onClear, onClose }
           (entry) =>
             entry.title.toLowerCase().includes(normalized) || entry.url.toLowerCase().includes(normalized)
         )
-      : entries;
+      : entries.slice(0, MAX_VISIBLE_ENTRIES);
 
     const result: DayGroup[] = [];
     let current: DayGroup | null = null;
