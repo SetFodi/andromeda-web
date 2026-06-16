@@ -27,7 +27,7 @@ import { useSettings } from "./state/useSettings";
 import { useQuickLinks } from "./state/useQuickLinks";
 import { useHistory } from "./state/useHistory";
 import { getUrlDisplayValue, resolveNavigationInput, type SearchEngineId } from "./utils/url";
-import type { IconName } from "./components/Icon";
+import Icon, { type IconName } from "./components/Icon";
 
 const SPLIT_RATIO_KEY = "andromeda.splitRatio";
 const MIN_SPLIT_RATIO = 0.25;
@@ -149,7 +149,7 @@ function loadSplitRatio(): number {
 export default function App() {
   const { theme, toggleTheme, setTheme } = useTheme();
   const { settings, updateSettings } = useSettings();
-  const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink } =
+  const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink, importLinks } =
     useQuickLinks();
   const {
     items: historyEntries,
@@ -158,7 +158,8 @@ export default function App() {
     recordTyped,
     updateMeta: recordMeta,
     deleteEntry: deleteHistoryEntry,
-    clearAll: clearHistory
+    clearAll: clearHistory,
+    importEntries: importHistoryEntries
   } = useHistory();
   const contentRef = useRef<HTMLDivElement>(null);
   const lastMainUrlRef = useRef<string | null>(null);
@@ -218,6 +219,7 @@ export default function App() {
   const [savePasswordPrompt, setSavePasswordPrompt] = useState<SavePasswordPromptPayload | null>(
     null
   );
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; url: string } | null>(null);
   const [downloads, setDownloads] = useState<DownloadEntry[]>(initialDownloadsRef.current);
   const [addressFocused, setAddressFocused] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
@@ -944,6 +946,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    return window.andromeda.onUpdateAvailable((payload) => {
+      setUpdateInfo(payload);
+    });
+  }, []);
+
+  useEffect(() => {
     if (!savePasswordPrompt) {
       return;
     }
@@ -1278,6 +1286,32 @@ export default function App() {
     clearHistory();
     void window.andromeda.clearBrowsingData();
   }, [clearHistory]);
+
+  // One-shot import from Chrome: bookmarks → shortcuts + searchable history,
+  // Chrome history → omnibar, passwords → vault (decrypted in main). The
+  // password step prompts the macOS keychain once.
+  const handleImportFromChrome = useCallback(async () => {
+    const [bookmarks, chromeHistory, passwords] = await Promise.all([
+      window.andromeda.importBookmarks(),
+      window.andromeda.importHistory(),
+      window.andromeda.importPasswords()
+    ]);
+
+    const pages = importHistoryEntries([
+      ...chromeHistory,
+      ...bookmarks.map((bookmark) => ({ url: bookmark.url, title: bookmark.title, visitCount: 1 }))
+    ]);
+    const shortcuts = importLinks(
+      bookmarks.map((bookmark) => ({ url: bookmark.url, label: bookmark.title }))
+    );
+
+    return {
+      pages,
+      shortcuts,
+      passwords: passwords.imported,
+      passwordsFound: passwords.found
+    };
+  }, [importHistoryEntries, importLinks]);
 
   // Live, jank-free space recoloring: paint the shell vars directly on the DOM
   // (no React re-render) and drop the blur/transition while picking, then commit
@@ -2042,6 +2076,7 @@ export default function App() {
           settings={settings}
           onUpdateSettings={updateSettings}
           onClearBrowsingData={handleClearBrowsingData}
+          onImportFromChrome={handleImportFromChrome}
           onClose={closeSettings}
         />
         <DownloadsTray
@@ -2095,6 +2130,33 @@ export default function App() {
           onPickSearchEngine={handleOnboardingEngine}
           onFinish={completeOnboarding}
         />
+
+        {updateInfo ? (
+          <div className="update-toast" role="status">
+            <span className="update-toast-dot" aria-hidden="true" />
+            <span className="update-toast-copy">
+              <b>Andromeda {updateInfo.version}</b> is available
+            </span>
+            <button
+              type="button"
+              className="update-toast-get"
+              onClick={() => {
+                void window.andromeda.openUpdate(updateInfo.url);
+                setUpdateInfo(null);
+              }}
+            >
+              Download
+            </button>
+            <button
+              type="button"
+              className="update-toast-dismiss"
+              aria-label="Dismiss"
+              onClick={() => setUpdateInfo(null)}
+            >
+              <Icon name="close" size={14} />
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

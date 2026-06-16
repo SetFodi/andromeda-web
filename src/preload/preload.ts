@@ -280,6 +280,27 @@ contextBridge.exposeInMainWorld("andromeda", {
   deletePassword: (id: string) => ipcRenderer.invoke("passwords:delete", { id: String(id) }),
   revealPassword: (id: string) => ipcRenderer.invoke("passwords:reveal", { id: String(id) }),
   passwordsAvailable: () => ipcRenderer.invoke("passwords:available"),
+  importAvailable: () => ipcRenderer.invoke("import:available"),
+  importBookmarks: () => ipcRenderer.invoke("import:bookmarks"),
+  importHistory: () => ipcRenderer.invoke("import:history"),
+  importPasswords: () => ipcRenderer.invoke("import:passwords"),
+  checkForUpdate: () => ipcRenderer.invoke("update:check"),
+  openUpdate: (url: string) => ipcRenderer.invoke("update:open", { url: String(url) }),
+  onUpdateAvailable: (callback: (payload: { version: string; url: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { version?: unknown }).version === "string" &&
+        typeof (payload as { url?: unknown }).url === "string"
+      ) {
+        callback(payload as { version: string; url: string });
+      }
+    };
+
+    ipcRenderer.on("browser:updateAvailable", listener);
+    return () => ipcRenderer.removeListener("browser:updateAvailable", listener);
+  },
   onSavePasswordPrompt: (callback: (payload: SavePasswordPromptPayload) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
       if (

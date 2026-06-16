@@ -138,6 +138,15 @@ interface Window {
     deletePassword: (id: string) => Promise<void>;
     revealPassword: (id: string) => Promise<string | null>;
     passwordsAvailable: () => Promise<boolean>;
+    importAvailable: () => Promise<boolean>;
+    importBookmarks: () => Promise<Array<{ title: string; url: string }>>;
+    importHistory: () => Promise<
+      Array<{ url: string; title: string; visitCount: number; lastVisited: number }>
+    >;
+    importPasswords: () => Promise<{ imported: number; skipped: number; found: number }>;
+    checkForUpdate: () => Promise<{ version: string; url: string } | null>;
+    openUpdate: (url: string) => Promise<void>;
+    onUpdateAvailable: (callback: (payload: { version: string; url: string }) => void) => () => void;
     onSavePasswordPrompt: (callback: (payload: SavePasswordPromptPayload) => void) => () => void;
     resizeContentView: (layout: ContentBounds | ContentLayout) => Promise<void>;
     setLayoutMetrics: (metrics: LayoutMetrics) => Promise<void>;

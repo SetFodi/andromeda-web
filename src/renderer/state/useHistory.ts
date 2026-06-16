@@ -84,6 +84,8 @@ function loadHistory(): HistoryEntry[] {
 export function useHistory() {
   const [entries, setEntries] = useState<HistoryEntry[]>(loadHistory);
   const saveTimerRef = useRef<number | null>(null);
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
 
   useEffect(() => {
     if (saveTimerRef.current) {
@@ -176,6 +178,56 @@ export function useHistory() {
 
   const clearAll = useCallback(() => setEntries([]), []);
 
+  // Bulk-merge imported pages (e.g. from another browser). Dedupes against the
+  // existing entries; returns the count of genuinely new pages added.
+  const importEntries = useCallback(
+    (incoming: Array<{ url: string; title?: string; visitCount?: number; lastVisited?: number }>) => {
+      const existingKeys = new Set(entriesRef.current.map((entry) => keyFor(entry.url)));
+      let added = 0;
+      for (const item of incoming) {
+        if (isHttpUrl(item.url) && !existingKeys.has(keyFor(item.url))) {
+          existingKeys.add(keyFor(item.url));
+          added += 1;
+        }
+      }
+      if (added === 0 && incoming.length === 0) {
+        return 0;
+      }
+
+      setEntries((current) => {
+        const byKey = new Map(current.map((entry) => [keyFor(entry.url), entry]));
+        for (const item of incoming) {
+          if (!isHttpUrl(item.url)) {
+            continue;
+          }
+          const key = keyFor(item.url);
+          const existing = byKey.get(key);
+          if (existing) {
+            byKey.set(key, {
+              ...existing,
+              visitCount: Math.max(existing.visitCount, item.visitCount ?? 1),
+              lastVisited: Math.max(existing.lastVisited, item.lastVisited ?? 0),
+              title: existing.title || item.title?.trim() || hostTitle(item.url)
+            });
+          } else {
+            byKey.set(key, {
+              url: item.url,
+              title: item.title?.trim() || hostTitle(item.url),
+              visitCount: item.visitCount ?? 1,
+              typedCount: 0,
+              lastVisited: item.lastVisited ?? Date.now()
+            });
+          }
+        }
+        return Array.from(byKey.values())
+          .sort((a, b) => b.lastVisited - a.lastVisited)
+          .slice(0, MAX_ENTRIES);
+      });
+      return added;
+    },
+    []
+  );
+
   // Ranked by frecency (visits + typed + recency) so the omnibar surfaces the
   // sites you actually use most.
   const items = useMemo(
@@ -186,5 +238,5 @@ export function useHistory() {
   // Chronological (newest first) for the history view.
   const recent = useMemo(() => [...entries].sort((a, b) => b.lastVisited - a.lastVisited), [entries]);
 
-  return { items, recent, recordVisit, recordTyped, updateMeta, deleteEntry, clearAll };
+  return { items, recent, recordVisit, recordTyped, updateMeta, deleteEntry, clearAll, importEntries };
 }

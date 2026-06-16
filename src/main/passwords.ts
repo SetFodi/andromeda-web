@@ -104,6 +104,50 @@ export async function listCredentials(): Promise<CredentialSummary[]> {
     .sort((a, b) => a.origin.localeCompare(b.origin) || a.username.localeCompare(b.username));
 }
 
+// Adds imported logins, skipping any origin+username we already hold so an
+// import never clobbers a credential the user already saved here.
+export async function bulkImportCredentials(
+  creds: { origin: string; username: string; password: string }[]
+): Promise<{ imported: number; skipped: number }> {
+  if (!isVaultAvailable()) {
+    return { imported: 0, skipped: creds.length };
+  }
+
+  const data = await loadVault();
+  const now = Date.now();
+  let imported = 0;
+  let skipped = 0;
+
+  for (const cred of creds) {
+    if (!cred.origin || !cred.password) {
+      skipped += 1;
+      continue;
+    }
+    const exists = data.credentials.some(
+      (entry) => entry.origin === cred.origin && entry.username === cred.username
+    );
+    if (exists) {
+      skipped += 1;
+      continue;
+    }
+    data.credentials.push({
+      id: createId(),
+      origin: cred.origin,
+      username: cred.username,
+      password: cred.password,
+      createdAt: now,
+      updatedAt: now,
+      lastUsedAt: 0
+    });
+    imported += 1;
+  }
+
+  if (imported > 0) {
+    persistVault();
+  }
+  return { imported, skipped };
+}
+
 export type OriginCredentialMeta = {
   id: string;
   username: string;

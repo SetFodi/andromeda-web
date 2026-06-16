@@ -117,6 +117,37 @@ export function useQuickLinks() {
     setQuickLinks((current) => current.filter((link) => link.id !== id));
   }, []);
 
+  // Bulk-add imported shortcuts, filling up to the tile cap and skipping any
+  // URL we already have. Returns the count actually added.
+  const importLinks = useCallback((links: Array<{ url: string; label?: string }>) => {
+    let added = 0;
+    setQuickLinks((current) => {
+      const seen = new Set(current.map((link) => normalizeKey(link.url)));
+      const next = [...current];
+      for (const item of links) {
+        if (next.length >= 16) {
+          break;
+        }
+        if (!isValidUrl(item.url)) {
+          continue;
+        }
+        const key = normalizeKey(item.url);
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        next.push({
+          id: `ql-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${added}`,
+          label: (item.label && item.label.trim()) || deriveLabel(item.url),
+          url: item.url
+        });
+        added += 1;
+      }
+      return next;
+    });
+    return added;
+  }, []);
+
   const reorderQuickLink = useCallback((sourceId: string, targetId: string) => {
     if (sourceId === targetId) {
       return;
@@ -169,6 +200,7 @@ export function useQuickLinks() {
   return {
     quickLinks,
     addQuickLink,
+    importLinks,
     removeQuickLink,
     reorderQuickLink,
     toggleQuickLink,

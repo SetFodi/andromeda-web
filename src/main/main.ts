@@ -6,6 +6,7 @@ import { registerIpc } from "./ipc";
 import { buildAppMenu } from "./menu";
 import { setupAdblocker } from "./adblocker";
 import { setupSecurityPolicy } from "./security";
+import { startUpdateChecks } from "./updater";
 
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -92,6 +93,7 @@ function createMainWindow(): BrowserWindow {
   registerIpc(manager, window);
   buildAppMenu(window);
   scheduleBenchmarkNavigation(window);
+  startUpdateChecks(window);
 
   // macOS trackpad swipe navigation (fires per the system "Swipe between
   // pages" gesture setting). Fingers right reveals the previous page.

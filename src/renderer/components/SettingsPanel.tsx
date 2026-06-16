@@ -13,6 +13,12 @@ type SettingsPanelProps = {
   settings: Settings;
   onUpdateSettings: (patch: SettingsPatch) => void;
   onClearBrowsingData: () => void;
+  onImportFromChrome: () => Promise<{
+    pages: number;
+    shortcuts: number;
+    passwords: number;
+    passwordsFound: number;
+  }>;
   onClose: () => void;
 };
 
@@ -29,11 +35,18 @@ const TOOLBAR_BUTTON_LABELS: Record<ToolbarButtonKey, string> = {
   siteInfo: "Site info"
 };
 
+type ImportState =
+  | { phase: "idle" }
+  | { phase: "running" }
+  | { phase: "done"; pages: number; shortcuts: number; passwords: number; passwordsFound: number }
+  | { phase: "error" };
+
 function SettingsPanel({
   isOpen,
   settings,
   onUpdateSettings,
   onClearBrowsingData,
+  onImportFromChrome,
   onClose
 }: SettingsPanelProps) {
   const nameRef = useRef<HTMLInputElement>(null);
@@ -45,6 +58,8 @@ function SettingsPanel({
   const [passwordsAvailable, setPasswordsAvailable] = useState(true);
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [revealedValue, setRevealedValue] = useState("");
+  const [chromeAvailable, setChromeAvailable] = useState(false);
+  const [importState, setImportState] = useState<ImportState>({ phase: "idle" });
 
   useEffect(() => {
     if (isOpen) {
@@ -54,6 +69,7 @@ function SettingsPanel({
       setDidClear(false);
       setRevealedId(null);
       setRevealedValue("");
+      setImportState({ phase: "idle" });
     }
   }, [isOpen]);
 
@@ -83,11 +99,28 @@ function SettingsPanel({
         setPasswordsAvailable(available);
       }
     });
+    void window.andromeda.importAvailable().then((available) => {
+      if (!cancelled) {
+        setChromeAvailable(available);
+      }
+    });
 
     return () => {
       cancelled = true;
     };
   }, [isOpen]);
+
+  const handleImport = () => {
+    setImportState({ phase: "running" });
+    onImportFromChrome().then(
+      (result) => {
+        setImportState({ phase: "done", ...result });
+        // Refresh the saved-password list so imported logins show immediately.
+        void window.andromeda.listPasswords().then(setPasswords);
+      },
+      () => setImportState({ phase: "error" })
+    );
+  };
 
   if (!isOpen) {
     return null;
@@ -204,6 +237,36 @@ function SettingsPanel({
               ))}
             </div>
           </div>
+
+          {chromeAvailable ? (
+            <div className="settings-field">
+              <label>Import from Chrome</label>
+              <div className="settings-row">
+                <span className="settings-row-copy">
+                  <span>Bring over your data</span>
+                  <small>
+                    {importState.phase === "done"
+                      ? `Imported ${importState.passwords} password${importState.passwords === 1 ? "" : "s"}, ${importState.pages} page${importState.pages === 1 ? "" : "s"}, ${importState.shortcuts} shortcut${importState.shortcuts === 1 ? "" : "s"}.`
+                      : importState.phase === "error"
+                        ? "Import failed — make sure Chrome is closed and try again."
+                        : "Bookmarks, history and saved passwords. Asks your keychain once."}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  className="settings-clear"
+                  disabled={importState.phase === "running"}
+                  onClick={handleImport}
+                >
+                  {importState.phase === "running"
+                    ? "Importing…"
+                    : importState.phase === "done"
+                      ? "Done"
+                      : "Import"}
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="settings-field">
             <label>Address bar</label>

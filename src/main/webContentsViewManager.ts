@@ -799,7 +799,11 @@ export class WebContentsViewManager {
         // Detached (inactive) tabs are throttled by Chromium — rAF pauses and
         // timers drop to ~1Hz — which is what keeps many open tabs cheap on
         // battery. Pin it on so a future default change can't regress that.
-        backgroundThrottling: true
+        backgroundThrottling: true,
+        // Enable Chromium's built-in PDF viewer (PDFium) so PDF links open
+        // inline with a real viewer instead of downloading. No security cost —
+        // legacy NPAPI/Flash plugins no longer exist.
+        plugins: true
       }
     });
 
@@ -1009,7 +1013,8 @@ export class WebContentsViewManager {
         nodeIntegration: false,
         sandbox: true,
         preload: PAGE_PRELOAD_PATH,
-        backgroundThrottling: true
+        backgroundThrottling: true,
+        plugins: true
       }
     });
 

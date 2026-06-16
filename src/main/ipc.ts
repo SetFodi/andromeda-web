@@ -21,6 +21,7 @@ import {
 } from "./adblocker";
 import { getOriginFromUrl, listPermissionGrants, revokePermissionGrant } from "./security";
 import {
+  bulkImportCredentials,
   classifyCandidate,
   deleteCredential,
   dropCandidate,
@@ -34,6 +35,13 @@ import {
   stashCandidate
 } from "./passwords";
 import { requireBiometric } from "./biometrics";
+import {
+  isChromeAvailable,
+  readChromeBookmarks,
+  readChromeHistory,
+  readChromePasswords
+} from "./chromeImport";
+import { checkForUpdate, openUpdateUrl } from "./updater";
 
 const MAX_BOUND = 10000;
 
@@ -593,5 +601,47 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
   setHandler("passwords:available", (event) => {
     assertTrustedSender(event, window);
     return isVaultAvailable();
+  });
+
+  // ---- Import from Chrome ------------------------------------------------
+  setHandler("import:available", (event) => {
+    assertTrustedSender(event, window);
+    return isChromeAvailable();
+  });
+
+  setHandler("import:bookmarks", (event) => {
+    assertTrustedSender(event, window);
+    return readChromeBookmarks();
+  });
+
+  setHandler("import:history", (event) => {
+    assertTrustedSender(event, window);
+    return readChromeHistory();
+  });
+
+  // Passwords are decrypted and merged entirely in the main process so plaintext
+  // never crosses to the renderer. Reading Chrome's key prompts the keychain.
+  setHandler("import:passwords", async (event) => {
+    assertTrustedSender(event, window);
+    const credentials = await readChromePasswords();
+    if (credentials.length === 0) {
+      return { imported: 0, skipped: 0, found: 0 };
+    }
+    const result = await bulkImportCredentials(credentials);
+    return { ...result, found: credentials.length };
+  });
+
+  // ---- Updates -----------------------------------------------------------
+  setHandler("update:check", (event) => {
+    assertTrustedSender(event, window);
+    return checkForUpdate();
+  });
+
+  setHandler("update:open", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    const url = (payload as { url?: unknown } | null)?.url;
+    if (typeof url === "string") {
+      openUpdateUrl(url);
+    }
   });
 }
