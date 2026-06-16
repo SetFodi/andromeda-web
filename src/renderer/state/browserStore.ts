@@ -334,16 +334,42 @@ export function useBrowserStore() {
   const [splitState, setSplitState] = useState<SplitState>(DEFAULT_SPLIT_STATE);
   const [closedTabs, setClosedTabs] = useState<Array<{ spaceId: SpaceId; tab: BrowserTab }>>([]);
   const persistedStateRef = useRef(initialStateRef.current.persistedValue ?? "");
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  useEffect(() => {
-    const serializedState = JSON.stringify(state);
+  const persistState = useCallback(() => {
+    const serializedState = JSON.stringify(stateRef.current);
     if (serializedState === persistedStateRef.current) {
       return;
     }
-
     localStorage.setItem(STORAGE_KEY, serializedState);
     persistedStateRef.current = serializedState;
-  }, [state]);
+  }, []);
+
+  // Debounce persistence: a page load fires a burst of tab mutations (title,
+  // favicon, nav state). Serializing every tab to disk on each one is wasted
+  // main-thread work, so coalesce into one write 600ms after the last change.
+  useEffect(() => {
+    const timer = window.setTimeout(persistState, 600);
+    return () => window.clearTimeout(timer);
+  }, [state, persistState]);
+
+  // Flush immediately when the window is closing or hidden so a debounced
+  // change is never lost on quit / minimize / app switch.
+  useEffect(() => {
+    const flush = () => persistState();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        persistState();
+      }
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [persistState]);
 
   const selectedSpace = useMemo(() => {
     return state.spaces.find((space) => space.id === state.selectedSpaceId) ?? state.spaces[0];

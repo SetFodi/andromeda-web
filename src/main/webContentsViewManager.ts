@@ -795,7 +795,11 @@ export class WebContentsViewManager {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
-        preload: PAGE_PRELOAD_PATH
+        preload: PAGE_PRELOAD_PATH,
+        // Detached (inactive) tabs are throttled by Chromium — rAF pauses and
+        // timers drop to ~1Hz — which is what keeps many open tabs cheap on
+        // battery. Pin it on so a future default change can't regress that.
+        backgroundThrottling: true
       }
     });
 
@@ -1004,7 +1008,8 @@ export class WebContentsViewManager {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
-        preload: PAGE_PRELOAD_PATH
+        preload: PAGE_PRELOAD_PATH,
+        backgroundThrottling: true
       }
     });
 

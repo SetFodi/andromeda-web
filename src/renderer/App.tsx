@@ -1788,27 +1788,55 @@ export default function App() {
   }, [closeCommandBar, isCommandBarOpen]);
 
   const addressBarPlacement = settings.addressBarPlacement;
-  const addressBar = (
-    <AddressBar
-      variant={addressBarPlacement === "sidebar" ? "sidebar" : "toolbar"}
-      addressValue={addressValue}
-      inputRef={addressInputRef}
-      currentPageTitle={currentPageTitle}
-      currentPageFaviconUrl={currentPageFaviconUrl}
-      currentPageIcon={currentPageIcon}
-      isStartPage={activePane === "main" && showReactStartPage}
-      isLoading={activeNavigationState.isLoading}
-      addressSuggestions={addressSuggestions}
-      showAddressSuggestions={showAddressSuggestions}
-      zoomPercent={zoomPercent}
-      onResetZoom={handleResetZoom}
-      onAddressChange={handleAddressChange}
-      onAddressFocus={handleAddressFocus}
-      onAddressBlur={handleAddressBlur}
-      onAddressEscape={handleAddressEscape}
-      onPickSuggestion={handlePickSuggestion}
-      onSubmit={handleSubmitAddress}
-    />
+  const addressBarIsStartPage = activePane === "main" && showReactStartPage;
+  const addressBarIsLoading = activeNavigationState.isLoading;
+  // Memoized so the (memoized) Sidebar/Toolbar only re-render when address state
+  // actually changes — not on every unrelated App render (tab audio, nav state
+  // of other tabs, etc.). Matters most in sidebar placement, where this node
+  // lives inside the heavy tab-list Sidebar.
+  const addressBar = useMemo(
+    () => (
+      <AddressBar
+        variant={addressBarPlacement === "sidebar" ? "sidebar" : "toolbar"}
+        addressValue={addressValue}
+        inputRef={addressInputRef}
+        currentPageTitle={currentPageTitle}
+        currentPageFaviconUrl={currentPageFaviconUrl}
+        currentPageIcon={currentPageIcon}
+        isStartPage={addressBarIsStartPage}
+        isLoading={addressBarIsLoading}
+        addressSuggestions={addressSuggestions}
+        showAddressSuggestions={showAddressSuggestions}
+        zoomPercent={zoomPercent}
+        onResetZoom={handleResetZoom}
+        onAddressChange={handleAddressChange}
+        onAddressFocus={handleAddressFocus}
+        onAddressBlur={handleAddressBlur}
+        onAddressEscape={handleAddressEscape}
+        onPickSuggestion={handlePickSuggestion}
+        onSubmit={handleSubmitAddress}
+      />
+    ),
+    [
+      addressBarPlacement,
+      addressValue,
+      addressInputRef,
+      currentPageTitle,
+      currentPageFaviconUrl,
+      currentPageIcon,
+      addressBarIsStartPage,
+      addressBarIsLoading,
+      addressSuggestions,
+      showAddressSuggestions,
+      zoomPercent,
+      handleResetZoom,
+      handleAddressChange,
+      handleAddressFocus,
+      handleAddressBlur,
+      handleAddressEscape,
+      handlePickSuggestion,
+      handleSubmitAddress
+    ]
   );
 
   return (
