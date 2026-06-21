@@ -3889,6 +3889,10 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.onboard-input + .onboard-label {
+  margin-top: 26px;
+}
+
 .onboard-themes {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

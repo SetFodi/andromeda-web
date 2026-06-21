@@ -1,7 +1,7 @@
 {
   "name": "andromeda",
   "productName": "Andromeda",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A calm, fast macOS browser built with Electron, React, TypeScript, and Vite.",
   "author": "Luka Fartenadze <pixelweb2026@gmail.com>",
   "main": "dist/main/main.cjs",
