@@ -1,6 +1,7 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Icon from "./Icon";
 import { SEARCH_ENGINES, SearchEngineId } from "../utils/url";
+import { restoreBackup, triggerBackupDownload } from "../utils/backup";
 import {
   TOOLBAR_BUTTON_KEYS,
   type Settings,
@@ -41,6 +42,12 @@ type ImportState =
   | { phase: "done"; pages: number; shortcuts: number; passwords: number; passwordsFound: number }
   | { phase: "error" };
 
+type BackupStatus =
+  | { kind: "idle" }
+  | { kind: "exported" }
+  | { kind: "restored"; count: number }
+  | { kind: "error" };
+
 function SettingsPanel({
   isOpen,
   settings,
@@ -60,6 +67,8 @@ function SettingsPanel({
   const [revealedValue, setRevealedValue] = useState("");
   const [chromeAvailable, setChromeAvailable] = useState(false);
   const [importState, setImportState] = useState<ImportState>({ phase: "idle" });
+  const [backupStatus, setBackupStatus] = useState<BackupStatus>({ kind: "idle" });
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -70,6 +79,7 @@ function SettingsPanel({
       setRevealedId(null);
       setRevealedValue("");
       setImportState({ phase: "idle" });
+      setBackupStatus({ kind: "idle" });
     }
   }, [isOpen]);
 
@@ -144,6 +154,38 @@ function SettingsPanel({
     setClearArmed(false);
     setDidClear(true);
     window.setTimeout(() => setDidClear(false), 2200);
+  };
+
+  const handleBackup = () => {
+    triggerBackupDownload();
+    setBackupStatus({ kind: "exported" });
+  };
+
+  const handleRestoreClick = () => {
+    backupInputRef.current?.click();
+  };
+
+  const handleRestoreFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset so picking the same file again still fires a change event.
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        const { restored } = restoreBackup(text);
+        setBackupStatus({ kind: "restored", count: restored });
+        window.setTimeout(() => window.location.reload(), 600);
+      } catch {
+        setBackupStatus({ kind: "error" });
+      }
+    };
+    reader.onerror = () => setBackupStatus({ kind: "error" });
+    reader.readAsText(file);
   };
 
   const handleToggleReveal = (id: string) => {
@@ -405,6 +447,48 @@ function SettingsPanel({
                 {didClear ? "Cleared" : clearArmed ? "Confirm" : "Clear…"}
               </button>
             </div>
+          </div>
+
+          <div className="settings-field">
+            <label>Backup</label>
+            <p className="settings-hint">
+              Saves your spaces, tabs, bookmarks, history and settings to a file.
+            </p>
+            <div className="settings-row">
+              <span className="settings-row-copy">
+                <span>Back up everything</span>
+                <small>
+                  {backupStatus.kind === "exported"
+                    ? "Backup downloaded."
+                    : "Download a copy of everything to your Mac."}
+                </small>
+              </span>
+              <button type="button" className="settings-clear" onClick={handleBackup}>
+                Back up
+              </button>
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-copy">
+                <span>Restore from backup</span>
+                <small>
+                  {backupStatus.kind === "restored"
+                    ? `Restored ${backupStatus.count} item${backupStatus.count === 1 ? "" : "s"} — reloading…`
+                    : backupStatus.kind === "error"
+                      ? "That file isn’t a valid Andromeda backup."
+                      : "Replace your data with a saved backup file."}
+                </small>
+              </span>
+              <button type="button" className="settings-clear" onClick={handleRestoreClick}>
+                Restore…
+              </button>
+            </div>
+            <input
+              ref={backupInputRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={handleRestoreFile}
+            />
           </div>
         </div>
 

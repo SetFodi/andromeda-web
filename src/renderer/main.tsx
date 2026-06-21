@@ -1,8 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./styles/globals.css";
 import "./styles/app.css";
+import "./styles/bookmarks.css";
 
 // Apply the persisted theme before the first React paint so the shell never
 // flashes the wrong palette on launch.
@@ -32,6 +34,8 @@ import "./styles/app.css";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 );

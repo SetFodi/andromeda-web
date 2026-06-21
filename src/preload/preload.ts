@@ -202,20 +202,22 @@ function isBenchmarkNavigatePayload(payload: unknown): payload is BenchmarkNavig
 const benchmarkNavigateQueue: BenchmarkNavigatePayload[] = [];
 const benchmarkNavigateCallbacks = new Set<(payload: BenchmarkNavigatePayload) => void>();
 
-ipcRenderer.on("browser:benchmarkNavigate", (_event, payload: unknown) => {
-  if (!isBenchmarkNavigatePayload(payload)) {
-    return;
-  }
+if (__ANDROMEDA_BENCH__) {
+  ipcRenderer.on("browser:benchmarkNavigate", (_event, payload: unknown) => {
+    if (!isBenchmarkNavigatePayload(payload)) {
+      return;
+    }
 
-  if (benchmarkNavigateCallbacks.size === 0) {
-    benchmarkNavigateQueue.push(payload);
-    return;
-  }
+    if (benchmarkNavigateCallbacks.size === 0) {
+      benchmarkNavigateQueue.push(payload);
+      return;
+    }
 
-  for (const callback of benchmarkNavigateCallbacks) {
-    callback(payload);
-  }
-});
+    for (const callback of benchmarkNavigateCallbacks) {
+      callback(payload);
+    }
+  });
+}
 
 contextBridge.exposeInMainWorld("andromeda", {
   navigate: (url: string, pane?: BrowserPane) =>

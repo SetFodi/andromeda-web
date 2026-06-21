@@ -11,6 +11,14 @@ let blockedTotal = 0;
 // so the site-info shield always reflects the current page.
 const blockedByWebContents = new Map<number, number>();
 
+// Filter lists are cached to disk and never refreshed on their own, so they go
+// stale over time. We re-fetch the prebuilt lists on a slow cadence.
+let cachePath: string | null = null;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+const LIST_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const LIST_STALE_MS = 18 * 60 * 60 * 1000;
+const FIRST_REFRESH_DELAY_MS = 30_000;
+
 type MutableConfig = {
   -readonly [Key in keyof Config]: Config[Key];
 };
@@ -66,6 +74,80 @@ export function setAdblockEnabled(next: boolean): void {
   void writePrefs({ adblock: next });
 }
 
+function applyNetworkOnlyConfig(engine: ElectronBlocker): void {
+  const config = engine.config as unknown as MutableConfig;
+  config.loadCosmeticFilters = false;
+  config.loadGenericCosmeticsFilters = false;
+  config.loadExtendedSelectors = false;
+  config.enableMutationObserver = false;
+  config.enablePushInjectionsOnNavigationEvents = false;
+  config.loadNetworkFilters = true;
+}
+
+function trackBlockedRequests(engine: ElectronBlocker): void {
+  engine.on("request-blocked", (request: { tabId?: number }) => {
+    blockedTotal += 1;
+    if (typeof request.tabId === "number" && request.tabId > 0) {
+      blockedByWebContents.set(request.tabId, (blockedByWebContents.get(request.tabId) ?? 0) + 1);
+    }
+  });
+}
+
+async function cacheAgeMs(): Promise<number> {
+  if (!cachePath) {
+    return Number.POSITIVE_INFINITY;
+  }
+  try {
+    const stat = await fs.stat(cachePath);
+    return Date.now() - stat.mtimeMs;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+// Re-fetches the latest prebuilt lists (bypassing the on-disk cache), hot-swaps
+// the live engine in the bound session, and rewrites the cache for the next cold
+// start. Best-effort: the current engine keeps blocking if the fetch fails.
+async function refreshFilterLists(): Promise<void> {
+  if (!boundSession) {
+    return;
+  }
+  try {
+    const fresh = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
+    applyNetworkOnlyConfig(fresh);
+    trackBlockedRequests(fresh);
+
+    const previous = blocker;
+    blocker = fresh;
+    if (enabled) {
+      if (previous) {
+        previous.disableBlockingInSession(boundSession);
+      }
+      fresh.enableBlockingInSession(boundSession);
+    }
+
+    if (cachePath) {
+      await fs.writeFile(cachePath, fresh.serialize());
+    }
+  } catch {
+    // Network or parse failure — keep the existing engine and retry next cycle.
+  }
+}
+
+function scheduleFilterListRefresh(): void {
+  if (refreshTimer) {
+    return;
+  }
+  setTimeout(() => {
+    void cacheAgeMs().then((age) => {
+      if (age >= LIST_STALE_MS) {
+        void refreshFilterLists();
+      }
+    });
+  }, FIRST_REFRESH_DELAY_MS);
+  refreshTimer = setInterval(() => void refreshFilterLists(), LIST_REFRESH_INTERVAL_MS);
+}
+
 /**
  * Network ad/tracker blocking for the whole default session (every tab/web
  * view). Uses Ghostery's prebuilt EasyList + EasyPrivacy engine, cached to
@@ -82,33 +164,31 @@ export async function setupAdblocker(
     const prefs = await readPrefs();
     enabled = prefs.adblock !== false;
 
-    const cachePath = path.join(app.getPath("userData"), "andromeda-adblocker.bin");
+    cachePath = path.join(app.getPath("userData"), "andromeda-adblocker.bin");
     const engine = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
       path: cachePath,
       read: fs.readFile,
       write: fs.writeFile
     });
 
-    const config = engine.config as unknown as MutableConfig;
-    config.loadCosmeticFilters = false;
-    config.loadGenericCosmeticsFilters = false;
-    config.loadExtendedSelectors = false;
-    config.enableMutationObserver = false;
-    config.enablePushInjectionsOnNavigationEvents = false;
-    config.loadNetworkFilters = true;
-
-    engine.on("request-blocked", (request: { tabId?: number }) => {
-      blockedTotal += 1;
-      if (typeof request.tabId === "number" && request.tabId > 0) {
-        blockedByWebContents.set(request.tabId, (blockedByWebContents.get(request.tabId) ?? 0) + 1);
-      }
-    });
+    applyNetworkOnlyConfig(engine);
+    trackBlockedRequests(engine);
 
     blocker = engine;
     boundSession = targetSession;
     if (enabled) {
       engine.enableBlockingInSession(targetSession);
     }
+
+    // Drop a web view's per-page block count when it is destroyed, so the
+    // webContents-id map cannot grow unbounded over a long session.
+    app.on("web-contents-created", (_event, contents) => {
+      contents.once("destroyed", () => {
+        blockedByWebContents.delete(contents.id);
+      });
+    });
+
+    scheduleFilterListRefresh();
   } catch {
     blocker = null;
   }

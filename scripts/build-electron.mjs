@@ -10,7 +10,11 @@ const commonOptions = {
   // web view. Dev (scripts/dev.mjs) stays unminified for readable stack traces.
   minify: true,
   sourcemap: true,
-  external: ["electron", "@ghostery/adblocker-electron"]
+  external: ["electron", "@ghostery/adblocker-electron"],
+  // Strip benchmark-navigation instrumentation from shipped builds; only an
+  // explicit ANDROMEDA_BENCH=1 build (used by scripts/browser-perf-compare.mjs)
+  // keeps it. See src/env.d.ts.
+  define: { __ANDROMEDA_BENCH__: process.env.ANDROMEDA_BENCH === "1" ? "true" : "false" }
 };
 
 await Promise.all([

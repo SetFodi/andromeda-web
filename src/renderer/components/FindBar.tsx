@@ -57,6 +57,7 @@ function FindBar({ isOpen, onFind, onClose }: FindBarProps) {
 
   const hasQuery = query.trim().length > 0;
   const noMatches = hasQuery && result !== null && result.total === 0;
+  const announcement = hasQuery && result ? (result.total > 0 ? `${result.active} of ${result.total} matches` : "No matches") : "";
 
   return (
     <div className="find-bar" role="search">
@@ -108,6 +109,9 @@ function FindBar({ isOpen, onFind, onClose }: FindBarProps) {
           <Icon name="close" size={15} />
         </button>
       </div>
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </span>
     </div>
   );
 }

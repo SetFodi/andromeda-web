@@ -98,6 +98,8 @@ export function buildAppMenu(window: BrowserWindow): void {
         { label: "Focus Address Bar", accelerator: "CmdOrCtrl+L", click: () => send("focus-address") },
         { type: "separator" },
         { label: "Show History", accelerator: "CmdOrCtrl+Y", click: () => send("history") },
+        { label: "Add Bookmark", accelerator: "CmdOrCtrl+Shift+D", click: () => send("add-bookmark") },
+        { label: "Show Bookmarks", accelerator: "CmdOrCtrl+Shift+B", click: () => send("show-bookmarks") },
         { label: "Toggle Reader Mode", accelerator: "CmdOrCtrl+Shift+R", click: () => send("reader") },
         { type: "separator" },
         { role: "toggleDevTools" }

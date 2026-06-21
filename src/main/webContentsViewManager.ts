@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { resetBlockedCountForWebContents } from "./adblocker";
 import {
+  app,
   BrowserWindow,
   Menu,
   WebContentsView,
@@ -303,6 +304,8 @@ export class WebContentsViewManager {
     this.dispose();
   };
 
+  private readonly downloadPaths = new Set<string>();
+
   private readonly handleDownload = (_event: unknown, item: DownloadItem): void => {
     if (this.disposed) {
       return;
@@ -313,11 +316,15 @@ export class WebContentsViewManager {
       if (this.window.isDestroyed()) {
         return;
       }
+      const savePath = item.getSavePath();
+      if (savePath) {
+        this.downloadPaths.add(savePath);
+      }
       this.window.webContents.send("browser:download", {
         id,
         filename: item.getFilename(),
         url: item.getURL(),
-        savePath: item.getSavePath(),
+        savePath,
         receivedBytes: item.getReceivedBytes(),
         totalBytes: item.getTotalBytes(),
         state
@@ -335,6 +342,27 @@ export class WebContentsViewManager {
 
   private unregisterDownloads(): void {
     this.session.off("will-download", this.handleDownload);
+  }
+
+  // Guards shell.openPath / showItemInFolder: only files this session actually
+  // downloaded, or files still sitting in the OS Downloads folder, may be opened
+  // — never an arbitrary path supplied by a (potentially compromised) renderer.
+  canOpenDownloadPath(candidate: string): boolean {
+    if (!candidate) {
+      return false;
+    }
+    if (this.downloadPaths.has(candidate)) {
+      return true;
+    }
+    try {
+      const real = realpathSync(candidate);
+      const downloadsDir = realpathSync(app.getPath("downloads"));
+      const rel = path.relative(downloadsDir, real);
+      const insideDownloads = rel.length > 0 && !rel.startsWith("..") && !path.isAbsolute(rel);
+      return insideDownloads && statSync(real).isFile();
+    } catch {
+      return false;
+    }
   }
 
   private debugViews(label: string): void {

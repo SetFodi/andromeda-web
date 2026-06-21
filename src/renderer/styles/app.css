@@ -4406,3 +4406,53 @@
   background: var(--hover);
   color: var(--text);
 }
+
+/* ====================================================================== */
+/* Focus visibility                                                       */
+/* ====================================================================== */
+/* One keyboard-only focus ring for every Tab-reachable control. Built on
+   :focus-visible (never :focus) so the ring never shows on mouse / touch
+   input — the many `outline: none/0` resets above stay clean for pointer
+   users while keyboard users always see where they are. The outline follows
+   each element's own border-radius automatically, so rounded controls keep
+   rounded rings. Motion is handled globally — nothing animated here. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Screen-reader-only announcer: present in the accessibility tree, invisible
+   on screen, zero-footprint so live regions never shift layout. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Controls that already carry their own focus indicator keep it — drop the
+   global ring so they never show a doubled outline. */
+.space-dock-item:focus-visible,
+.address-form input:focus-visible,
+.space-editor-name:focus-visible,
+.settings-input:focus-visible,
+.onboard-input:focus-visible,
+.find-input:focus-visible,
+.history-search input:focus-visible,
+.command-input-wrap input:focus-visible {
+  outline: none;
+}
+
+/* Find + history search fields signal focus on their wrapper (matching the
+   address bar) rather than ringing the bare inner input. */
+.find-field:focus-within,
+.history-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--field-border));
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}

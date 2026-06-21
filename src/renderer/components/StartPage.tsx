@@ -3,6 +3,8 @@ import Icon from "./Icon";
 import { formatClock, formatLongDate } from "../utils/time";
 import { getFaviconSrc } from "../utils/favicon";
 import type { QuickLink } from "../state/useQuickLinks";
+import BookmarksBar from "./BookmarksBar";
+import type { Bookmark, BookmarkFolder } from "../state/useBookmarks";
 
 type StartPageProps = {
   quickLinks: QuickLink[];
@@ -11,6 +13,8 @@ type StartPageProps = {
   onOpenLink: (url: string) => void;
   onRemoveQuickLink: (id: string) => void;
   onReorderQuickLink: (sourceId: string, targetId: string) => void;
+  bookmarks: Bookmark[];
+  folders: BookmarkFolder[];
 };
 
 function getGreeting(now: Date, userName?: string): string {
@@ -74,7 +78,9 @@ function StartPage({
   onOpenCommand,
   onOpenLink,
   onRemoveQuickLink,
-  onReorderQuickLink
+  onReorderQuickLink,
+  bookmarks,
+  folders
 }: StartPageProps) {
   const now = useNow();
   const [draggedQuickId, setDraggedQuickId] = useState<string | null>(null);
@@ -83,6 +89,7 @@ function StartPage({
   return (
     <main className="start-page">
       <div className="start-scroll">
+        <BookmarksBar bookmarks={bookmarks} folders={folders} onOpenUrl={onOpenLink} />
         <section className="start-stage">
           <header className="start-head reveal" style={{ "--reveal-delay": "40ms" } as React.CSSProperties}>
             <p className="start-greeting">{getGreeting(now, userName)}</p>

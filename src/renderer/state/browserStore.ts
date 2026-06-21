@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IconName } from "../components/Icon";
+import { quarantineCorruptValue } from "../utils/storage";
 
 export type SpaceId = string;
 export type BrowserPane = "main" | "split";
@@ -309,17 +310,26 @@ function selectLaunchStartPage(state: BrowserState): BrowserState {
 }
 
 function loadStateSnapshot(): { state: BrowserState; persistedValue: string | null } {
+  let rawValue: string | null = null;
   try {
-    const rawValue = localStorage.getItem(STORAGE_KEY);
+    rawValue = localStorage.getItem(STORAGE_KEY);
     const state = rawValue ? sanitizeState(JSON.parse(rawValue)) : createDefaultState();
     const launchState = selectLaunchStartPage(state);
     const serializedLaunchState = JSON.stringify(launchState);
     if (rawValue !== serializedLaunchState) {
-      localStorage.setItem(STORAGE_KEY, serializedLaunchState);
+      try {
+        localStorage.setItem(STORAGE_KEY, serializedLaunchState);
+      } catch {
+        // Best-effort re-normalization write; the in-memory state still stands.
+      }
     }
 
     return { state: launchState, persistedValue: serializedLaunchState };
-  } catch {
+  } catch (error) {
+    // Corrupt or unreadable state: preserve the raw value for recovery instead
+    // of silently destroying every space/tab, then fall back to defaults.
+    quarantineCorruptValue(STORAGE_KEY, rawValue);
+    console.warn("[andromeda] browser state unreadable; backed up and reset", error);
     return { state: createDefaultState(), persistedValue: null };
   }
 }
@@ -342,8 +352,14 @@ export function useBrowserStore() {
     if (serializedState === persistedStateRef.current) {
       return;
     }
-    localStorage.setItem(STORAGE_KEY, serializedState);
-    persistedStateRef.current = serializedState;
+    try {
+      localStorage.setItem(STORAGE_KEY, serializedState);
+      persistedStateRef.current = serializedState;
+    } catch (error) {
+      // Quota exceeded or storage unavailable. Leave persistedStateRef untouched
+      // so the next debounced flush retries instead of assuming this write landed.
+      console.warn("[andromeda] failed to persist browser state", error);
+    }
   }, []);
 
   // Debounce persistence: a page load fires a burst of tab mutations (title,

@@ -165,7 +165,8 @@ Options:
 Notes:
   - macOS Accessibility permission is required because URLs are entered with Cmd+L.
   - Battery deltas are coarse. Run on battery, with charger unplugged, for meaningful drain data.
-  - For fair Andromeda numbers, use production mode: pnpm build, then this script.
+  - For fair Andromeda numbers, benchmark with --build-andromeda (it builds an
+    instrumented bench build); a plain pnpm build strips the benchmark hooks.
 `);
 }
 
@@ -232,7 +233,11 @@ async function main() {
 
   if (options.buildAndromeda && options.browsers.includes("andromeda")) {
     console.log("Building Andromeda before benchmark...");
-    await execChecked("pnpm", ["build"], { cwd: root, stdio: "inherit" });
+    await execChecked("pnpm", ["build"], {
+      cwd: root,
+      stdio: "inherit",
+      env: { ANDROMEDA_BENCH: "1" }
+    });
   }
 
   const resolvedTargets = [];
@@ -815,6 +820,7 @@ function execCapture(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = execFile(command, args, {
       cwd: options.cwd,
+      env: options.env ? { ...process.env, ...options.env } : undefined,
       maxBuffer: 1024 * 1024 * 20
     });
 

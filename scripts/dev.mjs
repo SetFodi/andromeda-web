@@ -14,7 +14,9 @@ async function buildElectronSources() {
     target: "node22",
     format: "cjs",
     sourcemap: true,
-    external: ["electron", "@ghostery/adblocker-electron"]
+    external: ["electron", "@ghostery/adblocker-electron"],
+    // Benchmark instrumentation is always available in dev.
+    define: { __ANDROMEDA_BENCH__: "true" }
   };
 
   await Promise.all([

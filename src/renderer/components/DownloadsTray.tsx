@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
 
 export type DownloadEntry = {
@@ -62,12 +62,45 @@ function DownloadsTray({ isOpen, downloads, onClose, onOpen, onReveal, onClear }
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, onClose]);
 
+  const prevStates = useRef<Record<string, string>>({});
+  const [announcement, setAnnouncement] = useState("");
+
+  useEffect(() => {
+    const previous = prevStates.current;
+    const nextStates: Record<string, string> = {};
+    let message = "";
+    for (const entry of downloads) {
+      nextStates[entry.id] = entry.state;
+      const before = previous[entry.id];
+      if (before && before !== entry.state) {
+        if (entry.state === "completed") {
+          message = `${entry.filename} complete`;
+        } else if (entry.state === "interrupted") {
+          message = `${entry.filename} failed`;
+        } else if (entry.state === "cancelled") {
+          message = `${entry.filename} canceled`;
+        }
+      }
+    }
+    prevStates.current = nextStates;
+    if (message) {
+      setAnnouncement(message);
+    }
+  }, [downloads]);
+
+  const liveRegion = (
+    <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+      {announcement}
+    </span>
+  );
+
   if (!isOpen) {
-    return null;
+    return liveRegion;
   }
 
   return (
     <div className="downloads-layer" role="presentation" onMouseDown={onClose}>
+      {liveRegion}
       <section
         className="downloads-panel"
         role="dialog"
@@ -108,7 +141,14 @@ function DownloadsTray({ isOpen, downloads, onClose, onOpen, onReveal, onClear }
                       {entry.filename}
                     </span>
                     {progressing ? (
-                      <span className="download-bar">
+                      <span
+                        className="download-bar"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={pct}
+                        aria-label={`Downloading ${entry.filename}`}
+                      >
                         <span className="download-bar-fill" style={{ width: `${pct}%` }} />
                       </span>
                     ) : null}

@@ -92,7 +92,9 @@ function createMainWindow(): BrowserWindow {
   const manager = new WebContentsViewManager(window);
   registerIpc(manager, window);
   buildAppMenu(window);
-  scheduleBenchmarkNavigation(window);
+  if (__ANDROMEDA_BENCH__) {
+    scheduleBenchmarkNavigation(window);
+  }
   startUpdateChecks(window);
 
   // macOS trackpad swipe navigation (fires per the system "Swipe between

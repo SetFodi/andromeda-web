@@ -118,6 +118,7 @@ function SiteInfoPanel({ isOpen, url, pane, onClose, onReload }: SiteInfoPanelPr
       <section
         className="siteinfo-panel"
         role="dialog"
+        aria-modal="true"
         aria-label="Site information"
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -141,7 +142,17 @@ function SiteInfoPanel({ isOpen, url, pane, onClose, onReload }: SiteInfoPanelPr
           <>
             {shield?.active ? (
               <div className={shield.enabled ? "siteinfo-shield" : "siteinfo-shield is-off"}>
-                <span className="siteinfo-shield-count">
+                <span
+                  className="siteinfo-shield-count"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  aria-label={
+                    shield.enabled
+                      ? `${shield.blockedOnPage} ads and trackers blocked on this page`
+                      : "Shield is off"
+                  }
+                >
                   {shield.enabled ? shield.blockedOnPage : "—"}
                 </span>
                 <span className="siteinfo-shield-copy">

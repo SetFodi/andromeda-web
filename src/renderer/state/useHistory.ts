@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { quarantineCorruptValue } from "../utils/storage";
 
 export type HistoryEntry = {
   url: string;
@@ -49,13 +50,15 @@ function frecency(entry: HistoryEntry): number {
 }
 
 function loadHistory(): HistoryEntry[] {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       return [];
     }
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
+      quarantineCorruptValue(STORAGE_KEY, raw);
       return [];
     }
     return parsed
@@ -76,7 +79,9 @@ function loadHistory(): HistoryEntry[] {
         lastVisited: entry.lastVisited
       }))
       .slice(0, MAX_ENTRIES);
-  } catch {
+  } catch (error) {
+    quarantineCorruptValue(STORAGE_KEY, raw);
+    console.warn("[andromeda] history unreadable; backed up and reset", error);
     return [];
   }
 }

@@ -14,6 +14,7 @@ import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
 import OnboardingModal from "./components/OnboardingModal";
 import SiteInfoPanel from "./components/SiteInfoPanel";
 import HistoryPanel from "./components/HistoryPanel";
+import BookmarksPanel from "./components/BookmarksPanel";
 import TabSwitcher, { SwitcherTab } from "./components/TabSwitcher";
 import ReaderView, { ReaderArticle } from "./components/ReaderView";
 import FindBar from "./components/FindBar";
@@ -26,6 +27,7 @@ import { useTheme } from "./state/useTheme";
 import { useSettings } from "./state/useSettings";
 import { useQuickLinks } from "./state/useQuickLinks";
 import { useHistory } from "./state/useHistory";
+import { useBookmarks } from "./state/useBookmarks";
 import { getUrlDisplayValue, resolveNavigationInput, type SearchEngineId } from "./utils/url";
 import Icon, { type IconName } from "./components/Icon";
 
@@ -161,6 +163,18 @@ export default function App() {
     clearAll: clearHistory,
     importEntries: importHistoryEntries
   } = useHistory();
+  const {
+    bookmarks,
+    folders,
+    removeBookmark,
+    renameBookmark,
+    moveBookmark,
+    addFolder,
+    removeFolder,
+    renameFolder,
+    toggleBookmark,
+    importBookmarks: importBookmarkEntries
+  } = useBookmarks();
   const contentRef = useRef<HTMLDivElement>(null);
   const lastMainUrlRef = useRef<string | null>(null);
   const appShellRef = useRef<HTMLDivElement>(null);
@@ -204,6 +218,7 @@ export default function App() {
   const [isDownloadsOpen, setDownloadsOpen] = useState(false);
   const [isSiteInfoOpen, setSiteInfoOpen] = useState(false);
   const [isHistoryOpen, setHistoryOpen] = useState(false);
+  const [isBookmarksOpen, setBookmarksOpen] = useState(false);
   const [isTabSwitcherOpen, setTabSwitcherOpen] = useState(false);
   const [isReaderOpen, setReaderOpen] = useState(false);
   const [readerLoading, setReaderLoading] = useState(false);
@@ -840,6 +855,7 @@ export default function App() {
     isCommandBarOpen ||
     isSettingsOpen ||
     isHistoryOpen ||
+    isBookmarksOpen ||
     isTabSwitcherOpen ||
     isReaderOpen ||
     isOnboardingOpen ||
@@ -1245,6 +1261,18 @@ export default function App() {
     setHistoryOpen(true);
   }, []);
   const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  const openBookmarks = useCallback(() => {
+    setSettingsOpen(false);
+    setHistoryOpen(false);
+    setBookmarksOpen(true);
+  }, []);
+  const closeBookmarks = useCallback(() => setBookmarksOpen(false), []);
+  const handleAddBookmark = useCallback(() => {
+    if (!bookmarkUrl) {
+      return;
+    }
+    toggleBookmark(bookmarkUrl, currentPageTitle, currentPageFaviconUrl ?? undefined);
+  }, [bookmarkUrl, currentPageTitle, currentPageFaviconUrl, toggleBookmark]);
   const openTabSwitcher = useCallback(() => setTabSwitcherOpen(true), []);
   const closeTabSwitcher = useCallback(() => setTabSwitcherOpen(false), []);
   const handleSelectSwitcherTab = useCallback(
@@ -1304,6 +1332,7 @@ export default function App() {
     const shortcuts = importLinks(
       bookmarks.map((bookmark) => ({ url: bookmark.url, label: bookmark.title }))
     );
+    importBookmarkEntries(bookmarks);
 
     return {
       pages,
@@ -1311,7 +1340,7 @@ export default function App() {
       passwords: passwords.imported,
       passwordsFound: passwords.found
     };
-  }, [importHistoryEntries, importLinks]);
+  }, [importHistoryEntries, importLinks, importBookmarkEntries, bookmarks]);
 
   // Live, jank-free space recoloring: paint the shell vars directly on the DOM
   // (no React re-render) and drop the blur/transition while picking, then commit
@@ -1742,6 +1771,12 @@ export default function App() {
         case "reader":
           toggleReader();
           break;
+        case "show-bookmarks":
+          openBookmarks();
+          break;
+        case "add-bookmark":
+          handleAddBookmark();
+          break;
         case "print":
           void window.andromeda.printPage(activePane);
           break;
@@ -1796,7 +1831,9 @@ export default function App() {
       reopenClosedTab,
       selectTab,
       selectedSpace,
-      toggleSidebar
+      toggleSidebar,
+      openBookmarks,
+      handleAddBookmark
     ]
   );
 
@@ -2060,6 +2097,8 @@ export default function App() {
               onOpenLink={navigateTo}
               onRemoveQuickLink={removeQuickLink}
               onReorderQuickLink={reorderQuickLink}
+              bookmarks={bookmarks}
+              folders={folders}
             />
           ) : null}
         </div>
@@ -2101,6 +2140,19 @@ export default function App() {
           onDelete={deleteHistoryEntry}
           onClear={handleClearBrowsingData}
           onClose={closeHistory}
+        />
+        <BookmarksPanel
+          isOpen={isBookmarksOpen}
+          bookmarks={bookmarks}
+          folders={folders}
+          onClose={closeBookmarks}
+          onOpenUrl={navigateTo}
+          onRemove={removeBookmark}
+          onRemoveFolder={removeFolder}
+          onAddFolder={addFolder}
+          onRenameBookmark={renameBookmark}
+          onRenameFolder={renameFolder}
+          onMoveBookmark={moveBookmark}
         />
         <TabSwitcher
           isOpen={isTabSwitcherOpen}

@@ -235,6 +235,9 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     if (typeof path !== "string" || !path) {
       throw new Error("Invalid download path");
     }
+    if (!manager.canOpenDownloadPath(path)) {
+      return;
+    }
     void shell.openPath(path);
   });
 
@@ -243,6 +246,9 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     const path = (payload as { path?: unknown } | null)?.path;
     if (typeof path !== "string" || !path) {
       throw new Error("Invalid download path");
+    }
+    if (!manager.canOpenDownloadPath(path)) {
+      return;
     }
     shell.showItemInFolder(path);
   });

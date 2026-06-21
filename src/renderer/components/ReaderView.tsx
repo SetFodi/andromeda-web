@@ -1,4 +1,5 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, useMemo } from "react";
+import DOMPurify from "dompurify";
 import Icon from "./Icon";
 
 export type ReaderArticle = {
@@ -24,6 +25,26 @@ function hostOf(url: string): string {
   }
 }
 
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName !== "A") {
+    return;
+  }
+  const href = node.getAttribute("href");
+  if (href && /^https?:\/\//i.test(href)) {
+    node.setAttribute("target", "_blank");
+    node.setAttribute("rel", "noreferrer noopener");
+  } else {
+    node.removeAttribute("href");
+  }
+});
+
+// Reader HTML comes from arbitrary web pages, and Mozilla Readability (the
+// primary extractor) is explicitly NOT a sanitizer, so it is scrubbed here at
+// the dangerouslySetInnerHTML sink before it reaches the privileged shell DOM.
+function sanitizeArticleHtml(html: string): string {
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+}
+
 function ReaderView({ isOpen, loading, article, onClose, onOpenLink }: ReaderViewProps) {
   useEffect(() => {
     if (!isOpen) {
@@ -38,6 +59,8 @@ function ReaderView({ isOpen, loading, article, onClose, onOpenLink }: ReaderVie
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, onClose]);
+
+  const safeHtml = useMemo(() => (article ? sanitizeArticleHtml(article.html) : ""), [article]);
 
   if (!isOpen) {
     return null;
@@ -63,13 +86,17 @@ function ReaderView({ isOpen, loading, article, onClose, onOpenLink }: ReaderVie
             </header>
             <div
               className="reader-body"
-              // Content is sanitized to an allow-list of tags in the extractor.
-              dangerouslySetInnerHTML={{ __html: article.html }}
+              // Sanitized at this sink via sanitizeArticleHtml (DOMPurify); the
+              // extractor returns untrusted web-page HTML.
+              dangerouslySetInnerHTML={{ __html: safeHtml }}
               onClick={(event) => {
                 const anchor = (event.target as HTMLElement).closest("a");
-                const href = anchor?.getAttribute("href");
+                if (!anchor) {
+                  return;
+                }
+                event.preventDefault();
+                const href = anchor.getAttribute("href");
                 if (href && /^https?:\/\//.test(href)) {
-                  event.preventDefault();
                   onOpenLink(href);
                 }
               }}

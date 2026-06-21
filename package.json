@@ -61,7 +61,8 @@
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.18.0",
-    "@mozilla/readability": "^0.6.0"
+    "@mozilla/readability": "^0.6.0",
+    "dompurify": "^3.4.11"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
