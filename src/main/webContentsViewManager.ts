@@ -288,16 +288,22 @@ export class WebContentsViewManager {
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private recoveryTimers = new WeakMap<WebContents, ReturnType<typeof setTimeout>>();
   private disposed = false;
+  private closing = false;
 
   constructor(private readonly window: BrowserWindow) {
     this.session = window.webContents.session;
     this.registerDownloads();
     this.window.on("resize", this.handleWindowResize);
+    this.window.once("close", this.handleWindowClosing);
     this.window.once("closed", this.handleWindowClosed);
   }
 
   private readonly handleWindowResize = (): void => {
     this.scheduleWindowLayoutSync();
+  };
+
+  private readonly handleWindowClosing = (): void => {
+    this.closing = true;
   };
 
   private readonly handleWindowClosed = (): void => {
@@ -320,7 +326,7 @@ export class WebContentsViewManager {
       if (savePath) {
         this.downloadPaths.add(savePath);
       }
-      this.window.webContents.send("browser:download", {
+      this.sendToRenderer("browser:download", {
         id,
         filename: item.getFilename(),
         url: item.getURL(),
@@ -382,11 +388,22 @@ export class WebContentsViewManager {
   }
 
   private sendToRenderer(channel: string, payload: unknown): void {
-    if (this.window.isDestroyed()) {
+    if (this.disposed || this.closing || this.window.isDestroyed() || this.window.webContents.isDestroyed()) {
       return;
     }
 
-    this.window.webContents.send(channel, payload);
+    try {
+      const shell = this.window.webContents;
+      shell.send(channel, payload);
+    } catch (error) {
+      // Renderer-frame churn during rapid navigation/quit can invalidate the
+      // shell frame between the destroyed check and send(). These notifications
+      // are best-effort UI state updates; dropping the stale one is safer than
+      // letting Electron print noisy "WebFrameMain was disposed" errors.
+      if (DEBUG_WEB_CONTENTS) {
+        console.warn("[andromeda:webcontents] dropping renderer event", channel, error);
+      }
+    }
   }
 
   private removeChildView(view: WebContentsView): void {
@@ -490,6 +507,7 @@ export class WebContentsViewManager {
     this.unregisterDownloads();
     this.window.off("resize", this.handleWindowResize);
     this.window.off("closed", this.handleWindowClosed);
+    this.window.off("close", this.handleWindowClosing);
 
     for (const [tabId, entry] of [...this.mainTabs]) {
       this.closeMainEntry(tabId, entry);
@@ -622,7 +640,7 @@ export class WebContentsViewManager {
 
   private showWebContextMenu(wc: WebContents, params: ContextMenuParams): void {
     const items: MenuItemConstructorOptions[] = [];
-    const openTab = (url: string) => this.window.webContents.send("browser:openTab", { url });
+    const openTab = (url: string) => this.sendToRenderer("browser:openTab", { url });
 
     if (params.misspelledWord) {
       for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
@@ -837,7 +855,7 @@ export class WebContentsViewManager {
 
     view.webContents.setWindowOpenHandler(({ url }) => {
       if (isLoadableUrl(url)) {
-        this.window.webContents.send("browser:openTab", { url });
+        this.sendToRenderer("browser:openTab", { url });
       }
       return { action: "deny" };
     });
@@ -847,7 +865,7 @@ export class WebContentsViewManager {
       () => this.mainTabs.get(tabId)?.loadedUrl ?? view.webContents.getURL(),
       () => {
         this.mediaPlaying.delete(tabId);
-        this.window.webContents.send("browser:tabAudio", { tabId, audible: false });
+        this.sendToRenderer("browser:tabAudio", { tabId, audible: false });
         this.emitMainNavState(tabId);
       }
     );
@@ -867,7 +885,7 @@ export class WebContentsViewManager {
     view.webContents.on("focus", () => {
       this.activeMainTabId = tabId;
       this.activePane = "main";
-      this.window.webContents.send("browser:paneFocused", { pane: "main" });
+      this.sendToRenderer("browser:paneFocused", { pane: "main" });
     });
 
     const handleNavigation = (url: string) => {
@@ -876,7 +894,7 @@ export class WebContentsViewManager {
         entry.loadedUrl = url;
       }
       if (isLoadableUrl(url)) {
-        this.window.webContents.send("browser:tabNavigated", { tabId, url });
+        this.sendToRenderer("browser:tabNavigated", { tabId, url });
       }
       this.emitMainNavState(tabId);
     };
@@ -897,19 +915,19 @@ export class WebContentsViewManager {
     );
 
     view.webContents.on("page-title-updated", (_event, title) => {
-      this.window.webContents.send("browser:tabTitle", { tabId, title });
+      this.sendToRenderer("browser:tabTitle", { tabId, title });
     });
 
     view.webContents.on("page-favicon-updated", (_event, favicons) => {
       const faviconUrl = getFaviconUrl(favicons);
       if (faviconUrl) {
-        this.window.webContents.send("browser:tabFavicon", { tabId, faviconUrl });
+        this.sendToRenderer("browser:tabFavicon", { tabId, faviconUrl });
       }
     });
 
     view.webContents.on("found-in-page", (_event, result) => {
       if (this.activeMainTabId === tabId) {
-        this.window.webContents.send("browser:foundInPage", {
+        this.sendToRenderer("browser:foundInPage", {
           pane: "main",
           activeMatchOrdinal: result.activeMatchOrdinal,
           matches: result.matches
@@ -921,11 +939,11 @@ export class WebContentsViewManager {
     // which is racy and frequently false at the moment media starts.
     view.webContents.on("media-started-playing", () => {
       this.mediaPlaying.add(tabId);
-      this.window.webContents.send("browser:tabAudio", { tabId, audible: true });
+      this.sendToRenderer("browser:tabAudio", { tabId, audible: true });
     });
     view.webContents.on("media-paused", () => {
       this.mediaPlaying.delete(tabId);
-      this.window.webContents.send("browser:tabAudio", { tabId, audible: false });
+      this.sendToRenderer("browser:tabAudio", { tabId, audible: false });
     });
 
     return view;
@@ -993,7 +1011,7 @@ export class WebContentsViewManager {
     }
 
     entry.lastNav = navState;
-    this.window.webContents.send("browser:tabNavState", { tabId, ...navState });
+    this.sendToRenderer("browser:tabNavState", { tabId, ...navState });
   }
 
   // ---- Split pane (single view) ----------------------------------------
@@ -1072,7 +1090,7 @@ export class WebContentsViewManager {
 
     view.webContents.on("focus", () => {
       this.activePane = "split";
-      this.window.webContents.send("browser:paneFocused", { pane: "split" });
+      this.sendToRenderer("browser:paneFocused", { pane: "split" });
     });
 
     view.webContents.on("did-navigate", (_event, url) => {
@@ -1094,17 +1112,17 @@ export class WebContentsViewManager {
       }
     );
     view.webContents.on("page-title-updated", (_event, title) => {
-      this.window.webContents.send("browser:titleUpdated", { pane: "split", title });
+      this.sendToRenderer("browser:titleUpdated", { pane: "split", title });
     });
     view.webContents.on("page-favicon-updated", (_event, favicons) => {
       const faviconUrl = getFaviconUrl(favicons);
       if (faviconUrl) {
-        this.window.webContents.send("browser:faviconUpdated", { pane: "split", faviconUrl });
+        this.sendToRenderer("browser:faviconUpdated", { pane: "split", faviconUrl });
       }
     });
     view.webContents.on("found-in-page", (_event, result) => {
       if (this.activePane === "split") {
-        this.window.webContents.send("browser:foundInPage", {
+        this.sendToRenderer("browser:foundInPage", {
           pane: "split",
           activeMatchOrdinal: result.activeMatchOrdinal,
           matches: result.matches
@@ -1136,7 +1154,7 @@ export class WebContentsViewManager {
 
   private sendSplitNavigation(url: string): void {
     if (isLoadableUrl(url)) {
-      this.window.webContents.send("browser:didNavigate", { pane: "split", url });
+      this.sendToRenderer("browser:didNavigate", { pane: "split", url });
     }
   }
 
@@ -1158,7 +1176,7 @@ export class WebContentsViewManager {
     }
 
     this.split.lastNav = navState;
-    this.window.webContents.send("browser:navigationStateUpdated", { pane: "split", ...navState });
+    this.sendToRenderer("browser:navigationStateUpdated", { pane: "split", ...navState });
   }
 
   // ---- Shared pane operations ------------------------------------------
