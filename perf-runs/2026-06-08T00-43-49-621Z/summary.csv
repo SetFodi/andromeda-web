@@ -1,2 +1,0 @@
-browser,run,samples,wallSeconds,avgCpuPercent,peakCpuPercent,cpuSecondsApprox,avgRssMB,peakRssMB,avgProcessCount,peakProcessCount,batteryPercentDelta,batteryCapacityDelta,wasRunningBefore
-andromeda,1,39,81.29,0.53,5.90,0.43,349.67,410.09,4.90,5,0,0,false

@@ -1,7 +1,0 @@
-browser,run,phase,elapsedSec,processCount,cpuPercent,rssMB,batteryPercent,batterySource,pids
-andromeda,1,launch,0.14,0,0.00,0.00,35,battery,""
-andromeda,1,launch,2.24,4,28.70,474.81,35,battery,"52636 52637 52638 52639"
-andromeda,1,navigate,4.31,5,26.60,569.41,35,battery,"52636 52637 52638 52639 52945"
-andromeda,1,navigate,6.39,5,0.30,564.52,35,battery,"52636 52637 52638 52639 52945"
-andromeda,1,idle,8.47,5,0.20,564.00,35,battery,"52636 52637 52638 52639 52945"
-andromeda,1,idle,10.55,5,0.00,563.97,35,battery,"52636 52637 52638 52639 52945"
