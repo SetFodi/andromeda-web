@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { quarantineCorruptValue } from "../utils/storage";
 
 type ErrorBoundaryProps = {
   children: ReactNode;
@@ -115,6 +116,13 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error("Andromeda hit an unexpected error", error, info.componentStack);
+    // Web views composite ABOVE the renderer DOM, so an attached page would hide
+    // this recovery card. Detach them so the card is actually visible/clickable.
+    try {
+      void window.andromeda?.showStartPage();
+    } catch {
+      // best-effort
+    }
   }
 
   private handleReload = (): void => {
@@ -128,6 +136,20 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     }
     const report = `${error.message}\n\n${error.stack ?? ""}`.trim();
     void navigator.clipboard.writeText(report);
+  };
+
+  private handleResetSession = (): void => {
+    // Escape hatch when a crash is caused by persisted tab/space state: preserve
+    // the offending state for recovery, clear it, then reload into a clean
+    // default so the reload can't immediately re-crash on the same data.
+    try {
+      const key = "andromeda.browserState.v3"; // keep in sync with browserStore STORAGE_KEY
+      quarantineCorruptValue(key, localStorage.getItem(key));
+      localStorage.removeItem(key);
+    } catch {
+      // ignore — fall through to reload
+    }
+    window.location.reload();
   };
 
   render(): ReactNode {
@@ -153,6 +175,13 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
               onClick={this.handleReload}
             >
               Reload
+            </button>
+            <button
+              type="button"
+              className="error-boundary-btn"
+              onClick={this.handleResetSession}
+            >
+              Reset session
             </button>
             <button type="button" className="error-boundary-btn" onClick={this.handleReportCopy}>
               Report copy

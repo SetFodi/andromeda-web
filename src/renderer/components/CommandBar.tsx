@@ -23,6 +23,7 @@ function frecencyScore(item: HistoryItem): number {
 type CommandBarProps = {
   isOpen: boolean;
   mode: "default" | "split";
+  focusToken: number;
   historyItems?: HistoryItem[];
   onClose: () => void;
   onNavigateInput: (input: string, target: "active" | "split") => void;
@@ -134,6 +135,7 @@ function QuickOpenIcon({ result }: { result: QuickOpenResult }) {
 export default function CommandBar({
   isOpen,
   mode,
+  focusToken,
   historyItems = [],
   onClose,
   onNavigateInput,
@@ -190,10 +192,24 @@ export default function CommandBar({
 
     setQuery("");
     setSelectedIndex(0);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }, [isOpen]);
+    const focusInput = () => {
+      const input = inputRef.current;
+      if (!input) {
+        return;
+      }
+      input.focus({ preventScroll: true });
+      input.select();
+    };
+    focusInput();
+    const frame = requestAnimationFrame(focusInput);
+    const shortRetry = window.setTimeout(focusInput, 40);
+    const lateRetry = window.setTimeout(focusInput, 120);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(shortRetry);
+      window.clearTimeout(lateRetry);
+    };
+  }, [focusToken, isOpen]);
 
   useEffect(() => {
     setSelectedIndex((current) => Math.min(current, Math.max(results.length - 1, 0)));
@@ -232,6 +248,7 @@ export default function CommandBar({
               </span>
             ) : null}
             <input
+              autoFocus
               ref={inputRef}
               value={query}
               placeholder="Search..."

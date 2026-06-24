@@ -108,6 +108,52 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+  // Lock the privileged chrome to its own document. A dropped or programmatic
+  // link must never navigate the app renderer (it carries the full IPC bridge);
+  // real links are routed to a normal tab instead.
+  const isInternalChromeUrl = (target: string): boolean => {
+    try {
+      const url = new URL(target);
+      if (isDevelopment) {
+        return url.origin === new URL(process.env.ELECTRON_RENDERER_URL as string).origin;
+      }
+      return url.protocol === "file:";
+    } catch {
+      return false;
+    }
+  };
+  window.webContents.on("will-navigate", (event, url) => {
+    if (isInternalChromeUrl(url)) {
+      return;
+    }
+    event.preventDefault();
+    if (/^https?:\/\//i.test(url)) {
+      window.webContents.send("browser:openTab", { url });
+    }
+  });
+
+  // If the privileged renderer process itself dies, the window goes blank with
+  // the web views still composited on top — no in-app escape. Reload the shell
+  // so it re-mounts and restores the session, with a cap so a renderer that
+  // crashes on load can't spin in a hot reload loop. Clean exits are ignored.
+  let shellReloads = 0;
+  let shellReloadWindowStart = Date.now();
+  window.webContents.on("render-process-gone", (_event, details) => {
+    if (details.reason === "clean-exit" || window.isDestroyed()) {
+      return;
+    }
+    const now = Date.now();
+    if (now - shellReloadWindowStart > 60_000) {
+      shellReloadWindowStart = now;
+      shellReloads = 0;
+    }
+    shellReloads += 1;
+    if (shellReloads > 3) {
+      return;
+    }
+    window.webContents.reload();
+  });
   const showWindow = () => {
     if (!window.isDestroyed() && !window.isVisible()) {
       window.show();

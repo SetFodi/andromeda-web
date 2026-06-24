@@ -280,51 +280,21 @@ function sanitizeState(value: unknown): BrowserState {
   return { selectedSpaceId, spaces };
 }
 
-function selectLaunchStartPage(state: BrowserState): BrowserState {
-  let didChange = false;
-  const spaces = state.spaces.map((space) => {
-    if (space.id !== state.selectedSpaceId) {
-      return space;
-    }
-
-    const localStartTab = space.tabs.find((tab) => tab.isStartPage && tab.url === null);
-    if (localStartTab) {
-      if (space.activeTabId === localStartTab.id) {
-        return space;
-      }
-
-      didChange = true;
-      return { ...space, activeTabId: localStartTab.id };
-    }
-
-    didChange = true;
-    const startTab = createStartTab();
-    return {
-      ...space,
-      tabs: capSpaceTabs([startTab, ...space.tabs]),
-      activeTabId: startTab.id
-    };
-  });
-
-  return didChange ? { ...state, spaces } : state;
-}
-
 function loadStateSnapshot(): { state: BrowserState; persistedValue: string | null } {
   let rawValue: string | null = null;
   try {
     rawValue = localStorage.getItem(STORAGE_KEY);
     const state = rawValue ? sanitizeState(JSON.parse(rawValue)) : createDefaultState();
-    const launchState = selectLaunchStartPage(state);
-    const serializedLaunchState = JSON.stringify(launchState);
-    if (rawValue !== serializedLaunchState) {
+    const serializedState = JSON.stringify(state);
+    if (rawValue !== serializedState) {
       try {
-        localStorage.setItem(STORAGE_KEY, serializedLaunchState);
+        localStorage.setItem(STORAGE_KEY, serializedState);
       } catch {
         // Best-effort re-normalization write; the in-memory state still stands.
       }
     }
 
-    return { state: launchState, persistedValue: serializedLaunchState };
+    return { state, persistedValue: serializedState };
   } catch (error) {
     // Corrupt or unreadable state: preserve the raw value for recovery instead
     // of silently destroying every space/tab, then fall back to defaults.

@@ -149,7 +149,7 @@ function loadSplitRatio(): number {
 }
 
 export default function App() {
-  const { theme, toggleTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { settings, updateSettings } = useSettings();
   const { quickLinks, removeQuickLink, reorderQuickLink, toggleQuickLink, isQuickLink, importLinks } =
     useQuickLinks();
@@ -188,7 +188,6 @@ export default function App() {
   const lastSplitRequestRef = useRef<string | null>(null);
   const lastCommandBarOpenRef = useRef(false);
   const lastLayoutMetricsKeyRef = useRef<string | null>(null);
-  const didCompleteLaunchResetRef = useRef(false);
   const sidebarResizeFrameRef = useRef<number | null>(null);
   const windowResizeIdleRef = useRef<number | null>(null);
   const spaceSwitchIdleRef = useRef<number | null>(null);
@@ -203,6 +202,7 @@ export default function App() {
   const [addressValue, setAddressValue] = useState("");
   const [isCommandBarOpen, setCommandBarOpen] = useState(false);
   const [commandBarMode, setCommandBarMode] = useState<"default" | "split">("default");
+  const [commandFocusToken, setCommandFocusToken] = useState(0);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("andromeda.compact") === "1"
   );
@@ -634,15 +634,6 @@ export default function App() {
   }, [flushContentLayout, isFindOpen, isSplitOpen, contentRightInset]);
 
   useEffect(() => {
-    if (!didCompleteLaunchResetRef.current) {
-      didCompleteLaunchResetRef.current = true;
-      if (!showReactStartPage) {
-        setAddressValue("");
-        showStartPage();
-        void window.andromeda.showStartPage();
-        return;
-      }
-    }
 
     const contentRequestKey = `${activeTab.id}:${showReactStartPage ? "start" : "url"}`;
     if (lastMainRequestRef.current === contentRequestKey) {
@@ -796,6 +787,40 @@ export default function App() {
     });
   }, [openMainUrl]);
 
+  // Belt-and-suspenders for the privileged chrome: an external file/link drop
+  // onto a non-droppable region must not navigate the app renderer. The main
+  // process also denies such navigations (will-navigate), but cancelling the
+  // drop here stops it before it starts. Internal tab drags use a custom data
+  // type and their own handlers, so they are never affected.
+  useEffect(() => {
+    const isExternalDrag = (event: WindowEventMap["drop"]) => {
+      const types = event.dataTransfer?.types;
+      return (
+        !!types &&
+        (Array.from(types).includes("Files") || Array.from(types).includes("text/uri-list"))
+      );
+    };
+    const onDragOver = (event: WindowEventMap["dragover"]) => {
+      if (!event.defaultPrevented && isExternalDrag(event)) {
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "none";
+        }
+      }
+    };
+    const onDrop = (event: WindowEventMap["drop"]) => {
+      if (!event.defaultPrevented && isExternalDrag(event)) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
   useEffect(() => {
     return window.andromeda.onDownload((payload) => {
       if (!seenDownloadIdsRef.current.has(payload.id)) {
@@ -843,7 +868,9 @@ export default function App() {
 
   useEffect(() => {
     return window.andromeda.onOpenCommandBar(() => {
+      setCommandBarMode("default");
       setCommandBarOpen(true);
+      setCommandFocusToken((current) => current + 1);
     });
   }, []);
 
@@ -994,6 +1021,7 @@ export default function App() {
   const openSplitCommandBar = useCallback(() => {
     setCommandBarMode("split");
     setCommandBarOpen(true);
+    setCommandFocusToken((current) => current + 1);
   }, []);
 
   const navigateSplitTo = useCallback(
@@ -1056,6 +1084,7 @@ export default function App() {
   const handleNewTab = useCallback(() => {
     setCommandBarMode("default");
     setCommandBarOpen(true);
+    setCommandFocusToken((current) => current + 1);
     setAddressValue("");
   }, []);
 
@@ -1667,6 +1696,7 @@ export default function App() {
   const openCommandBar = useCallback(() => {
     setCommandBarMode("default");
     setCommandBarOpen(true);
+    setCommandFocusToken((current) => current + 1);
   }, []);
 
   const closeCommandBar = useCallback(() => {
@@ -1940,7 +1970,6 @@ export default function App() {
           canGoBack={activeNavigationState.canGoBack}
           canGoForward={activeNavigationState.canGoForward}
           isLoading={activeNavigationState.isLoading}
-          theme={theme}
           isSidebarCollapsed={isSidebarCollapsed}
           canBookmark={Boolean(bookmarkUrl)}
           isBookmarked={isBookmarked}
@@ -1958,7 +1987,6 @@ export default function App() {
           onToggleDownloads={toggleDownloads}
           onToggleSiteInfo={toggleSiteInfo}
           onToggleReader={toggleReader}
-          onToggleTheme={toggleTheme}
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
           onCloseWindow={handleCloseWindow}
@@ -2105,6 +2133,7 @@ export default function App() {
         <CommandBar
           isOpen={isCommandBarOpen}
           mode={commandBarMode}
+          focusToken={commandFocusToken}
           historyItems={quickOpenItems}
           onClose={closeCommandBar}
           onNavigateInput={handleCommandInputNavigation}

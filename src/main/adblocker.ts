@@ -1,4 +1,4 @@
-import { app, session as electronSession, type Session } from "electron";
+import { app, session as electronSession, type InsertCSSOptions, type Session } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { ElectronBlocker, type Config } from "@ghostery/adblocker-electron";
@@ -74,14 +74,45 @@ export function setAdblockEnabled(next: boolean): void {
   void writePrefs({ adblock: next });
 }
 
-function applyNetworkOnlyConfig(engine: ElectronBlocker): void {
+function silenceCosmeticInjectionRejections(engine: ElectronBlocker): void {
+  const originalInject = engine.onInjectCosmeticFilters.bind(engine);
+  engine.onInjectCosmeticFilters = async (...args) => {
+    const [event] = args;
+    const sender = event.sender;
+    const originalExecuteJavaScript = sender.executeJavaScript.bind(sender);
+    const originalInsertCSS = sender.insertCSS.bind(sender);
+
+    sender.executeJavaScript = ((code: string, userGesture?: boolean) =>
+      originalExecuteJavaScript(code, userGesture).catch(() => undefined)) as typeof sender.executeJavaScript;
+    sender.insertCSS = ((css: string, options?: InsertCSSOptions) =>
+      originalInsertCSS(css, options).catch(() => "")) as typeof sender.insertCSS;
+
+    try {
+      await originalInject(...args);
+    } catch {
+      // Cosmetic and scriptlet rules are best-effort. A site can reject a
+      // scriptlet in one frame without disabling network blocking or poisoning
+      // the main process with unhandled promise rejections.
+    } finally {
+      sender.executeJavaScript = originalExecuteJavaScript as typeof sender.executeJavaScript;
+      sender.insertCSS = originalInsertCSS as typeof sender.insertCSS;
+    }
+  };
+}
+
+function tuneEngine(engine: ElectronBlocker): void {
+  // Full uBlock-style blocking: network filters AND cosmetic/scriptlet
+  // injection. Cosmetics hide in-page ad slots (YouTube promoted/masthead,
+  // sponsored rows); scriptlets strip the video-ad payloads that network
+  // rules alone can't catch. The upstream Electron adapter does not await the
+  // per-frame injection promises, so we attach rejection handlers first.
+  silenceCosmeticInjectionRejections(engine);
   const config = engine.config as unknown as MutableConfig;
-  config.loadCosmeticFilters = false;
-  config.loadGenericCosmeticsFilters = false;
-  config.loadExtendedSelectors = false;
-  config.enableMutationObserver = false;
-  config.enablePushInjectionsOnNavigationEvents = false;
   config.loadNetworkFilters = true;
+  config.loadCosmeticFilters = true;
+  config.loadGenericCosmeticsFilters = true;
+  config.enableMutationObserver = true;
+  config.enablePushInjectionsOnNavigationEvents = true;
 }
 
 function trackBlockedRequests(engine: ElectronBlocker): void {
@@ -113,8 +144,8 @@ async function refreshFilterLists(): Promise<void> {
     return;
   }
   try {
-    const fresh = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
-    applyNetworkOnlyConfig(fresh);
+    const fresh = await ElectronBlocker.fromPrebuiltFull(fetch);
+    tuneEngine(fresh);
     trackBlockedRequests(fresh);
 
     const previous = blocker;
@@ -149,13 +180,12 @@ function scheduleFilterListRefresh(): void {
 }
 
 /**
- * Network ad/tracker blocking for the whole default session (every tab/web
- * view). Uses Ghostery's prebuilt EasyList + EasyPrivacy engine, cached to
- * userData so subsequent launches are instant and work offline. Cosmetic
- * filtering is intentionally disabled because it injects page scripts and
- * per-page listeners that are fragile in our sandboxed WebContentsViews.
- * Fails open (browsing still works unblocked) if the lists can't be fetched on
- * first run.
+ * Ad/tracker blocking for the whole default session (every tab / web view).
+ * Uses Ghostery's prebuilt "full" engine — EasyList + EasyPrivacy + uBlock
+ * Origin filters with cosmetic filtering and scriptlet injection enabled, so
+ * it blocks like uBlock Origin, including YouTube video and in-feed ads.
+ * Cached to userData so later launches are instant and work offline; fails
+ * open (browsing still works unblocked) if the lists can't be fetched.
  */
 export async function setupAdblocker(
   targetSession: Session = electronSession.defaultSession
@@ -164,14 +194,14 @@ export async function setupAdblocker(
     const prefs = await readPrefs();
     enabled = prefs.adblock !== false;
 
-    cachePath = path.join(app.getPath("userData"), "andromeda-adblocker.bin");
-    const engine = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
+    cachePath = path.join(app.getPath("userData"), "andromeda-adblocker-full.bin");
+    const engine = await ElectronBlocker.fromPrebuiltFull(fetch, {
       path: cachePath,
       read: fs.readFile,
       write: fs.writeFile
     });
 
-    applyNetworkOnlyConfig(engine);
+    tuneEngine(engine);
     trackBlockedRequests(engine);
 
     blocker = engine;

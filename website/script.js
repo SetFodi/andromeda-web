@@ -1,153 +1,200 @@
-/* Andromeda landing — interactions. No dependencies. */
+/* ====================================================================== */
+/*  Andromeda — Daybreak. Smooth interactions, no dependencies.           */
+/* ====================================================================== */
 (function () {
   "use strict";
 
-  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  /* ---- Theme toggle (persisted, defaults to system) -------------------- */
-  var THEME_KEY = "andromeda.site.theme";
   var root = document.documentElement;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var fine = window.matchMedia("(pointer: fine)").matches;
 
-  function applyTheme(mode) {
+  /* ---- Theme -------------------------------------------------------- */
+  var THEME_KEY = "andromeda.site.theme";
+  var toggle = document.getElementById("themeToggle");
+
+  function setTheme(mode) {
     root.dataset.theme = mode;
+    if (toggle) toggle.setAttribute("aria-pressed", String(mode === "dark"));
   }
 
-  var storedTheme = null;
-  try {
-    storedTheme = localStorage.getItem(THEME_KEY);
-  } catch (e) {
-    /* private mode */
-  }
-  applyTheme(
-    storedTheme === "dark" || storedTheme === "light"
-      ? storedTheme
-      : window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
+  var stored = null;
+  try { stored = localStorage.getItem(THEME_KEY); } catch (e) {}
+  setTheme(
+    stored === "dark" || stored === "light"
+      ? stored
+      : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   );
 
-  document.getElementById("themeBtn").addEventListener("click", function () {
-    var next = root.dataset.theme === "dark" ? "light" : "dark";
-    applyTheme(next);
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch (e) {
-      /* ignore */
-    }
-  });
-
-  /* ---- Live clock + greeting in the mockup ----------------------------- */
-  var clockEl = document.getElementById("mockClock");
-  var dateEl = document.getElementById("mockDate");
-  var greetEl = document.getElementById("mockGreeting");
-
-  function tick() {
-    var now = new Date();
-    clockEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    dateEl.textContent = now.toLocaleDateString([], {
-      weekday: "long",
-      month: "long",
-      day: "numeric"
-    });
-    var hour = now.getHours();
-    greetEl.textContent =
-      hour < 5 ? "Up late" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  }
-
-  tick();
-  setInterval(tick, 30000);
-
-  /* ---- Space chips: re-tint the whole mockup ---------------------------- */
-  function setAccent(color) {
-    root.style.setProperty("--maccent", color);
-
-    document.querySelectorAll(".chip").forEach(function (el) {
-      el.classList.toggle("is-active", el.dataset.color === color);
-    });
-    // The dock only highlights when the chosen color matches one of its
-    // spaces; "Late Night" has no tile, so the dock simply rests.
-    document.querySelectorAll(".mock-space").forEach(function (el) {
-      el.classList.toggle("is-active", el.dataset.color === color);
+  if (toggle) {
+    toggle.addEventListener("click", function () {
+      var next = root.dataset.theme === "dark" ? "light" : "dark";
+      setTheme(next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
     });
   }
 
-  document.querySelectorAll(".chip").forEach(function (el) {
-    el.addEventListener("click", function () {
-      setAccent(el.dataset.color);
-    });
-  });
+  /* ---- Nav stuck state ---------------------------------------------- */
+  var nav = document.getElementById("nav");
+  function onNavScroll() {
+    if (nav) nav.classList.toggle("is-stuck", window.scrollY > 16);
+  }
+  onNavScroll();
+  window.addEventListener("scroll", onNavScroll, { passive: true });
 
-  /* ---- Reveal on scroll -------------------------------------------------- */
-  var revealEls = document.querySelectorAll(".reveal");
-  if (reduceMotion || !("IntersectionObserver" in window)) {
-    revealEls.forEach(function (el) {
-      el.classList.add("in");
-    });
+  /* ---- Reveal on scroll --------------------------------------------- */
+  var revealEls = document.querySelectorAll("[data-reveal]");
+  if (reduce || !("IntersectionObserver" in window)) {
+    revealEls.forEach(function (el) { el.classList.add("in"); });
   } else {
-    var revealObserver = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("in");
-            revealObserver.unobserve(entry.target);
-          }
-        });
-      },
-      { rootMargin: "0px 0px -8% 0px", threshold: 0.08 }
-    );
-    revealEls.forEach(function (el) {
-      revealObserver.observe(el);
-    });
-  }
-
-  /* ---- Shield counter ----------------------------------------------------
-     Counts up when scrolled into view, then keeps ticking slowly — a small
-     dramatization of the network blocking that never stops. */
-  var numEl = document.getElementById("shieldNum");
-  var started = false;
-
-  function formatNum(value) {
-    return Math.round(value).toLocaleString();
-  }
-
-  function startCounter() {
-    if (started) return;
-    started = true;
-
-    var target = 1284;
-    if (reduceMotion) {
-      numEl.textContent = formatNum(target);
-    } else {
-      var startTime = null;
-      var duration = 1400;
-      function frame(ts) {
-        if (startTime === null) startTime = ts;
-        var t = Math.min(1, (ts - startTime) / duration);
-        var eased = 1 - Math.pow(1 - t, 3);
-        numEl.textContent = formatNum(target * eased);
-        if (t < 1) requestAnimationFrame(frame);
-      }
-      requestAnimationFrame(frame);
-    }
-
-    setInterval(function () {
-      target += 1 + Math.floor(Math.random() * 3);
-      numEl.textContent = formatNum(target);
-    }, 1700);
-  }
-
-  if ("IntersectionObserver" in window) {
-    var counterObserver = new IntersectionObserver(
-      function (entries) {
-        if (entries.some(function (entry) { return entry.isIntersecting; })) {
-          startCounter();
-          counterObserver.disconnect();
+    var revObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("in");
+          revObserver.unobserve(entry.target);
         }
-      },
-      { threshold: 0.4 }
-    );
-    counterObserver.observe(numEl);
-  } else {
-    startCounter();
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+    revealEls.forEach(function (el) { revObserver.observe(el); });
+  }
+
+  /* ---- Hero: cursor spotlight + window tilt + scroll parallax -------- */
+  var hero = document.querySelector(".hero");
+  var spot = document.querySelector(".hero-spot");
+  var heroStage = document.querySelector(".hero-stage");
+  var heroWindow = heroStage ? heroStage.querySelector(".window") : null;
+
+  if (hero && fine && !reduce) {
+    hero.addEventListener("pointermove", function (e) {
+      var r = hero.getBoundingClientRect();
+      if (spot) {
+        spot.style.setProperty("--mx", (e.clientX - r.left) + "px");
+        spot.style.setProperty("--my", (e.clientY - r.top) + "px");
+      }
+    });
+  }
+
+  if (heroWindow && heroStage && fine && !reduce) {
+    heroStage.addEventListener("pointermove", function (e) {
+      var r = heroStage.getBoundingClientRect();
+      var px = (e.clientX - r.left) / r.width - 0.5;   // -0.5..0.5
+      var py = (e.clientY - r.top) / r.height - 0.5;
+      heroWindow.style.setProperty("--ry", (px * 7).toFixed(2) + "deg");
+      heroWindow.style.setProperty("--rx", (-py * 5).toFixed(2) + "deg");
+    });
+    heroStage.addEventListener("pointerleave", function () {
+      heroWindow.style.setProperty("--ry", "0deg");
+      heroWindow.style.setProperty("--rx", "0deg");
+    });
+  }
+
+  /* ---- rAF scroll loop (parallax) ----------------------------------- */
+  var ticking = false;
+  function onFrame() {
+    ticking = false;
+    var y = window.scrollY;
+    if (heroWindow && !reduce) {
+      var sty = Math.max(-60, Math.min(60, y * 0.06));
+      heroWindow.style.setProperty("--sty", sty.toFixed(1) + "px");
+    }
+  }
+  function requestFrame() {
+    if (!ticking) { ticking = true; requestAnimationFrame(onFrame); }
+  }
+  if (!reduce) {
+    window.addEventListener("scroll", requestFrame, { passive: true });
+    onFrame();
+  }
+
+  /* ---- Sticky showcase: active step --------------------------------- */
+  var feats = Array.prototype.slice.call(document.querySelectorAll(".feat"));
+  var shots = document.querySelectorAll(".sc-shot");
+  var dots = document.querySelectorAll(".sc-dot");
+
+  function setStep(i) {
+    shots.forEach(function (s) { s.classList.toggle("is-active", +s.dataset.shot === i); });
+    dots.forEach(function (d) { d.classList.toggle("is-active", +d.dataset.go === i); });
+  }
+
+  if (feats.length && "IntersectionObserver" in window) {
+    var stepObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) setStep(+entry.target.dataset.step);
+      });
+    }, { rootMargin: "-45% 0px -45% 0px", threshold: 0 });
+    feats.forEach(function (f) { stepObserver.observe(f); });
+  }
+
+  dots.forEach(function (dot) {
+    dot.addEventListener("click", function () {
+      var i = +dot.dataset.go;
+      var target = feats[i];
+      if (target) target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+    });
+  });
+
+  /* ---- Shield counter ----------------------------------------------- */
+  var numEl = document.getElementById("shieldNum");
+  if (numEl) {
+    var target = parseInt(numEl.dataset.target, 10) || 0;
+    var ran = false;
+    function runCount() {
+      if (ran) return; ran = true;
+      if (reduce) { numEl.textContent = target.toLocaleString(); return; }
+      var start = performance.now();
+      var dur = 2000;
+      function step(now) {
+        var t = Math.min(1, (now - start) / dur);
+        var eased = 1 - Math.pow(1 - t, 3);
+        numEl.textContent = Math.round(target * eased).toLocaleString();
+        if (t < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    if ("IntersectionObserver" in window) {
+      var cObs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) { runCount(); cObs.disconnect(); } });
+      }, { threshold: 0.5 });
+      cObs.observe(numEl);
+    } else { runCount(); }
+  }
+
+  /* ---- Day / night compare slider ----------------------------------- */
+  var compare = document.getElementById("compare");
+  if (compare) {
+    var win = compare.querySelector(".compare-window");
+    var handle = document.getElementById("compareHandle");
+    var dragging = false;
+
+    function setPct(pct) {
+      pct = Math.max(0, Math.min(100, pct));
+      win.style.setProperty("--cw", pct + "%");
+      if (handle) handle.setAttribute("aria-valuenow", Math.round(pct));
+    }
+    function fromEvent(clientX) {
+      var r = win.getBoundingClientRect();
+      setPct(((clientX - r.left) / r.width) * 100);
+    }
+
+    win.addEventListener("pointerdown", function (e) {
+      dragging = true;
+      win.setPointerCapture(e.pointerId);
+      fromEvent(e.clientX);
+    });
+    win.addEventListener("pointermove", function (e) {
+      if (dragging) fromEvent(e.clientX);
+    });
+    win.addEventListener("pointerup", function (e) {
+      dragging = false;
+      try { win.releasePointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    if (handle) {
+      handle.addEventListener("keydown", function (e) {
+        var cur = parseFloat(handle.getAttribute("aria-valuenow")) || 50;
+        if (e.key === "ArrowLeft") { setPct(cur - 4); e.preventDefault(); }
+        else if (e.key === "ArrowRight") { setPct(cur + 4); e.preventDefault(); }
+      });
+    }
+    setPct(50);
   }
 })();

@@ -853,6 +853,8 @@ export class WebContentsViewManager {
       }
     });
 
+    view.webContents.setMaxListeners(Math.max(view.webContents.getMaxListeners(), 32));
+
     view.webContents.setWindowOpenHandler(({ url }) => {
       if (isLoadableUrl(url)) {
         this.sendToRenderer("browser:openTab", { url });
@@ -1063,6 +1065,8 @@ export class WebContentsViewManager {
         plugins: true
       }
     });
+
+    view.webContents.setMaxListeners(Math.max(view.webContents.getMaxListeners(), 32));
 
     view.webContents.setWindowOpenHandler(({ url }) => {
       if (isLoadableUrl(url)) {

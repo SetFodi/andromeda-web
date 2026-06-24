@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, session as electronSession, type Session } from "electron";
+import { BrowserWindow, desktopCapturer, dialog, session as electronSession, type Session } from "electron";
 
 const ASKED_PERMISSIONS = new Set([
   "clipboard-read",
@@ -12,7 +12,9 @@ const ASKED_PERMISSIONS = new Set([
   "fullscreen"
 ]);
 
-const SAFE_PERMISSIONS = new Set(["fullscreen", "pointerLock"]);
+// display-capture is auto-granted here because the screen/window picker shown by
+// setDisplayMediaRequestHandler (below) is itself the user's consent step.
+const SAFE_PERMISSIONS = new Set(["fullscreen", "pointerLock", "display-capture"]);
 
 const grants = new Set<string>();
 const pendingPrompts = new Map<string, Promise<boolean>>();
@@ -140,4 +142,23 @@ export function setupSecurityPolicy(
   });
 
   targetSession.setDevicePermissionHandler(() => false);
+
+  // Screen / window sharing (getDisplayMedia — Google Meet, Zoom-web, Figma
+  // "present"). Prefer the native macOS picker when available; otherwise fall
+  // back to a desktopCapturer source so capture still works on older macOS.
+  targetSession.setDisplayMediaRequestHandler(
+    (_request, callback) => {
+      desktopCapturer
+        .getSources({ types: ["screen", "window"] })
+        .then((sources) => {
+          if (sources.length > 0) {
+            callback({ video: sources[0] });
+          } else {
+            callback({});
+          }
+        })
+        .catch(() => callback({}));
+    },
+    { useSystemPicker: true }
+  );
 }

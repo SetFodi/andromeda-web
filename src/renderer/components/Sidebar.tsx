@@ -77,18 +77,6 @@ type SidebarProps = {
   addressBar?: ReactNode;
 };
 
-function getTabSubtitle(tab: BrowserTab): string {
-  if (tab.isSleeping) {
-    return "Sleeping - click to wake";
-  }
-
-  if (tab.isStartPage || !tab.url) {
-    return "Local start page";
-  }
-
-  return getTabHostname(tab) ?? tab.url;
-}
-
 function getTabFallbackIcon(tab: BrowserTab): IconName {
   if (tab.isStartPage) {
     return "docs";
@@ -171,6 +159,23 @@ function Sidebar({
   onNewTab,
   addressBar
 }: SidebarProps) {
+  // Global "background glow" preference — toggles the warm start-page aurora.
+  // Persisted and applied as a class on <html> (also bootstrapped in main.tsx).
+  const [startGlowOff, setStartGlowOff] = useState<boolean>(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("no-start-glow")
+  );
+  const toggleStartGlow = () => {
+    setStartGlowOff((prev) => {
+      const next = !prev;
+      document.documentElement.classList.toggle("no-start-glow", next);
+      try {
+        localStorage.setItem("andromeda.startGlow", next ? "off" : "on");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
   const selectedSpace = spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0];
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -179,8 +184,12 @@ function Sidebar({
   const [dropSpaceId, setDropSpaceId] = useState<string | null>(null);
   const [draggedSpaceId, setDraggedSpaceId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [headerRename, setHeaderRename] = useState<string | null>(null);
+  const headerRenameRef = useRef<HTMLInputElement>(null);
   const swipeLockRef = useRef(false);
   const swipeIdleRef = useRef<number | null>(null);
+  const swipeDeltaRef = useRef(0);
+  const swipeLastAtRef = useRef(0);
 
   useEffect(() => {
     if (!draggedTabId) {
@@ -194,6 +203,19 @@ function Sidebar({
       renameInputRef.current?.select();
     }
   }, [editingSpaceId]);
+
+  const isHeaderRenaming = headerRename !== null;
+  useEffect(() => {
+    if (isHeaderRenaming) {
+      headerRenameRef.current?.focus();
+      headerRenameRef.current?.select();
+    }
+  }, [isHeaderRenaming]);
+
+  // Cancel an in-flight header rename when the active Space changes.
+  useEffect(() => {
+    setHeaderRename(null);
+  }, [selectedSpaceId]);
 
   useEffect(() => {
     if (!tabMenu && !spaceMenu) {
@@ -267,6 +289,16 @@ function Sidebar({
     setEditingSpaceId(null);
   };
 
+  const commitHeaderRename = () => {
+    if (headerRename !== null) {
+      const trimmed = headerRename.trim();
+      if (trimmed) {
+        onRenameSpace(selectedSpace.id, trimmed);
+      }
+    }
+    setHeaderRename(null);
+  };
+
   const handleCreateSpace = () => {
     setSpaceMenu(null);
     const newSpaceId = onCreateSpace();
@@ -275,7 +307,8 @@ function Sidebar({
   };
 
   const pinnedTabs = selectedSpace.tabs.filter((tab) => tab.pinned);
-  const regularTabs = selectedSpace.tabs.filter((tab) => !tab.pinned);
+  const activeTabs = selectedSpace.tabs.filter((tab) => !tab.pinned && !tab.isSleeping);
+  const sleepingTabs = selectedSpace.tabs.filter((tab) => !tab.pinned && tab.isSleeping);
 
   const releaseSwipeAfterIdle = () => {
     if (swipeIdleRef.current !== null) {
@@ -284,36 +317,55 @@ function Sidebar({
     swipeIdleRef.current = window.setTimeout(() => {
       swipeIdleRef.current = null;
       swipeLockRef.current = false;
-    }, 320);
+      swipeDeltaRef.current = 0;
+    }, 220);
   };
 
   const handleWheel = (event: WheelEvent<HTMLElement>) => {
-    const isHorizontalSwipe =
-      Math.abs(event.deltaX) > 28 && Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.35;
+    if (spaces.length < 2) {
+      return;
+    }
 
-    if (!isHorizontalSwipe || spaces.length < 2) {
+    const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerWidth : 1;
+    const deltaX = event.deltaX * deltaScale;
+    const deltaY = event.deltaY * deltaScale;
+    const horizontalIntent =
+      Math.abs(deltaX) > 2 && Math.abs(deltaX) > Math.abs(deltaY) * 0.85;
+
+    if (!horizontalIntent) {
       return;
     }
 
     event.preventDefault();
+    event.stopPropagation();
+
+    const now = window.performance.now();
+    if (now - swipeLastAtRef.current > 180) {
+      swipeDeltaRef.current = 0;
+    }
+    swipeLastAtRef.current = now;
+    swipeDeltaRef.current += deltaX;
     releaseSwipeAfterIdle();
 
-    if (swipeLockRef.current) {
+    if (swipeLockRef.current || Math.abs(swipeDeltaRef.current) < 56) {
       return;
     }
 
     const currentIndex = spaces.findIndex((space) => space.id === selectedSpaceId);
     const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-    const direction = event.deltaX > 0 ? "next" : "previous";
+    const direction = swipeDeltaRef.current > 0 ? "next" : "previous";
     const nextIndex = Math.max(
       0,
       Math.min(spaces.length - 1, safeIndex + (direction === "next" ? 1 : -1))
     );
 
-    swipeLockRef.current = true;
-    if (nextIndex !== safeIndex) {
-      onSwitchSpace(direction);
+    swipeDeltaRef.current = 0;
+    if (nextIndex === safeIndex) {
+      return;
     }
+
+    swipeLockRef.current = true;
+    onSwitchSpace(direction);
   };
 
   const handleSidebarContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
@@ -486,7 +538,6 @@ function Sidebar({
           <TabFavicon tab={tab} isLoading={tab.id === loadingTabId} />
           <span className="tab-copy">
             <span>{tab.title}</span>
-            <small>{getTabSubtitle(tab)}</small>
           </span>
         </button>
         <span className="tab-actions">
@@ -557,12 +608,53 @@ function Sidebar({
       ) : null}
       {addressBar ? <div className="sidebar-address-section">{addressBar}</div> : null}
       <div className="sidebar-body">
-        <section className="sidebar-section new-tab-section">
-          <button type="button" className="sidebar-new-tab" onClick={onNewTab}>
-            <Icon name="plus" size={20} />
-            <span>New Tab</span>
+        <div className="sidebar-space-heading">
+          <span
+            className="sidebar-space-icon"
+            style={{ "--space-hue": selectedSpace.accent } as CSSProperties}
+            aria-hidden="true"
+          >
+            <Icon name={selectedSpace.icon} size={15} />
+          </span>
+          {headerRename !== null ? (
+            <input
+              ref={headerRenameRef}
+              className="sidebar-space-rename"
+              value={headerRename}
+              spellCheck={false}
+              aria-label="Rename space"
+              onChange={(event) => setHeaderRename(event.target.value)}
+              onBlur={commitHeaderRename}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitHeaderRename();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setHeaderRename(null);
+                }
+              }}
+            />
+          ) : (
+            <span
+              className="sidebar-space-name"
+              title="Double-click to rename"
+              onDoubleClick={() => setHeaderRename(selectedSpace.name)}
+            >
+              {selectedSpace.name}
+            </span>
+          )}
+          <button
+            type="button"
+            className="sidebar-space-chevron"
+            aria-label={`${selectedSpace.name} space options`}
+            title="Space options"
+            onClick={(event) => openSpaceMenu(event, selectedSpace)}
+          >
+            <Icon name="chevronDown" size={16} />
           </button>
-        </section>
+        </div>
+        <div className="sidebar-rule" aria-hidden="true" />
 
         <section className="sidebar-section tabs-section" aria-label={`${selectedSpace.name} tabs`}>
           {pinnedTabs.length > 0 ? (
@@ -575,8 +667,35 @@ function Sidebar({
             </>
           ) : null}
 
-          {regularTabs.length > 0 ? (
-            <div className="tab-list">{regularTabs.map(renderTab)}</div>
+          {activeTabs.length > 0 ? (
+            <>
+              <div className="tab-group-label">
+                <span>Tabs</span>
+                <span className="tab-group-actions">
+                  <button
+                    type="button"
+                    className="tab-group-action"
+                    aria-label="New tab"
+                    title="New tab (⌘T)"
+                    onClick={onNewTab}
+                  >
+                    <Icon name="plus" size={14} />
+                  </button>
+                </span>
+              </div>
+              <div className="tab-list">{activeTabs.map(renderTab)}</div>
+            </>
+          ) : null}
+
+          {sleepingTabs.length > 0 ? (
+            <>
+              <div className="tab-group-label">
+                <Icon name="moon" size={11} />
+                <span>Sleeping</span>
+                <span className="tab-group-count">{sleepingTabs.length}</span>
+              </div>
+              <div className="tab-list">{sleepingTabs.map(renderTab)}</div>
+            </>
           ) : null}
         </section>
       </div>
@@ -798,6 +917,17 @@ function Sidebar({
             </ColorPicker>
           </div>
           <div className="tab-context-sep" />
+          <button
+            type="button"
+            className="tab-context-item"
+            role="menuitemcheckbox"
+            aria-checked={!startGlowOff}
+            onClick={toggleStartGlow}
+          >
+            <Icon name="sparkle" size={15} />
+            <span>Background glow</span>
+            <span className={startGlowOff ? "ctx-state" : "ctx-state is-on"}>{startGlowOff ? "Off" : "On"}</span>
+          </button>
           <button
             type="button"
             className="tab-context-item"

@@ -43,6 +43,19 @@ export function isVaultAvailable(): boolean {
   return safeStorage.isEncryptionAvailable();
 }
 
+async function quarantineVaultFile(raw: string, error: unknown): Promise<void> {
+  try {
+    const dest = path.join(
+      app.getPath("userData"),
+      `andromeda-passwords.corrupt-${Date.now()}.json`
+    );
+    await fs.writeFile(dest, raw);
+    console.warn(`[andromeda] password vault unreadable; backed up to ${dest}`, error);
+  } catch {
+    // Best-effort backup; never block startup on it.
+  }
+}
+
 async function loadVault(): Promise<VaultData> {
   if (vault) {
     return vault;
@@ -50,8 +63,14 @@ async function loadVault(): Promise<VaultData> {
 
   if (!loadPromise) {
     loadPromise = (async () => {
+      const raw = await fs.readFile(vaultPath(), "utf8").catch(() => null);
+      if (raw === null) {
+        // Missing file (first run) — nothing to preserve, start fresh.
+        vault = { credentials: [], neverOrigins: [] };
+        return vault;
+      }
+
       try {
-        const raw = await fs.readFile(vaultPath(), "utf8");
         const parsed = JSON.parse(raw) as { version?: number; encrypted?: string };
         if (parsed.version === VAULT_VERSION && typeof parsed.encrypted === "string") {
           const decrypted = safeStorage.decryptString(Buffer.from(parsed.encrypted, "base64"));
@@ -62,13 +81,17 @@ async function loadVault(): Promise<VaultData> {
           };
           return vault;
         }
-      } catch {
-        // Missing file (first run) or undecryptable vault (Keychain reset) —
-        // start fresh either way rather than blocking the browser.
+        throw new Error(`unreadable password vault (version ${String(parsed.version)})`);
+      } catch (error) {
+        // The file exists but won't decrypt/parse (truncation, or a rotated
+        // Keychain key). Preserve the original bytes so the passwords stay
+        // recoverable instead of silently destroying them, then start fresh.
+        if (isVaultAvailable()) {
+          await quarantineVaultFile(raw, error);
+        }
+        vault = { credentials: [], neverOrigins: [] };
+        return vault;
       }
-
-      vault = { credentials: [], neverOrigins: [] };
-      return vault;
     })();
   }
 
@@ -86,8 +109,16 @@ function persistVault(): void {
     encrypted: safeStorage.encryptString(JSON.stringify(snapshot)).toString("base64")
   });
 
+  const finalPath = vaultPath();
+  const tmpPath = `${finalPath}.tmp`;
   writeQueue = writeQueue
-    .then(() => fs.writeFile(vaultPath(), payload))
+    .then(async () => {
+      // Atomic write: a crash mid-write leaves the previous intact file in
+      // place — write a temp file, then rename over the target — instead of a
+      // truncated, undecryptable vault.
+      await fs.writeFile(tmpPath, payload);
+      await fs.rename(tmpPath, finalPath);
+    })
     .catch(() => {
       // Disk errors shouldn't crash browsing; the vault stays usable in memory.
     });

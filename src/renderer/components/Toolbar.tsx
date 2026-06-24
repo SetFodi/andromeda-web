@@ -1,6 +1,5 @@
 import { memo, type ReactNode } from "react";
-import Icon, { IconName } from "./Icon";
-import type { ThemeMode } from "../state/useTheme";
+import Icon from "./Icon";
 import type { AddressBarPlacement, ToolbarButtons } from "../state/useSettings";
 
 type ToolbarProps = {
@@ -11,7 +10,6 @@ type ToolbarProps = {
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
-  theme: ThemeMode;
   isSidebarCollapsed: boolean;
   canBookmark: boolean;
   isBookmarked: boolean;
@@ -29,7 +27,6 @@ type ToolbarProps = {
   onToggleDownloads: () => void;
   onToggleSiteInfo: () => void;
   onToggleReader: () => void;
-  onToggleTheme: () => void;
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
   onCloseWindow: () => void;
@@ -53,7 +50,6 @@ function Toolbar({
   canGoBack,
   canGoForward,
   isLoading,
-  theme,
   isSidebarCollapsed,
   canBookmark,
   isBookmarked,
@@ -71,14 +67,12 @@ function Toolbar({
   onToggleDownloads,
   onToggleSiteInfo,
   onToggleReader,
-  onToggleTheme,
   onToggleSidebar,
   onOpenSettings,
   onCloseWindow,
   onMinimizeWindow,
   onToggleMaximizeWindow
 }: ToolbarProps) {
-  const themeIcon: IconName = theme === "day" ? "sun" : theme === "night" ? "moon" : "sparkle";
   const addressInToolbar = addressBarPlacement === "toolbar";
 
   return (
@@ -230,15 +224,6 @@ function Toolbar({
           </button>
         ) : null}
         <span className="toolbar-sep" aria-hidden="true" />
-        <button
-          className="toolbar-icon theme-toggle"
-          type="button"
-          aria-label="Cycle appearance"
-          title="Cycle appearance"
-          onClick={onToggleTheme}
-        >
-          <Icon name={themeIcon} size={17} />
-        </button>
         <button
           className="toolbar-icon"
           type="button"

@@ -26,6 +26,7 @@ import "./styles/bookmarks.css";
     document.documentElement.dataset.theme = isDark ? "dark" : "light";
     document.documentElement.dataset.appearance = appearance;
     document.documentElement.classList.toggle("dark", isDark);
+    document.documentElement.classList.toggle("no-start-glow", localStorage.getItem("andromeda.startGlow") === "off");
   } catch {
     document.documentElement.dataset.theme = "light";
     document.documentElement.dataset.appearance = "day";
