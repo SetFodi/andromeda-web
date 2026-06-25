@@ -90,6 +90,14 @@ type SavePasswordPromptPayload = {
   mode: "save" | "update";
 };
 
+type AuthPromptPayload = {
+  id: string;
+  host: string;
+  port: number;
+  realm: string;
+  isProxy: boolean;
+};
+
 type CredentialSummary = {
   id: string;
   origin: string;
@@ -148,6 +156,9 @@ interface Window {
     openUpdate: (url: string) => Promise<void>;
     onUpdateAvailable: (callback: (payload: { version: string; url: string }) => void) => () => void;
     onSavePasswordPrompt: (callback: (payload: SavePasswordPromptPayload) => void) => () => void;
+    respondAuth: (id: string, username: string, password: string) => Promise<void>;
+    cancelAuth: (id: string) => Promise<void>;
+    onAuthPrompt: (callback: (payload: AuthPromptPayload) => void) => () => void;
     resizeContentView: (layout: ContentBounds | ContentLayout) => Promise<void>;
     setLayoutMetrics: (metrics: LayoutMetrics) => Promise<void>;
     syncLayout: () => Promise<void>;

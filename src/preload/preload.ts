@@ -65,6 +65,14 @@ type SavePasswordPromptPayload = {
   mode: "save" | "update";
 };
 
+type AuthPromptPayload = {
+  id: string;
+  host: string;
+  port: number;
+  realm: string;
+  isProxy: boolean;
+};
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -319,6 +327,27 @@ contextBridge.exposeInMainWorld("andromeda", {
 
     ipcRenderer.on("passwords:savePrompt", listener);
     return () => ipcRenderer.removeListener("passwords:savePrompt", listener);
+  },
+  respondAuth: (id: string, username: string, password: string) =>
+    ipcRenderer.invoke("auth:respond", {
+      id: String(id),
+      username: String(username),
+      password: String(password)
+    }),
+  cancelAuth: (id: string) => ipcRenderer.invoke("auth:respond", { id: String(id), cancel: true }),
+  onAuthPrompt: (callback: (payload: AuthPromptPayload) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { id?: unknown }).id === "string" &&
+        typeof (payload as { host?: unknown }).host === "string"
+      ) {
+        callback(payload as AuthPromptPayload);
+      }
+    };
+    ipcRenderer.on("browser:authPrompt", listener);
+    return () => ipcRenderer.removeListener("browser:authPrompt", listener);
   },
   resizeContentView: (layout: ContentBounds | ContentLayout) =>
     ipcRenderer.invoke("browser:resizeContentView", sanitizeLayout(layout)),

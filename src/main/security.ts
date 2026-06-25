@@ -1,4 +1,6 @@
-import { BrowserWindow, desktopCapturer, dialog, session as electronSession, type Session } from "electron";
+import path from "node:path";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { app, BrowserWindow, desktopCapturer, dialog, session as electronSession, type Session } from "electron";
 
 const ASKED_PERMISSIONS = new Set([
   "clipboard-read",
@@ -18,6 +20,53 @@ const SAFE_PERMISSIONS = new Set(["fullscreen", "pointerLock", "display-capture"
 
 const grants = new Set<string>();
 const pendingPrompts = new Map<string, Promise<boolean>>();
+
+// Site permission grants persist across launches (like Chrome/Arc), so a site
+// you've trusted isn't re-prompted every restart. Stored as a flat JSON array
+// of "origin:permission" keys in userData; atomic write, quarantine-on-corrupt.
+let grantsLoaded = false;
+function grantsPath(): string {
+  return path.join(app.getPath("userData"), "andromeda-permissions.json");
+}
+function loadGrants(): void {
+  if (grantsLoaded) {
+    return;
+  }
+  grantsLoaded = true;
+  let raw: string;
+  try {
+    raw = readFileSync(grantsPath(), "utf8");
+  } catch {
+    return; // first run — no file yet
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      for (const key of parsed) {
+        if (typeof key === "string" && key.includes(":")) {
+          grants.add(key);
+        }
+      }
+    }
+  } catch {
+    // Corrupt — preserve for inspection rather than silently dropping it.
+    try {
+      renameSync(grantsPath(), `${grantsPath()}.corrupt-${Date.now()}`);
+    } catch {
+      // best-effort
+    }
+  }
+}
+function persistGrants(): void {
+  const finalPath = grantsPath();
+  const tmpPath = `${finalPath}.tmp`;
+  try {
+    writeFileSync(tmpPath, JSON.stringify([...grants]));
+    renameSync(tmpPath, finalPath); // atomic swap — a crash mid-write can't corrupt
+  } catch {
+    // best-effort — a failed persist just means re-prompting next launch
+  }
+}
 
 function originFromUrl(rawUrl?: string): string | null {
   if (!rawUrl) {
@@ -50,6 +99,7 @@ export function listPermissionGrants(origin: string): string[] {
 
 export function revokePermissionGrant(origin: string, permission: string): void {
   grants.delete(grantKey(origin, permission));
+  persistGrants();
 }
 
 function describePermission(permission: string, details: Electron.PermissionRequest): string {
@@ -90,7 +140,7 @@ async function askUser(
       noLink: true,
       title: "Permission request",
       message: `${origin} wants ${describePermission(permission, details)}.`,
-      detail: "Andromeda remembers this until you quit. Only allow it if you trust the site."
+      detail: "Andromeda remembers this for this site. Only allow it if you trust the site."
     })
     .then(({ response }) => response === 0)
     .finally(() => pendingPrompts.delete(key));
@@ -103,6 +153,8 @@ export function setupSecurityPolicy(
   window: BrowserWindow,
   targetSession: Session = electronSession.defaultSession
 ): void {
+  loadGrants();
+
   targetSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
     const origin = originFromUrl(requestingOrigin);
     if (!origin) {
@@ -135,6 +187,7 @@ export function setupSecurityPolicy(
       .then((allowed) => {
         if (allowed) {
           grants.add(key);
+          persistGrants();
         }
         callback(allowed);
       })

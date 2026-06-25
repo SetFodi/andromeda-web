@@ -12,6 +12,7 @@ import AddressBar from "./components/AddressBar";
 import CommandBar from "./components/CommandBar";
 import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
 import OnboardingModal from "./components/OnboardingModal";
+import AuthDialog, { type AuthPromptRequest } from "./components/AuthDialog";
 import SiteInfoPanel from "./components/SiteInfoPanel";
 import HistoryPanel from "./components/HistoryPanel";
 import BookmarksPanel from "./components/BookmarksPanel";
@@ -234,6 +235,7 @@ export default function App() {
   const [savePasswordPrompt, setSavePasswordPrompt] = useState<SavePasswordPromptPayload | null>(
     null
   );
+  const [authPrompt, setAuthPrompt] = useState<AuthPromptRequest | null>(null);
   const [updateInfo, setUpdateInfo] = useState<{ version: string; url: string } | null>(null);
   const [downloads, setDownloads] = useState<DownloadEntry[]>(initialDownloadsRef.current);
   const [addressFocused, setAddressFocused] = useState(false);
@@ -988,6 +990,14 @@ export default function App() {
     });
   }, []);
 
+  // HTTP auth (Basic/Digest/NTLM) prompts arrive from the main process when a
+  // web view hits a 401/407; show the credential modal until the user answers.
+  useEffect(() => {
+    return window.andromeda.onAuthPrompt((payload) => {
+      setAuthPrompt(payload);
+    });
+  }, []);
+
   useEffect(() => {
     return window.andromeda.onUpdateAvailable((payload) => {
       setUpdateInfo(payload);
@@ -1017,6 +1027,16 @@ export default function App() {
     },
     [savePasswordPrompt]
   );
+
+  const handleAuthSubmit = useCallback((id: string, username: string, password: string) => {
+    void window.andromeda.respondAuth(id, username, password);
+    setAuthPrompt(null);
+  }, []);
+
+  const handleAuthCancel = useCallback((id: string) => {
+    void window.andromeda.cancelAuth(id);
+    setAuthPrompt(null);
+  }, []);
 
   const openSplitCommandBar = useCallback(() => {
     setCommandBarMode("split");
@@ -2211,6 +2231,7 @@ export default function App() {
           onPickSearchEngine={handleOnboardingEngine}
           onFinish={completeOnboarding}
         />
+        <AuthDialog request={authPrompt} onSubmit={handleAuthSubmit} onCancel={handleAuthCancel} />
 
         {updateInfo ? (
           <div className="update-toast" role="status">

@@ -4615,3 +4615,115 @@
   border-color: color-mix(in srgb, var(--accent) 60%, var(--field-border));
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
+/* ====================================================================== */
+/* HTTP auth prompt (Basic / Digest / NTLM, including proxies)            */
+/* ====================================================================== */
+.auth-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, #000 38%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.auth-panel {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 24px;
+  border-radius: var(--r-xl);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  animation: auth-pop var(--dur-med) var(--ease-out) both;
+}
+
+@keyframes auth-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.auth-sub {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-soft);
+  word-break: break-word;
+}
+
+.auth-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.auth-input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--field-border);
+  background: var(--field);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.auth-input:focus {
+  border-color: var(--accent);
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.auth-btn {
+  padding: 8px 16px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.auth-btn:hover {
+  background: var(--hover);
+}
+
+.auth-btn.is-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.auth-btn.is-primary:hover {
+  background: var(--accent-bright);
+}

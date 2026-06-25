@@ -199,6 +199,7 @@ type MainTab = {
   attached: boolean;
   applied: ContentBounds | null;
   lastNav: NavState | null;
+  lastActiveAt: number;
 };
 
 type SplitState = {
@@ -230,6 +231,11 @@ const MIN_SPLIT_RATIO = 0.25;
 const MAX_SPLIT_RATIO = 0.75;
 const UNRESPONSIVE_RECOVERY_DELAY_MS = 3500;
 const DEBUG_WEB_CONTENTS = process.env.ANDROMEDA_DEBUG_WEBCONTENTS === "1";
+// Cap on simultaneously-resident main web views. Beyond this, the
+// least-recently-active background tab's view is discarded (Chrome-style tab
+// discarding) and rebuilt from its URL on next visit, so an all-day, many-tab,
+// multi-space session can't grow unbounded renderer processes.
+const MAX_RESIDENT_MAIN_VIEWS = 12;
 
 function hasSameBounds(left: ContentBounds, right: ContentBounds): boolean {
   return (
@@ -543,7 +549,7 @@ export class WebContentsViewManager {
     let entry = this.mainTabs.get(tabId);
     if (!entry) {
       const view = this.createMainView(tabId);
-      entry = { view, loadedUrl: url, attached: false, applied: null, lastNav: null };
+      entry = { view, loadedUrl: url, attached: false, applied: null, lastNav: null, lastActiveAt: Date.now() };
       this.mainTabs.set(tabId, entry);
       this.debugViews("created-main-view");
       void view.webContents.loadURL(url);
@@ -553,11 +559,35 @@ export class WebContentsViewManager {
     }
 
     this.activeMainTabId = tabId;
+    entry.lastActiveAt = Date.now();
     this.activePane = "main";
     this.attachMain(tabId);
     // Returning to a tab brings its video back inline (closes its mini player).
     this.exitPictureInPicture(tabId);
     this.emitMainNavState(tabId);
+    this.enforceResidentCap();
+  }
+
+  // Keep resident main views under MAX_RESIDENT_MAIN_VIEWS by discarding the
+  // least-recently-active background tabs. The active tab and any tab still
+  // playing audio/video are never discarded; a discarded view is rebuilt from
+  // its URL the next time showTab targets it.
+  private enforceResidentCap(): void {
+    if (this.mainTabs.size <= MAX_RESIDENT_MAIN_VIEWS) {
+      return;
+    }
+    const victims = [...this.mainTabs.entries()]
+      .filter(([id]) => id !== this.activeMainTabId && !this.mediaPlaying.has(id))
+      .sort((a, b) => a[1].lastActiveAt - b[1].lastActiveAt);
+    let excess = this.mainTabs.size - MAX_RESIDENT_MAIN_VIEWS;
+    for (const [id, entry] of victims) {
+      if (excess <= 0) {
+        break;
+      }
+      this.closeMainEntry(id, entry);
+      excess -= 1;
+    }
+    this.debugViews("discarded-lru-main-views");
   }
 
   showStartPage(): void {

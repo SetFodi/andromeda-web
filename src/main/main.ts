@@ -1,12 +1,13 @@
 import path from "node:path";
-import { existsSync } from "node:fs";
-import { app, BrowserWindow, components } from "electron";
+import { appendFileSync, existsSync } from "node:fs";
+import { app, BrowserWindow, components, crashReporter, dialog } from "electron";
 import { WebContentsViewManager } from "./webContentsViewManager";
 import { registerIpc } from "./ipc";
 import { buildAppMenu } from "./menu";
 import { setupAdblocker } from "./adblocker";
 import { setupSecurityPolicy } from "./security";
 import { startUpdateChecks } from "./updater";
+import { setupHttpAuth } from "./auth";
 
 const isDevelopment = Boolean(process.env.ELECTRON_RENDERER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -20,6 +21,64 @@ app.commandLine.appendSwitch("enable-features", "TouchpadOverscrollHistoryNaviga
 app.userAgentFallback = app.userAgentFallback
   .replace(/\sandromeda\/\S+/i, "")
   .replace(/\sElectron\/\S+/, "");
+
+// Native crash capture: collect renderer/GPU/utility minidumps to a local
+// directory so a daily-driver crash leaves a diagnosable artifact. Nothing is
+// uploaded (uploadToServer:false) — local-only signal, not telemetry.
+crashReporter.start({ uploadToServer: false, compress: true });
+
+// A main-process JS exception would otherwise kill the whole app silently.
+// Append it (timestamped) to userData so it can be inspected or sent.
+function logMainError(scope: string, error: unknown): void {
+  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  try {
+    appendFileSync(
+      path.join(app.getPath("userData"), "andromeda-main-errors.log"),
+      `[${new Date().toISOString()}] ${scope}: ${detail}\n`
+    );
+  } catch {
+    // best-effort — disk full / unavailable
+  }
+  console.error(scope, error);
+}
+process.on("uncaughtException", (error) => logMainError("uncaughtException", error));
+process.on("unhandledRejection", (reason) => logMainError("unhandledRejection", reason));
+
+// TLS certificate errors: instead of a hard, unbypassable failure (which breaks
+// captive portals and self-signed internal/staging sites), let the user make an
+// informed choice — Chrome-style "proceed anyway". Deduped per host so a page's
+// subresource errors don't stack dialogs.
+const certPrompts = new Map<string, Promise<boolean>>();
+app.on("certificate-error", (event, webContents, url, error, _certificate, callback) => {
+  event.preventDefault();
+  let host = url;
+  try {
+    host = new URL(url).host;
+  } catch {
+    // keep the raw URL as the label
+  }
+  const existing = certPrompts.get(host);
+  if (existing) {
+    void existing.then(callback);
+    return;
+  }
+  const parent = BrowserWindow.fromWebContents(webContents) ?? mainWindow;
+  const options: Electron.MessageBoxOptions = {
+    type: "warning",
+    buttons: ["Back to safety", "Proceed anyway"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: "Connection not private",
+    message: `The security certificate for ${host} is not valid (${error}).`,
+    detail: "Someone may be impersonating this site to steal your information. Only continue if you understand the risk."
+  };
+  const prompt = (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options))
+    .then(({ response }) => response === 1)
+    .finally(() => certPrompts.delete(host));
+  certPrompts.set(host, prompt);
+  void prompt.then(callback);
+});
 
 function getBenchmarkUrls(): string[] {
   if (!process.env.ANDROMEDA_BENCHMARK_URLS) {
@@ -89,6 +148,7 @@ function createMainWindow(): BrowserWindow {
   });
 
   setupSecurityPolicy(window);
+  setupHttpAuth(window);
   const manager = new WebContentsViewManager(window);
   registerIpc(manager, window);
   buildAppMenu(window);

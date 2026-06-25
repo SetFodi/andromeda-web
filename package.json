@@ -33,6 +33,12 @@
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Andromeda needs camera access for sites you explicitly allow (e.g. video calls).",
+        "NSMicrophoneUsageDescription": "Andromeda needs microphone access for sites you explicitly allow (e.g. calls, voice input).",
+        "NSLocationWhenInUseUsageDescription": "Andromeda shares your location only with sites you explicitly allow.",
+        "NSLocationUsageDescription": "Andromeda shares your location only with sites you explicitly allow."
+      },
       "identity": null,
       "target": [
         {

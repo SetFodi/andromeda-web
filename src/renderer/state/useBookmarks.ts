@@ -128,20 +128,37 @@ export function useBookmarks() {
   const saveTimerRef = useRef<number | null>(null);
   const bookmarksRef = useRef(store.bookmarks);
   bookmarksRef.current = store.bookmarks;
+  // Mirrors the full store (bookmarks + folders) so the flush-on-exit path
+  // serializes the latest value without reading a stale closure.
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  // Set when a debounced write is scheduled, cleared once it lands; lets the
+  // flush-on-exit path no-op when there is nothing outstanding to persist.
+  const pendingWriteRef = useRef(false);
+
+  // Single write site: serializes the latest store from the ref under
+  // STORAGE_KEY. Shared by the debounced timer and the flush-on-exit path
+  // below so the serialization lives in one place.
+  const writeStore = useCallback(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ bookmarks: storeRef.current.bookmarks.slice(0, MAX_BOOKMARKS), folders: storeRef.current.folders })
+      );
+    } catch {
+      // ignore storage failures
+    }
+    pendingWriteRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
+    pendingWriteRef.current = true;
     saveTimerRef.current = window.setTimeout(() => {
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ bookmarks: store.bookmarks.slice(0, MAX_BOOKMARKS), folders: store.folders })
-        );
-      } catch {
-        // ignore storage failures
-      }
+      saveTimerRef.current = null;
+      writeStore();
     }, 800);
 
     return () => {
@@ -149,7 +166,34 @@ export function useBookmarks() {
         window.clearTimeout(saveTimerRef.current);
       }
     };
-  }, [store]);
+  }, [store, writeStore]);
+
+  // Flush immediately when the window is closing or hidden so a debounced
+  // change is never lost on quit / reload / app switch. pagehide is the
+  // primary teardown signal; visibilitychange-hidden is the backstop.
+  useEffect(() => {
+    const flush = () => {
+      if (!pendingWriteRef.current) {
+        return;
+      }
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      writeStore();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        flush();
+      }
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [writeStore]);
 
   const addBookmark = useCallback(
     (url: string, title: string, faviconUrl?: string, parentId: string | null = null) => {

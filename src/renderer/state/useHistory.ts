@@ -91,17 +91,30 @@ export function useHistory() {
   const saveTimerRef = useRef<number | null>(null);
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
+  // Set when a debounced write is scheduled, cleared once it lands; lets the
+  // flush-on-exit path no-op when there is nothing outstanding to persist.
+  const pendingWriteRef = useRef(false);
+
+  // Single write site: serializes the latest entries from the ref (never a
+  // stale closure) under STORAGE_KEY. Shared by the debounced timer and the
+  // flush-on-exit path below so the serialization lives in one place.
+  const writeEntries = useCallback(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entriesRef.current.slice(0, MAX_ENTRIES)));
+    } catch {
+      // ignore storage failures
+    }
+    pendingWriteRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
+    pendingWriteRef.current = true;
     saveTimerRef.current = window.setTimeout(() => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES)));
-      } catch {
-        // ignore storage failures
-      }
+      saveTimerRef.current = null;
+      writeEntries();
     }, 800);
 
     return () => {
@@ -109,7 +122,34 @@ export function useHistory() {
         window.clearTimeout(saveTimerRef.current);
       }
     };
-  }, [entries]);
+  }, [entries, writeEntries]);
+
+  // Flush immediately when the window is closing or hidden so a debounced
+  // change is never lost on quit / reload / app switch. pagehide is the
+  // primary teardown signal; visibilitychange-hidden is the backstop.
+  useEffect(() => {
+    const flush = () => {
+      if (!pendingWriteRef.current) {
+        return;
+      }
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      writeEntries();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        flush();
+      }
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [writeEntries]);
 
   const recordVisit = useCallback((url: string, title?: string) => {
     if (!isHttpUrl(url)) {
