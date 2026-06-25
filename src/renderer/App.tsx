@@ -21,6 +21,7 @@ import ReaderView, { ReaderArticle } from "./components/ReaderView";
 import FindBar from "./components/FindBar";
 import SettingsPanel from "./components/SettingsPanel";
 import Sidebar from "./components/Sidebar";
+import ClassicTabs from "./components/ClassicTabs";
 import StartPage from "./components/StartPage";
 import Toolbar from "./components/Toolbar";
 import { BrowserPane, BrowserTab, useBrowserStore, SpaceId } from "./state/browserStore";
@@ -565,6 +566,7 @@ export default function App() {
         splitOpen: isSplitOpen,
         splitRatio: splitRatioRef.current,
         findOpen: isFindOpen,
+        classic: settings.layout === "classic",
         ...overrides
       };
       const metricsKey = JSON.stringify(metrics);
@@ -575,7 +577,7 @@ export default function App() {
       lastLayoutMetricsKeyRef.current = metricsKey;
       void window.andromeda.setLayoutMetrics(metrics);
     },
-    [isFindOpen, isSidebarCollapsed, isSplitOpen]
+    [isFindOpen, isSidebarCollapsed, isSplitOpen, settings.layout]
   );
 
   const flushContentLayout = useCallback(
@@ -633,7 +635,7 @@ export default function App() {
   // ResizeObserver won't fire on its own).
   useEffect(() => {
     flushContentLayout(isSplitOpen, true);
-  }, [flushContentLayout, isFindOpen, isSplitOpen, contentRightInset]);
+  }, [flushContentLayout, isFindOpen, isSplitOpen, contentRightInset, settings.layout]);
 
   useEffect(() => {
 
@@ -1908,7 +1910,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closeCommandBar, isCommandBarOpen]);
 
-  const addressBarPlacement = settings.addressBarPlacement;
+  const isClassic = settings.layout === "classic";
+  const addressBarPlacement = isClassic ? "toolbar" : settings.addressBarPlacement;
   const addressBarIsStartPage = activePane === "main" && showReactStartPage;
   const addressBarIsLoading = activeNavigationState.isLoading;
   // Memoized so the (memoized) Sidebar/Toolbar only re-render when address state
@@ -1969,13 +1972,14 @@ export default function App() {
           isPureBlackTheme ? "is-pure-black" : "",
           isSidebarCollapsed ? "is-sidebar-collapsed" : "",
           isSidebarCollapsed && isSidebarPeeking ? "is-peeking" : "",
-          isResizingSidebar ? "is-resizing-sidebar" : ""
+          isResizingSidebar ? "is-resizing-sidebar" : "",
+          isClassic ? "is-classic" : ""
         ]
           .filter(Boolean)
           .join(" ")}
         style={shellStyle}
       >
-        {isSidebarCollapsed && !isSidebarPeeking ? (
+        {!isClassic && isSidebarCollapsed && !isSidebarPeeking ? (
           <div
             className="sidebar-peek-zone"
             aria-hidden="true"
@@ -1991,6 +1995,7 @@ export default function App() {
           canGoForward={activeNavigationState.canGoForward}
           isLoading={activeNavigationState.isLoading}
           isSidebarCollapsed={isSidebarCollapsed}
+          isClassicLayout={isClassic}
           canBookmark={Boolean(bookmarkUrl)}
           isBookmarked={isBookmarked}
           hasActiveDownload={hasActiveDownload}
@@ -2013,36 +2018,50 @@ export default function App() {
           onMinimizeWindow={handleMinimizeWindow}
           onToggleMaximizeWindow={handleToggleMaximizeWindow}
         />
-        <Sidebar
-          spaces={state.spaces}
-          selectedSpaceId={state.selectedSpaceId}
-          onMouseLeave={isSidebarCollapsed ? handlePeekLeave : undefined}
-          onResizeStart={handleSidebarResizeStart}
-          onSelectSpace={handleSelectSpace}
-          onCreateSpace={createSpace}
-          onRenameSpace={renameSpace}
-          onUpdateSpace={updateSpace}
-          onPreviewSpaceColor={handleSpaceColorPreview}
-          onDeleteSpace={deleteSpace}
-          onReorderSpaces={reorderSpaces}
-          onSwitchSpace={handleSwitchSpace}
-          onSelectTab={handleSelectSidebarTab}
-          onCloseTab={handleCloseSidebarTab}
-          onTogglePinTab={togglePinTab}
-          onDuplicateTab={duplicateTab}
-          onCloseOtherTabs={closeOtherTabs}
-          onSleepTab={handleSleepSidebarTab}
-          onMoveTabToSpace={moveTabToSpace}
-          loadingTabId={loadingTabId}
-          tabAudio={tabAudio}
-          onToggleMute={handleToggleMute}
-          onReorderTabs={handleReorderSidebarTabs}
-          onTabDragStart={handleSidebarTabDragStart}
-          onTabDragEnd={handleSidebarTabDragEnd}
-          draggedTabId={draggedTab?.id ?? null}
-          onNewTab={handleNewTab}
-          addressBar={addressBarPlacement === "sidebar" ? addressBar : null}
-        />
+        {isClassic ? (
+          <ClassicTabs
+            spaces={state.spaces}
+            selectedSpaceId={state.selectedSpaceId}
+            onSelectSpace={handleSelectSpace}
+            onSelectTab={handleSelectSidebarTab}
+            onCloseTab={handleCloseSidebarTab}
+            onNewTab={handleNewTab}
+            loadingTabId={loadingTabId}
+            tabAudio={tabAudio}
+            onToggleMute={handleToggleMute}
+          />
+        ) : (
+          <Sidebar
+            spaces={state.spaces}
+            selectedSpaceId={state.selectedSpaceId}
+            onMouseLeave={isSidebarCollapsed ? handlePeekLeave : undefined}
+            onResizeStart={handleSidebarResizeStart}
+            onSelectSpace={handleSelectSpace}
+            onCreateSpace={createSpace}
+            onRenameSpace={renameSpace}
+            onUpdateSpace={updateSpace}
+            onPreviewSpaceColor={handleSpaceColorPreview}
+            onDeleteSpace={deleteSpace}
+            onReorderSpaces={reorderSpaces}
+            onSwitchSpace={handleSwitchSpace}
+            onSelectTab={handleSelectSidebarTab}
+            onCloseTab={handleCloseSidebarTab}
+            onTogglePinTab={togglePinTab}
+            onDuplicateTab={duplicateTab}
+            onCloseOtherTabs={closeOtherTabs}
+            onSleepTab={handleSleepSidebarTab}
+            onMoveTabToSpace={moveTabToSpace}
+            loadingTabId={loadingTabId}
+            tabAudio={tabAudio}
+            onToggleMute={handleToggleMute}
+            onReorderTabs={handleReorderSidebarTabs}
+            onTabDragStart={handleSidebarTabDragStart}
+            onTabDragEnd={handleSidebarTabDragEnd}
+            draggedTabId={draggedTab?.id ?? null}
+            onNewTab={handleNewTab}
+            addressBar={addressBarPlacement === "sidebar" ? addressBar : null}
+          />
+        )}
 
         <div
           ref={contentRef}

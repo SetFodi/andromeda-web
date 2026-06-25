@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import AndromedaMark from "./AndromedaMark";
 import Icon from "./Icon";
+import PreviewNote from "./PreviewNote";
 import { SEARCH_ENGINES, SearchEngineId } from "../utils/url";
 import type { ThemeMode } from "../state/useTheme";
 
@@ -120,6 +121,7 @@ function OnboardingModal({
                 </span>
               </div>
             </div>
+            <PreviewNote />
           </div>
         ) : null}
 

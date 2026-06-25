@@ -11,6 +11,7 @@ type ToolbarProps = {
   canGoForward: boolean;
   isLoading: boolean;
   isSidebarCollapsed: boolean;
+  isClassicLayout: boolean;
   canBookmark: boolean;
   isBookmarked: boolean;
   hasActiveDownload: boolean;
@@ -51,6 +52,7 @@ function Toolbar({
   canGoForward,
   isLoading,
   isSidebarCollapsed,
+  isClassicLayout,
   canBookmark,
   isBookmarked,
   hasActiveDownload,
@@ -84,15 +86,17 @@ function Toolbar({
         <button className="traffic traffic-maximize" type="button" onClick={onToggleMaximizeWindow} />
       </div>
 
-      <button
-        className={isSidebarCollapsed ? "toolbar-icon sidebar-switch is-active" : "toolbar-icon sidebar-switch"}
-        type="button"
-        aria-label="Toggle sidebar"
-        aria-pressed={isSidebarCollapsed}
-        onClick={onToggleSidebar}
-      >
-        <Icon name="panel" size={18} />
-      </button>
+      {!isClassicLayout ? (
+        <button
+          className={isSidebarCollapsed ? "toolbar-icon sidebar-switch is-active" : "toolbar-icon sidebar-switch"}
+          type="button"
+          aria-label="Toggle sidebar"
+          aria-pressed={isSidebarCollapsed}
+          onClick={onToggleSidebar}
+        >
+          <Icon name="panel" size={18} />
+        </button>
+      ) : null}
 
       <div className="navigation-controls" aria-label="Navigation controls">
         <button

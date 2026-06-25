@@ -3,6 +3,8 @@ import { SEARCH_ENGINES, SearchEngineId, setSearchEngine } from "../utils/url";
 
 export type AddressBarPlacement = "toolbar" | "sidebar";
 
+export type LayoutMode = "sidebar" | "classic";
+
 export type ToolbarButtonKey = "bookmark" | "split" | "downloads" | "reader" | "siteInfo";
 
 export type ToolbarButtons = Record<ToolbarButtonKey, boolean>;
@@ -16,6 +18,7 @@ export type Settings = {
   searchEngine: SearchEngineId;
   appearanceAccent: string;
   addressBarPlacement: AddressBarPlacement;
+  layout: LayoutMode;
   toolbarButtons: ToolbarButtons;
 };
 
@@ -52,6 +55,7 @@ const DEFAULT_SETTINGS: Settings = {
   searchEngine: "google",
   appearanceAccent: "#f28366",
   addressBarPlacement: "toolbar",
+  layout: "sidebar",
   toolbarButtons: DEFAULT_TOOLBAR_BUTTONS
 };
 
@@ -63,6 +67,10 @@ function sanitizeAccent(value: unknown): string {
 
 function sanitizePlacement(value: unknown): AddressBarPlacement {
   return value === "sidebar" ? "sidebar" : "toolbar";
+}
+
+function sanitizeLayoutMode(value: unknown): LayoutMode {
+  return value === "classic" ? "classic" : "sidebar";
 }
 
 function sanitizeToolbarButtons(value: unknown): ToolbarButtons {
@@ -95,9 +103,10 @@ function loadSettings(): Settings {
         : DEFAULT_SETTINGS.searchEngine;
     const appearanceAccent = sanitizeAccent(parsed.appearanceAccent);
     const addressBarPlacement = sanitizePlacement(parsed.addressBarPlacement);
+    const layout = sanitizeLayoutMode(parsed.layout);
     const toolbarButtons = sanitizeToolbarButtons(parsed.toolbarButtons);
 
-    return { name, searchEngine, appearanceAccent, addressBarPlacement, toolbarButtons };
+    return { name, searchEngine, appearanceAccent, addressBarPlacement, layout, toolbarButtons };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -142,6 +151,7 @@ export function useSettings(): {
           patch.addressBarPlacement !== undefined
             ? sanitizePlacement(patch.addressBarPlacement)
             : current.addressBarPlacement,
+        layout: patch.layout !== undefined ? sanitizeLayoutMode(patch.layout) : current.layout,
         toolbarButtons:
           patch.toolbarButtons !== undefined
             ? sanitizeToolbarButtons({ ...current.toolbarButtons, ...patch.toolbarButtons })
@@ -153,6 +163,7 @@ export function useSettings(): {
         next.searchEngine === current.searchEngine &&
         next.appearanceAccent === current.appearanceAccent &&
         next.addressBarPlacement === current.addressBarPlacement &&
+        next.layout === current.layout &&
         toolbarButtonsEqual(next.toolbarButtons, current.toolbarButtons)
       ) {
         return current;

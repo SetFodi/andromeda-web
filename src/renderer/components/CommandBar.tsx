@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { resolveNavigationInput } from "../utils/url";
+import { getInlineCompletion, resolveNavigationInput } from "../utils/url";
 import { getFaviconSrc } from "../utils/favicon";
 import Icon, { IconName } from "./Icon";
 
@@ -93,27 +93,6 @@ function getMatchRank(item: HistoryItem, normalizedQuery: string): number {
   return Number.POSITIVE_INFINITY;
 }
 
-function getCompletionText(query: string, historyItems: HistoryItem[]): string | null {
-  const normalizedQuery = normalize(query);
-  if (!normalizedQuery) {
-    return null;
-  }
-
-  for (const item of historyItems) {
-    const candidates = [getHostname(item.url), getDisplayUrl(item.url), item.title].filter(Boolean);
-    const candidate = candidates.find((value) => {
-      const normalizedValue = normalize(value);
-      return normalizedValue.startsWith(normalizedQuery) && normalizedValue !== normalizedQuery;
-    });
-
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
 function QuickOpenIcon({ result }: { result: QuickOpenResult }) {
   const [failed, setFailed] = useState(false);
 
@@ -144,7 +123,7 @@ export default function CommandBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const completionText = useMemo(() => getCompletionText(query, historyItems), [historyItems, query]);
+  const completion = useMemo(() => getInlineCompletion(query, historyItems.map((item) => item.url)), [historyItems, query]);
 
   const results = useMemo<QuickOpenResult[]>(() => {
     const normalizedQuery = normalize(query);
@@ -241,10 +220,10 @@ export default function CommandBar({
         <div className="command-input-wrap">
           <Icon name="search" size={19} />
           <span className="command-input-field">
-            {completionText ? (
+            {completion ? (
               <span className="command-completion" aria-hidden="true">
                 <span className="command-completion-typed">{query}</span>
-                {completionText.slice(query.length)}
+                {completion.text.slice(query.length)}
               </span>
             ) : null}
             <input
@@ -287,16 +266,21 @@ export default function CommandBar({
                 const isCaretAtEnd =
                   event.currentTarget.selectionStart === event.currentTarget.value.length &&
                   event.currentTarget.selectionEnd === event.currentTarget.value.length;
-                if ((event.key === "Tab" || (event.key === "ArrowRight" && isCaretAtEnd)) && completionText) {
+                if ((event.key === "Tab" || (event.key === "ArrowRight" && isCaretAtEnd)) && completion) {
                   event.preventDefault();
-                  setQuery(completionText);
+                  setQuery(completion.text);
                   setSelectedIndex(0);
                   return;
                 }
 
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  runSelectedResult();
+                  if (completion && selectedIndex === 0) {
+                    onOpenUrl(completion.url, mode === "split" ? "split" : "active");
+                    onClose();
+                  } else {
+                    runSelectedResult();
+                  }
                 }
               }}
             />

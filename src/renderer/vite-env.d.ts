@@ -20,6 +20,7 @@ type LayoutMetrics = {
   splitOpen?: boolean;
   splitRatio?: number;
   findOpen?: boolean;
+  classic?: boolean;
 };
 
 type NavigationPayload = {

@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Icon from "./Icon";
+import PreviewNote from "./PreviewNote";
 import { SEARCH_ENGINES, SearchEngineId } from "../utils/url";
 import { restoreBackup, triggerBackupDownload } from "../utils/backup";
 import {
@@ -245,6 +246,7 @@ function SettingsPanel({
         </header>
 
         <div className="settings-body">
+          <PreviewNote />
           <div className="settings-field">
             <label htmlFor="settings-name">Your name</label>
             <p className="settings-hint">Used in the start page greeting and profile badge.</p>
@@ -335,6 +337,35 @@ function SettingsPanel({
                 onClick={() => onUpdateSettings({ addressBarPlacement: "sidebar" })}
               >
                 Sidebar
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-field">
+            <label>Layout</label>
+            <p className="settings-hint">Sidebar tabs or a classic top tab bar.</p>
+            <div className="settings-segment">
+              <button
+                type="button"
+                className={
+                  settings.layout === "sidebar"
+                    ? "settings-seg-btn is-active"
+                    : "settings-seg-btn"
+                }
+                onClick={() => onUpdateSettings({ layout: "sidebar" })}
+              >
+                Sidebar
+              </button>
+              <button
+                type="button"
+                className={
+                  settings.layout === "classic"
+                    ? "settings-seg-btn is-active"
+                    : "settings-seg-btn"
+                }
+                onClick={() => onUpdateSettings({ layout: "classic" })}
+              >
+                Classic
               </button>
             </div>
           </div>

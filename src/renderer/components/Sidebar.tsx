@@ -8,7 +8,7 @@ import type {
 } from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
-import { getFaviconSrc } from "../utils/favicon";
+import { TabFavicon } from "./TabFavicon";
 import {
   ColorArea,
   ColorField,
@@ -76,58 +76,6 @@ type SidebarProps = {
   onNewTab: () => void;
   addressBar?: ReactNode;
 };
-
-function getTabFallbackIcon(tab: BrowserTab): IconName {
-  if (tab.isStartPage) {
-    return "docs";
-  }
-
-  const hostname = getTabHostname(tab);
-  if (hostname === "github.com" || hostname?.endsWith(".github.com")) {
-    return "github";
-  }
-
-  if (hostname === "linear.app" || hostname?.endsWith(".linear.app")) {
-    return "linear";
-  }
-
-  return "globe";
-}
-
-function getTabHostname(tab: BrowserTab): string | null {
-  if (!tab.url) {
-    return null;
-  }
-
-  try {
-    return new URL(tab.url).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
-
-function TabFavicon({ tab, isLoading }: { tab: BrowserTab; isLoading: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const src = tab.isStartPage ? null : getFaviconSrc(tab.url, tab.faviconUrl);
-
-  useEffect(() => {
-    setFailed(false);
-  }, [src]);
-
-  return (
-    <span className={isLoading ? "tab-favicon is-loading" : "tab-favicon"}>
-      {isLoading ? (
-        <span className="tab-spinner" aria-label="Loading" />
-      ) : tab.isSleeping ? (
-        <Icon name="moon" size={15} />
-      ) : src && !failed ? (
-        <img alt="" src={src} loading="lazy" onError={() => setFailed(true)} />
-      ) : (
-        <Icon name={getTabFallbackIcon(tab)} size={15} />
-      )}
-    </span>
-  );
-}
 
 function Sidebar({
   spaces,

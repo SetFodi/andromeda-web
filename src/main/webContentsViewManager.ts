@@ -37,6 +37,7 @@ export type LayoutMetrics = {
   splitOpen: boolean;
   splitRatio: number;
   findOpen: boolean;
+  classic: boolean;
 };
 
 export type ReaderArticle = {
@@ -221,9 +222,11 @@ const DEFAULT_LAYOUT_METRICS: LayoutMetrics = {
   sidebarCollapsed: false,
   splitOpen: false,
   splitRatio: 0.5,
-  findOpen: false
+  findOpen: false,
+  classic: false
 };
 const TOOLBAR_HEIGHT = 56;
+const CLASSIC_TABS_HEIGHT = 40;
 const FIND_BAR_HEIGHT = 46;
 const SPLIT_HEADER_HEIGHT = 34;
 const SPLIT_GAP = 10;
@@ -1365,7 +1368,8 @@ export class WebContentsViewManager {
         MIN_SPLIT_RATIO,
         MAX_SPLIT_RATIO
       ),
-      findOpen: metrics.findOpen ?? this.layoutMetrics.findOpen
+      findOpen: metrics.findOpen ?? this.layoutMetrics.findOpen,
+      classic: metrics.classic ?? this.layoutMetrics.classic
     };
     this.syncLayoutFromWindow();
   }
@@ -1392,10 +1396,11 @@ export class WebContentsViewManager {
 
   private computeLayout(width: number, height: number): ContentLayout {
     const findInset = this.layoutMetrics.findOpen ? FIND_BAR_HEIGHT : 0;
-    const contentX = Math.round(this.layoutMetrics.sidebarCollapsed ? 8 : this.layoutMetrics.sidebarWidth);
-    const contentY = TOOLBAR_HEIGHT;
+    const classic = this.layoutMetrics.classic;
+    const contentX = classic ? 0 : Math.round(this.layoutMetrics.sidebarCollapsed ? 8 : this.layoutMetrics.sidebarWidth);
+    const contentY = classic ? TOOLBAR_HEIGHT + CLASSIC_TABS_HEIGHT : TOOLBAR_HEIGHT;
     const contentWidth = Math.max(0, Math.round(width - contentX));
-    const contentHeight = Math.max(0, Math.round(height - TOOLBAR_HEIGHT));
+    const contentHeight = Math.max(0, Math.round(height - contentY));
 
     if (!this.layoutMetrics.splitOpen) {
       return {

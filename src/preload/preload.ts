@@ -20,6 +20,7 @@ type LayoutMetrics = {
   splitOpen?: boolean;
   splitRatio?: number;
   findOpen?: boolean;
+  classic?: boolean;
 };
 
 type NavigationPayload = {
@@ -148,6 +149,13 @@ function sanitizeLayoutMetrics(metrics: LayoutMetrics): LayoutMetrics {
       throw new Error("Invalid find state");
     }
     sanitized.findOpen = metrics.findOpen;
+  }
+
+  if (metrics.classic !== undefined) {
+    if (typeof metrics.classic !== "boolean") {
+      throw new Error("Invalid layout state");
+    }
+    sanitized.classic = metrics.classic;
   }
 
   return sanitized;

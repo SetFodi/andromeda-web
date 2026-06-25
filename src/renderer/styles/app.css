@@ -414,6 +414,8 @@
 }
 
 .address-form input {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -4726,4 +4728,264 @@
 
 .auth-btn.is-primary:hover {
   background: var(--accent-bright);
+}
+
+/* ====================================================================== */
+/* Classic layout — horizontal top tab strip, no sidebar                  */
+/* ====================================================================== */
+.app-shell.is-classic {
+  --classic-tabs-height: 40px;
+}
+
+/* Full-width content below the toolbar + tab strip (the renderer measures
+   this rect; computeLayout mirrors it on resize). */
+.app-shell.is-classic .content-view-host {
+  top: calc(var(--toolbar-height) + var(--classic-tabs-height));
+  left: 0;
+}
+
+.classic-tabs {
+  position: absolute;
+  top: var(--toolbar-height);
+  left: 0;
+  right: 0;
+  height: var(--classic-tabs-height);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-glass);
+}
+
+.classic-spaces {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 6px;
+  border-right: 1px solid var(--border);
+}
+
+.classic-space {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.classic-space:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.classic-space.is-active {
+  background: color-mix(in srgb, var(--space-hue) 22%, transparent);
+  color: var(--space-hue);
+}
+
+.classic-tab-list {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.classic-tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.classic-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 1 200px;
+  min-width: 44px;
+  max-width: 220px;
+  padding: 0 4px 0 9px;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-muted);
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.classic-tab.is-pinned {
+  flex: 0 0 auto;
+  max-width: none;
+  padding: 0 7px;
+}
+
+.classic-tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.classic-tab.is-active {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.classic-tab-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.classic-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 520;
+}
+
+.classic-tab.is-sleeping .classic-tab-title {
+  color: var(--text-faint);
+}
+
+.classic-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.classic-tab:hover .classic-tab-btn,
+.classic-tab.is-active .classic-tab-btn,
+.classic-tab-btn.is-muted {
+  opacity: 1;
+}
+
+.classic-tab-btn:hover {
+  background: var(--hover-strong);
+  color: var(--text);
+}
+
+.classic-tab-close:hover {
+  color: #ff5f57;
+}
+
+.classic-new-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.classic-new-tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* Classic toolbar has no sidebar-toggle button, so drop that grid column —
+   otherwise the 4 remaining children shift into the wrong tracks and the
+   address bar gets squeezed into the narrow nav column. */
+.app-shell.is-classic .toolbar {
+  grid-template-columns: 88px 120px minmax(260px, 1fr) auto;
+}
+
+.app-shell.is-classic .address-form {
+  width: 100%;
+  max-width: 760px;
+}
+
+/* Inline autocomplete ghost for the address bar (mirrors the command bar). */
+.address-input-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+  height: 100%;
+}
+
+.address-completion {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 10px 0 3px;
+  color: var(--text-faint);
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.address-completion-typed {
+  color: transparent;
+}
+
+/* Small "aesthetic-first early build" label (onboarding intro + Settings). */
+.preview-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.onboard-step .preview-note {
+  margin-top: 18px;
+}
+
+.preview-note-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.preview-note-copy {
+  min-width: 0;
 }

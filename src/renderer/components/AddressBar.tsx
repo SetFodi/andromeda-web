@@ -1,5 +1,6 @@
-import { memo, useEffect, useState, type RefObject } from "react";
+import { memo, useEffect, useMemo, useState, type RefObject } from "react";
 import Icon, { IconName } from "./Icon";
+import { getInlineCompletion } from "../utils/url";
 
 function getHostname(url: string): string {
   try {
@@ -66,6 +67,14 @@ function AddressBar({
     setSuggestIndex(-1);
   }, [addressValue, showAddressSuggestions]);
 
+  const completion = useMemo(
+    () =>
+      showAddressSuggestions
+        ? getInlineCompletion(addressValue, addressSuggestions.map((suggestion) => suggestion.url))
+        : null,
+    [addressValue, addressSuggestions, showAddressSuggestions]
+  );
+
   const className = [
     "address-form",
     variant === "sidebar" ? "is-sidebar" : "",
@@ -95,44 +104,66 @@ function AddressBar({
           <Icon name={isStartPage ? "search" : currentPageIcon} size={15} />
         )}
       </span>
-      <input
-        ref={inputRef}
-        value={addressValue}
-        placeholder="Search or enter website"
-        onChange={(event) => onAddressChange(event.target.value)}
-        onFocus={onAddressFocus}
-        onBlur={onAddressBlur}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            onAddressEscape();
-            event.currentTarget.blur();
-            return;
-          }
-
-          if (!showAddressSuggestions || addressSuggestions.length === 0) {
-            return;
-          }
-
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setSuggestIndex((current) => (current + 1) % addressSuggestions.length);
-          } else if (event.key === "ArrowUp") {
-            event.preventDefault();
-            setSuggestIndex((current) =>
-              current <= 0 ? addressSuggestions.length - 1 : current - 1
-            );
-          } else if (event.key === "Enter" && suggestIndex >= 0) {
-            event.preventDefault();
-            const target = addressSuggestions[suggestIndex];
-            if (target) {
-              onPickSuggestion(target.url);
+      <span className="address-input-field">
+        {completion ? (
+          <span className="address-completion" aria-hidden="true">
+            <span className="address-completion-typed">{addressValue}</span>
+            {completion.text.slice(addressValue.length)}
+          </span>
+        ) : null}
+        <input
+          ref={inputRef}
+          value={addressValue}
+          placeholder="Search or enter website"
+          onChange={(event) => onAddressChange(event.target.value)}
+          onFocus={onAddressFocus}
+          onBlur={onAddressBlur}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              onAddressEscape();
+              event.currentTarget.blur();
+              return;
             }
-          }
-        }}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-      />
+
+            if (!showAddressSuggestions || addressSuggestions.length === 0) {
+              return;
+            }
+
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setSuggestIndex((current) => (current + 1) % addressSuggestions.length);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setSuggestIndex((current) =>
+                current <= 0 ? addressSuggestions.length - 1 : current - 1
+              );
+            } else if (
+              (event.key === "Tab" ||
+                (event.key === "ArrowRight" &&
+                  event.currentTarget.selectionStart === event.currentTarget.value.length &&
+                  event.currentTarget.selectionEnd === event.currentTarget.value.length)) &&
+              completion
+            ) {
+              event.preventDefault();
+              onAddressChange(completion.text);
+            } else if (event.key === "Enter") {
+              if (suggestIndex >= 0) {
+                event.preventDefault();
+                const target = addressSuggestions[suggestIndex];
+                if (target) {
+                  onPickSuggestion(target.url);
+                }
+              } else if (completion) {
+                event.preventDefault();
+                onPickSuggestion(completion.url);
+              }
+            }
+          }}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+        />
+      </span>
       {zoomPercent !== null && zoomPercent !== 100 ? (
         <button type="button" className="zoom-chip" title="Reset zoom" onClick={onResetZoom}>
           {zoomPercent}%
