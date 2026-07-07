@@ -1229,6 +1229,144 @@ export function useBrowserStore() {
     setSplitState(resetSplitState);
   }, []);
 
+  // "Tidy": stack duplicate pages (keeping the active tab when it's one of the
+  // copies), then group the remaining unpinned tabs by site in first-seen
+  // order. Closed duplicates land on the reopen stack (⌘⇧T undoes).
+  const tidyTabs = useCallback(
+    (spaceId: SpaceId) => {
+      const space = state.spaces.find((candidate) => candidate.id === spaceId);
+      if (!space) {
+        return;
+      }
+
+      const pinned = space.tabs.filter((tab) => tab.pinned);
+      const unpinned = space.tabs.filter((tab) => !tab.pinned);
+
+      const keptByKey = new Map<string, BrowserTab>();
+      const duplicates: BrowserTab[] = [];
+      for (const tab of unpinned) {
+        const key = !tab.url || tab.isStartPage ? `tab:${tab.id}` : getReusableUrlKey(tab.url);
+        const existing = keptByKey.get(key);
+        if (!existing) {
+          keptByKey.set(key, tab);
+        } else if (tab.id === space.activeTabId) {
+          duplicates.push(existing);
+          keptByKey.set(key, tab);
+        } else {
+          duplicates.push(tab);
+        }
+      }
+
+      const keptIds = new Set(Array.from(keptByKey.values(), (tab) => tab.id));
+      const hostOf = (tab: BrowserTab): string => {
+        if (!tab.url || tab.isStartPage) {
+          return "";
+        }
+        try {
+          return new URL(tab.url).hostname.replace(/^www\./, "");
+        } catch {
+          return "";
+        }
+      };
+
+      const groupOrder: string[] = [];
+      const groups = new Map<string, BrowserTab[]>();
+      for (const tab of unpinned) {
+        if (!keptIds.has(tab.id)) {
+          continue;
+        }
+        const host = hostOf(tab);
+        const bucket = groups.get(host);
+        if (bucket) {
+          bucket.push(tab);
+        } else {
+          groups.set(host, [tab]);
+          groupOrder.push(host);
+        }
+      }
+
+      const tidiedTabs = [...pinned, ...groupOrder.flatMap((host) => groups.get(host) ?? [])];
+      const isUnchanged =
+        duplicates.length === 0 &&
+        tidiedTabs.length === space.tabs.length &&
+        tidiedTabs.every((tab, index) => tab.id === space.tabs[index].id);
+      if (isUnchanged) {
+        return;
+      }
+
+      const restorable = duplicates.filter((tab) => tab.url && !tab.isStartPage);
+      if (restorable.length > 0) {
+        setClosedTabs((stack) =>
+          [
+            ...stack,
+            ...restorable.map((tab) => ({ spaceId, tab: { ...tab, isSleeping: undefined } }))
+          ].slice(-10)
+        );
+      }
+
+      setState((current) => ({
+        ...current,
+        spaces: current.spaces.map((candidate) =>
+          candidate.id === spaceId ? { ...candidate, tabs: tidiedTabs } : candidate
+        )
+      }));
+    },
+    [state.spaces]
+  );
+
+  // "Clear": close every unpinned tab in the space in one sweep. Closed pages
+  // land on the reopen stack (up to its cap), so the sweep is recoverable.
+  const clearUnpinnedTabs = useCallback(
+    (spaceId: SpaceId) => {
+      const space = state.spaces.find((candidate) => candidate.id === spaceId);
+      if (!space) {
+        return;
+      }
+
+      const removed = space.tabs.filter((tab) => !tab.pinned);
+      const isAlreadyBare =
+        removed.length === 0 || (space.tabs.length === 1 && space.tabs[0].isStartPage);
+      if (isAlreadyBare) {
+        return;
+      }
+
+      const restorable = removed.filter((tab) => tab.url && !tab.isStartPage);
+      if (restorable.length > 0) {
+        setClosedTabs((stack) =>
+          [
+            ...stack,
+            ...restorable.map((tab) => ({ spaceId, tab: { ...tab, isSleeping: undefined } }))
+          ].slice(-10)
+        );
+      }
+
+      setState((current) => {
+        let didChange = false;
+        const spaces = current.spaces.map((candidate) => {
+          if (candidate.id !== spaceId) {
+            return candidate;
+          }
+
+          const keptTabs = candidate.tabs.filter((tab) => tab.pinned);
+          const tabs = keptTabs.length > 0 ? keptTabs : [createStartTab()];
+          const activeTabId = tabs.some((tab) => tab.id === candidate.activeTabId)
+            ? candidate.activeTabId
+            : tabs[0].id;
+
+          didChange = true;
+          return { ...candidate, tabs, activeTabId };
+        });
+
+        return didChange ? { ...current, spaces } : current;
+      });
+
+      if (spaceId === state.selectedSpaceId) {
+        setSplitState(resetSplitState);
+      }
+    },
+    [state.selectedSpaceId, state.spaces]
+  );
+
   return {
     state,
     selectedSpace,
@@ -1251,6 +1389,8 @@ export function useBrowserStore() {
     closeTab,
     duplicateTab,
     closeOtherTabs,
+    tidyTabs,
+    clearUnpinnedTabs,
     sleepTab,
     moveTabToSpace,
     reopenClosedTab,

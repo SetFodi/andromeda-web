@@ -10,6 +10,21 @@ function getHostname(url: string): string {
   }
 }
 
+// Hostname for the collapsed domain chip; "" when the value isn't URL-shaped
+// (queries, empty) so the full field shows instead.
+function getChipHost(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed)) {
+    return "";
+  }
+  try {
+    const url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    return url.hostname.includes(".") ? url.hostname.replace(/^www\./, "") : "";
+  } catch {
+    return "";
+  }
+}
+
 type AddressBarProps = {
   variant: "toolbar" | "sidebar";
   addressValue: string;
@@ -54,9 +69,16 @@ function AddressBar({
   const pageLabel = currentPageTitle.trim() || (isStartPage ? "Start" : "Browsing");
   const [failedFaviconUrl, setFailedFaviconUrl] = useState<string | null>(null);
   const [suggestIndex, setSuggestIndex] = useState(-1);
+  const [isEditing, setIsEditing] = useState(false);
   const showFavicon = Boolean(
     currentPageFaviconUrl && !isStartPage && currentPageFaviconUrl !== failedFaviconUrl
   );
+
+  // Toolbar placement collapses to an Aside-style domain chip while browsing.
+  // The real input stays mounted (hidden) so ⌘L focus flips straight into
+  // editing via its onFocus handler.
+  const chipHost = useMemo(() => getChipHost(addressValue), [addressValue]);
+  const isChip = variant === "toolbar" && !isEditing && !isStartPage && chipHost !== "";
 
   useEffect(() => {
     setFailedFaviconUrl(null);
@@ -78,7 +100,8 @@ function AddressBar({
   const className = [
     "address-form",
     variant === "sidebar" ? "is-sidebar" : "",
-    isLoading ? "is-loading" : ""
+    isLoading ? "is-loading" : "",
+    isChip ? "is-chip" : ""
   ]
     .filter(Boolean)
     .join(" ");
@@ -91,6 +114,32 @@ function AddressBar({
         onSubmit();
       }}
     >
+      {isChip ? (
+        <button
+          type="button"
+          className="address-chip"
+          title={addressValue.trim()}
+          aria-label={`Edit address — ${chipHost}`}
+          onClick={() => {
+            setIsEditing(true);
+            requestAnimationFrame(() => {
+              inputRef.current?.focus();
+              inputRef.current?.select();
+            });
+          }}
+        >
+          {showFavicon ? (
+            <img
+              alt=""
+              src={currentPageFaviconUrl}
+              onError={() => setFailedFaviconUrl(currentPageFaviconUrl ?? null)}
+            />
+          ) : (
+            <Icon name={currentPageIcon} size={14} />
+          )}
+          <span className="address-chip-host">{chipHost}</span>
+        </button>
+      ) : null}
       <span className="address-lead" title={pageLabel} aria-hidden="true">
         {showFavicon ? (
           <img
@@ -116,8 +165,14 @@ function AddressBar({
           value={addressValue}
           placeholder="Search or enter website"
           onChange={(event) => onAddressChange(event.target.value)}
-          onFocus={onAddressFocus}
-          onBlur={onAddressBlur}
+          onFocus={() => {
+            setIsEditing(true);
+            onAddressFocus();
+          }}
+          onBlur={() => {
+            setIsEditing(false);
+            onAddressBlur();
+          }}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               onAddressEscape();

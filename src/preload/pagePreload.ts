@@ -67,6 +67,7 @@ const PICKER_CSS = `
 
 if (location.protocol === "https:" || location.protocol === "http:") {
   setupPasswordAutofill();
+  setupLinkHoverPill();
 }
 
 function setupPasswordAutofill(): void {
@@ -395,4 +396,138 @@ function setupPasswordAutofill(): void {
   } else {
     watchForLoginForms();
   }
+}
+
+/**
+ * Link-hover URL pill: a small floating chip in the page's bottom-left corner
+ * showing the destination of the hovered link (Aside-style, replaces a status
+ * bar). Rendered inside the page via a closed shadow root so page CSS can't
+ * restyle it and nothing is exposed. Native web views composite above the
+ * renderer chrome, so this must live in-page — the React shell can't draw it.
+ */
+function setupLinkHoverPill(): void {
+  const SHOW_DELAY_MS = 150;
+  const EDGE_AVOID_PX = 56;
+
+  let host: HTMLDivElement | null = null;
+  let pill: HTMLSpanElement | null = null;
+  let showTimer = 0;
+  let currentUrl = "";
+
+  function ensurePill(): HTMLSpanElement | null {
+    if (pill) {
+      return pill;
+    }
+    if (!document.documentElement) {
+      return null;
+    }
+
+    host = document.createElement("div");
+    host.style.cssText =
+      "position:fixed;left:0;bottom:0;z-index:2147483647;pointer-events:none;";
+    const shadow = host.attachShadow({ mode: "closed" });
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { all: initial; }
+      .pill {
+        position: fixed;
+        left: 12px;
+        bottom: 10px;
+        display: block;
+        max-width: min(64vw, 720px);
+        padding: 5px 12px;
+        border: 1px solid rgba(255, 205, 180, 0.16);
+        border-radius: 999px;
+        background: rgba(28, 20, 16, 0.92);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+        color: #ece2d9;
+        font: 500 11.5px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0.005em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0;
+        transform: translateY(3px);
+        transition: opacity 130ms ease, transform 130ms ease;
+      }
+      .pill.is-visible { opacity: 1; transform: none; }
+      .pill.is-right { left: auto; right: 12px; }
+    `;
+    pill = document.createElement("span");
+    pill.className = "pill";
+    shadow.append(style, pill);
+    document.documentElement.appendChild(host);
+    return pill;
+  }
+
+  function formatTarget(href: string): string {
+    try {
+      const url = new URL(href, location.href);
+      if (url.protocol === "mailto:") {
+        return href;
+      }
+      const path = `${url.pathname}${url.search}${url.hash}`;
+      return `${url.hostname.replace(/^www\./, "")}${path === "/" ? "" : path}`;
+    } catch {
+      return href;
+    }
+  }
+
+  function hide(): void {
+    window.clearTimeout(showTimer);
+    showTimer = 0;
+    currentUrl = "";
+    pill?.classList.remove("is-visible");
+  }
+
+  function show(href: string, pointerX: number, pointerY: number): void {
+    const target = ensurePill();
+    if (!target) {
+      return;
+    }
+
+    currentUrl = href;
+    window.clearTimeout(showTimer);
+    showTimer = window.setTimeout(() => {
+      if (currentUrl !== href) {
+        return;
+      }
+      target.textContent = formatTarget(href);
+      // Dodge the corner the cursor is in so the pill never sits under it.
+      const nearLeftBottom =
+        pointerY > window.innerHeight - EDGE_AVOID_PX && pointerX < window.innerWidth * 0.45;
+      target.classList.toggle("is-right", nearLeftBottom);
+      target.classList.add("is-visible");
+    }, SHOW_DELAY_MS);
+  }
+
+  document.addEventListener(
+    "mouseover",
+    (event) => {
+      const element = event.target instanceof Element ? event.target : null;
+      const anchor = element?.closest("a[href]");
+      const href = anchor?.getAttribute("href")?.trim();
+      if (!anchor || !href || href.startsWith("javascript:") || href === "#") {
+        hide();
+        return;
+      }
+      show((anchor as HTMLAnchorElement).href || href, event.clientX, event.clientY);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "mouseout",
+    (event) => {
+      const element = event.target instanceof Element ? event.target : null;
+      if (element?.closest("a[href]")) {
+        hide();
+      }
+    },
+    true
+  );
+
+  document.addEventListener("mousedown", hide, true);
+  window.addEventListener("blur", hide);
+  window.addEventListener("pagehide", hide);
 }

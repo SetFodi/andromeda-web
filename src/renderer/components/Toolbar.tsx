@@ -80,11 +80,13 @@ function Toolbar({
   return (
     <header className={addressInToolbar ? "toolbar" : "toolbar is-address-elsewhere"}>
       {isLoading ? <span className="toolbar-progress" aria-hidden="true" /> : null}
-      <div className="traffic-lights" aria-label="Window controls">
-        <button className="traffic traffic-close" type="button" onClick={onCloseWindow} />
-        <button className="traffic traffic-minimize" type="button" onClick={onMinimizeWindow} />
-        <button className="traffic traffic-maximize" type="button" onClick={onToggleMaximizeWindow} />
-      </div>
+      {isClassicLayout || isSidebarCollapsed ? (
+        <div className="traffic-lights" aria-label="Window controls">
+          <button className="traffic traffic-close" type="button" onClick={onCloseWindow} />
+          <button className="traffic traffic-minimize" type="button" onClick={onMinimizeWindow} />
+          <button className="traffic traffic-maximize" type="button" onClick={onToggleMaximizeWindow} />
+        </div>
+      ) : null}
 
       {!isClassicLayout ? (
         <button

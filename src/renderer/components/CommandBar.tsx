@@ -2,6 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getInlineCompletion, resolveNavigationInput } from "../utils/url";
 import { getFaviconSrc } from "../utils/favicon";
 import Icon, { IconName } from "./Icon";
+import type { SwitcherTab } from "./TabSwitcher";
+
+export type CommandAction = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  icon: IconName;
+  run: () => void;
+};
 
 type HistoryItem = {
   id: string;
@@ -25,6 +34,9 @@ type CommandBarProps = {
   mode: "default" | "split";
   focusToken: number;
   historyItems?: HistoryItem[];
+  openTabs?: SwitcherTab[];
+  actions?: CommandAction[];
+  onSelectTab?: (tab: SwitcherTab) => void;
   onClose: () => void;
   onNavigateInput: (input: string, target: "active" | "split") => void;
   onOpenUrl: (url: string, target: "active" | "split") => void;
@@ -43,6 +55,7 @@ type QuickOpenResult = {
   title: string;
   subtitle: string;
   icon: IconName;
+  group: string;
   faviconUrl?: string | null;
   matchRank?: number;
   run: () => void;
@@ -116,6 +129,9 @@ export default function CommandBar({
   mode,
   focusToken,
   historyItems = [],
+  openTabs = [],
+  actions = [],
+  onSelectTab,
   onClose,
   onNavigateInput,
   onOpenUrl
@@ -138,14 +154,63 @@ export default function CommandBar({
         title: item.title || getHostname(item.url),
         subtitle: getDisplayUrl(item.url),
         faviconUrl: getFaviconSrc(item.url, item.faviconUrl),
-        icon: "history",
+        icon: "history" as const,
+        group: "History",
         matchRank: rank,
         run: () => onOpenUrl(item.url, navigationTarget)
       }));
 
     if (!normalizedQuery) {
-      return historyResults;
+      return historyResults.map((result) => ({ ...result, group: "Recent" }));
     }
+
+    // Open tabs beat re-opening the same page from history — switching is
+    // cheaper than a duplicate. Only offered in the default mode; the split
+    // picker is about choosing a page to load.
+    const tabResults: QuickOpenResult[] =
+      mode === "split" || !onSelectTab
+        ? []
+        : openTabs
+            .filter((tab) => !tab.isActive && !tab.isStartPage)
+            .map((tab) => {
+              const host = tab.url ? getHostname(tab.url) : "";
+              const title = normalize(tab.title);
+              const hostNormalized = normalize(host);
+              const rank = hostNormalized.startsWith(normalizedQuery)
+                ? 0
+                : title.startsWith(normalizedQuery)
+                  ? 1
+                  : hostNormalized.includes(normalizedQuery)
+                    ? 2
+                    : title.includes(normalizedQuery)
+                      ? 3
+                      : Number.POSITIVE_INFINITY;
+              return { tab, host, rank };
+            })
+            .filter(({ rank }) => Number.isFinite(rank))
+            .sort((a, b) => a.rank - b.rank)
+            .slice(0, 3)
+            .map(({ tab, host }) => ({
+              id: `tab-${tab.id}`,
+              title: tab.title || host,
+              subtitle: `${tab.spaceName}${tab.isSleeping ? " · asleep" : ""}`,
+              faviconUrl: tab.url ? getFaviconSrc(tab.url, tab.faviconUrl) : null,
+              icon: "globe" as const,
+              group: "Switch to tab",
+              run: () => onSelectTab(tab)
+            }));
+
+    const actionResults: QuickOpenResult[] = actions
+      .filter((action) => normalize(action.title).includes(normalizedQuery))
+      .slice(0, 3)
+      .map((action) => ({
+        id: `action-${action.id}`,
+        title: action.title,
+        subtitle: action.subtitle ?? "Command",
+        icon: action.icon,
+        group: "Actions",
+        run: action.run
+      }));
 
     const resolvedUrl = resolveNavigationInput(query);
     const navigationResult: QuickOpenResult = {
@@ -153,16 +218,18 @@ export default function CommandBar({
       title: query.trim(),
       subtitle: looksLikeUrl(query) ? resolvedUrl : "Web search",
       icon: "search",
+      group: "Go",
       run: () => onNavigateInput(query, navigationTarget)
     };
 
     const bestHistoryResult = historyResults[0];
-    if (bestHistoryResult && bestHistoryResult.matchRank !== undefined && bestHistoryResult.matchRank <= 2) {
-      return [...historyResults, navigationResult];
-    }
+    const core =
+      bestHistoryResult && bestHistoryResult.matchRank !== undefined && bestHistoryResult.matchRank <= 2
+        ? [...historyResults, navigationResult]
+        : [navigationResult, ...historyResults];
 
-    return [navigationResult, ...historyResults];
-  }, [historyItems, mode, onNavigateInput, onOpenUrl, query]);
+    return [...core, ...tabResults, ...actionResults];
+  }, [actions, historyItems, mode, onNavigateInput, onOpenUrl, onSelectTab, openTabs, query]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -194,14 +261,19 @@ export default function CommandBar({
     setSelectedIndex((current) => Math.min(current, Math.max(results.length - 1, 0)));
   }, [results.length]);
 
-  const runSelectedResult = () => {
-    const result = results[selectedIndex];
+  // Close first, then run: actions that open another surface (split view's
+  // picker, panels) would otherwise be immediately closed again.
+  const runResult = (result: QuickOpenResult | undefined) => {
     if (!result) {
       return;
     }
 
-    result.run();
     onClose();
+    result.run();
+  };
+
+  const runSelectedResult = () => {
+    runResult(results[selectedIndex]);
   };
 
   if (!isOpen) {
@@ -276,8 +348,8 @@ export default function CommandBar({
                 if (event.key === "Enter") {
                   event.preventDefault();
                   if (completion && selectedIndex === 0) {
-                    onOpenUrl(completion.url, mode === "split" ? "split" : "active");
                     onClose();
+                    onOpenUrl(completion.url, mode === "split" ? "split" : "active");
                   } else {
                     runSelectedResult();
                   }
@@ -289,27 +361,41 @@ export default function CommandBar({
 
         {results.length > 0 ? (
           <div className="command-results" role="listbox" aria-label="Search suggestions">
-            {results.map((result, index) => (
-              <button
-                key={result.id}
-                className={index === selectedIndex ? "command-result is-selected" : "command-result"}
-                type="button"
-                role="option"
-                aria-selected={index === selectedIndex}
-                onMouseEnter={() => setSelectedIndex(index)}
-                onClick={() => {
-                  result.run();
-                  onClose();
-                }}
-              >
-                <QuickOpenIcon result={result} />
-                <span className="command-result-copy">
-                  <span>{result.title}</span>
-                  <small>{result.subtitle}</small>
-                </span>
-                <kbd>↵</kbd>
-              </button>
-            ))}
+            {results.map((result, index) => {
+              const previousGroup = index > 0 ? results[index - 1].group : null;
+              const showGroupLabel = result.group !== previousGroup;
+              return (
+                <div key={result.id} className="command-result-row" role="presentation">
+                  {showGroupLabel ? (
+                    <div className="command-group-label" aria-hidden="true">
+                      {result.group}
+                    </div>
+                  ) : null}
+                  <button
+                    className={index === selectedIndex ? "command-result is-selected" : "command-result"}
+                    type="button"
+                    role="option"
+                    aria-selected={index === selectedIndex}
+                    onMouseEnter={() => setSelectedIndex(index)}
+                    onClick={() => runResult(result)}
+                  >
+                    <QuickOpenIcon result={result} />
+                    <span className="command-result-copy">
+                      <span>{result.title}</span>
+                      <small>{result.subtitle}</small>
+                    </span>
+                    <kbd>↵</kbd>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+        {results.length > 0 ? (
+          <div className="command-foot" aria-hidden="true">
+            <span><kbd>↑↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
           </div>
         ) : null}
       </section>

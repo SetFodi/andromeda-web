@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -9,17 +11,13 @@ import {
   type MouseEvent as ReactMouseEvent
 } from "react";
 import AddressBar from "./components/AddressBar";
-import CommandBar from "./components/CommandBar";
+import CommandBar, { type CommandAction } from "./components/CommandBar";
 import DownloadsTray, { DownloadEntry } from "./components/DownloadsTray";
-import OnboardingModal from "./components/OnboardingModal";
 import AuthDialog, { type AuthPromptRequest } from "./components/AuthDialog";
 import SiteInfoPanel from "./components/SiteInfoPanel";
-import HistoryPanel from "./components/HistoryPanel";
-import BookmarksPanel from "./components/BookmarksPanel";
 import TabSwitcher, { SwitcherTab } from "./components/TabSwitcher";
-import ReaderView, { ReaderArticle } from "./components/ReaderView";
+import { type ReaderArticle } from "./components/ReaderView";
 import FindBar from "./components/FindBar";
-import SettingsPanel from "./components/SettingsPanel";
 import Sidebar from "./components/Sidebar";
 import ClassicTabs from "./components/ClassicTabs";
 import StartPage from "./components/StartPage";
@@ -32,6 +30,24 @@ import { useHistory } from "./state/useHistory";
 import { useBookmarks } from "./state/useBookmarks";
 import { getUrlDisplayValue, resolveNavigationInput, type SearchEngineId } from "./utils/url";
 import Icon, { type IconName } from "./components/Icon";
+
+// Modal surfaces load as lazy chunks the first time they open — none of them
+// belong in the startup bundle.
+const SettingsPanel = lazy(() => import("./components/SettingsPanel"));
+const HistoryPanel = lazy(() => import("./components/HistoryPanel"));
+const BookmarksPanel = lazy(() => import("./components/BookmarksPanel"));
+const OnboardingModal = lazy(() => import("./components/OnboardingModal"));
+const ReaderView = lazy(() => import("./components/ReaderView"));
+
+// True once `value` has ever been true — defers mounting a lazy panel until
+// its first open, then keeps it mounted so close transitions still play.
+function useEverTrue(value: boolean): boolean {
+  const everRef = useRef(false);
+  if (value) {
+    everRef.current = true;
+  }
+  return everRef.current || value;
+}
 
 const SPLIT_RATIO_KEY = "andromeda.splitRatio";
 const MIN_SPLIT_RATIO = 0.25;
@@ -271,6 +287,8 @@ export default function App() {
     closeTab,
     duplicateTab,
     closeOtherTabs,
+    tidyTabs,
+    clearUnpinnedTabs,
     sleepTab,
     moveTabToSpace,
     reopenClosedTab,
@@ -1912,6 +1930,86 @@ export default function App() {
 
   const isClassic = settings.layout === "classic";
   const addressBarPlacement = isClassic ? "toolbar" : settings.addressBarPlacement;
+
+  // Lazy-panel mount latches (see useEverTrue).
+  const hasOpenedSettings = useEverTrue(isSettingsOpen);
+  const hasOpenedHistory = useEverTrue(isHistoryOpen);
+  const hasOpenedBookmarks = useEverTrue(isBookmarksOpen);
+  const hasOpenedReader = useEverTrue(isReaderOpen);
+  const hasOpenedOnboarding = useEverTrue(isOnboardingOpen);
+
+  // Typeable verbs for the command bar; every run target already exists.
+  const commandActions = useMemo<CommandAction[]>(
+    () => [
+      {
+        id: "split",
+        title: "Open split view",
+        subtitle: "Pick a page for the second pane",
+        icon: "split",
+        run: openSplitCommandBar
+      },
+      {
+        id: "tidy-tabs",
+        title: "Tidy tabs",
+        subtitle: "Group by site · close duplicates",
+        icon: "sparkle",
+        run: () => tidyTabs(state.selectedSpaceId)
+      },
+      {
+        id: "clear-tabs",
+        title: "Clear tabs",
+        subtitle: "Close all unpinned tabs (⌘⇧T reopens)",
+        icon: "close",
+        run: () => clearUnpinnedTabs(state.selectedSpaceId)
+      },
+      {
+        id: "reader",
+        title: "Toggle reader",
+        subtitle: "Clean article view (⌘⇧R)",
+        icon: "reader",
+        run: toggleReader
+      },
+      {
+        id: "history",
+        title: "Show history",
+        subtitle: "Search everything you've visited (⌘Y)",
+        icon: "history",
+        run: openHistory
+      },
+      {
+        id: "downloads",
+        title: "Show downloads",
+        subtitle: "Recent files",
+        icon: "download",
+        run: toggleDownloads
+      },
+      {
+        id: "bookmarks",
+        title: "Show bookmarks",
+        subtitle: "Saved pages and folders",
+        icon: "star",
+        run: openBookmarks
+      },
+      {
+        id: "settings",
+        title: "Open settings",
+        subtitle: "Appearance, search, privacy (⌘,)",
+        icon: "menu",
+        run: openSettings
+      }
+    ],
+    [
+      clearUnpinnedTabs,
+      openBookmarks,
+      openHistory,
+      openSettings,
+      openSplitCommandBar,
+      state.selectedSpaceId,
+      tidyTabs,
+      toggleDownloads,
+      toggleReader
+    ]
+  );
   const addressBarIsStartPage = activePane === "main" && showReactStartPage;
   const addressBarIsLoading = activeNavigationState.isLoading;
   // Memoized so the (memoized) Sidebar/Toolbar only re-render when address state
@@ -2059,6 +2157,12 @@ export default function App() {
             onTabDragEnd={handleSidebarTabDragEnd}
             draggedTabId={draggedTab?.id ?? null}
             onNewTab={handleNewTab}
+            onTidyTabs={tidyTabs}
+            onClearTabs={clearUnpinnedTabs}
+            showWindowControls
+            onCloseWindow={handleCloseWindow}
+            onMinimizeWindow={handleMinimizeWindow}
+            onToggleMaximizeWindow={handleToggleMaximizeWindow}
             addressBar={addressBarPlacement === "sidebar" ? addressBar : null}
           />
         )}
@@ -2174,18 +2278,25 @@ export default function App() {
           mode={commandBarMode}
           focusToken={commandFocusToken}
           historyItems={quickOpenItems}
+          openTabs={openTabItems}
+          actions={commandActions}
+          onSelectTab={(tab) => handleSelectSwitcherTab(tab.spaceId, tab.id)}
           onClose={closeCommandBar}
           onNavigateInput={handleCommandInputNavigation}
           onOpenUrl={handleOpenUrlFromCommand}
         />
-        <SettingsPanel
-          isOpen={isSettingsOpen}
-          settings={settings}
-          onUpdateSettings={updateSettings}
-          onClearBrowsingData={handleClearBrowsingData}
-          onImportFromChrome={handleImportFromChrome}
-          onClose={closeSettings}
-        />
+        {hasOpenedSettings ? (
+          <Suspense fallback={null}>
+            <SettingsPanel
+              isOpen={isSettingsOpen}
+              settings={settings}
+              onUpdateSettings={updateSettings}
+              onClearBrowsingData={handleClearBrowsingData}
+              onImportFromChrome={handleImportFromChrome}
+              onClose={closeSettings}
+            />
+          </Suspense>
+        ) : null}
         <DownloadsTray
           isOpen={isDownloadsOpen}
           downloads={downloads}
@@ -2201,55 +2312,71 @@ export default function App() {
           onClose={closeSiteInfo}
           onReload={handleReload}
         />
-        <HistoryPanel
-          isOpen={isHistoryOpen}
-          entries={historyRecent}
-          onOpenUrl={navigateTo}
-          onDelete={deleteHistoryEntry}
-          onClear={handleClearBrowsingData}
-          onClose={closeHistory}
-        />
-        <BookmarksPanel
-          isOpen={isBookmarksOpen}
-          bookmarks={bookmarks}
-          folders={folders}
-          onClose={closeBookmarks}
-          onOpenUrl={navigateTo}
-          onRemove={removeBookmark}
-          onRemoveFolder={removeFolder}
-          onAddFolder={addFolder}
-          onRenameBookmark={renameBookmark}
-          onRenameFolder={renameFolder}
-          onMoveBookmark={moveBookmark}
-        />
+        {hasOpenedHistory ? (
+          <Suspense fallback={null}>
+            <HistoryPanel
+              isOpen={isHistoryOpen}
+              entries={historyRecent}
+              onOpenUrl={navigateTo}
+              onDelete={deleteHistoryEntry}
+              onClear={handleClearBrowsingData}
+              onClose={closeHistory}
+            />
+          </Suspense>
+        ) : null}
+        {hasOpenedBookmarks ? (
+          <Suspense fallback={null}>
+            <BookmarksPanel
+              isOpen={isBookmarksOpen}
+              bookmarks={bookmarks}
+              folders={folders}
+              onClose={closeBookmarks}
+              onOpenUrl={navigateTo}
+              onRemove={removeBookmark}
+              onRemoveFolder={removeFolder}
+              onAddFolder={addFolder}
+              onRenameBookmark={renameBookmark}
+              onRenameFolder={renameFolder}
+              onMoveBookmark={moveBookmark}
+            />
+          </Suspense>
+        ) : null}
         <TabSwitcher
           isOpen={isTabSwitcherOpen}
           tabs={openTabItems}
           onSelect={handleSelectSwitcherTab}
           onClose={closeTabSwitcher}
         />
-        <ReaderView
-          isOpen={isReaderOpen}
-          loading={readerLoading}
-          article={readerArticle}
-          onClose={closeReader}
-          onOpenLink={(url) => {
-            closeReader();
-            navigateTo(url);
-          }}
-        />
-        <OnboardingModal
-          isOpen={isOnboardingOpen}
-          name={settings.name}
-          theme={theme}
-          accent={shellAccent}
-          searchEngine={settings.searchEngine}
-          onSetName={handleOnboardingName}
-          onPickTheme={setTheme}
-          onPickAccent={handleOnboardingAccent}
-          onPickSearchEngine={handleOnboardingEngine}
-          onFinish={completeOnboarding}
-        />
+        {hasOpenedReader ? (
+          <Suspense fallback={null}>
+            <ReaderView
+              isOpen={isReaderOpen}
+              loading={readerLoading}
+              article={readerArticle}
+              onClose={closeReader}
+              onOpenLink={(url) => {
+                closeReader();
+                navigateTo(url);
+              }}
+            />
+          </Suspense>
+        ) : null}
+        {hasOpenedOnboarding ? (
+          <Suspense fallback={null}>
+            <OnboardingModal
+              isOpen={isOnboardingOpen}
+              name={settings.name}
+              theme={theme}
+              accent={shellAccent}
+              searchEngine={settings.searchEngine}
+              onSetName={handleOnboardingName}
+              onPickTheme={setTheme}
+              onPickAccent={handleOnboardingAccent}
+              onPickSearchEngine={handleOnboardingEngine}
+              onFinish={completeOnboarding}
+            />
+          </Suspense>
+        ) : null}
         <AuthDialog request={authPrompt} onSubmit={handleAuthSubmit} onCancel={handleAuthCancel} />
 
         {updateInfo ? (

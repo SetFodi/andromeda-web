@@ -162,22 +162,35 @@
 /* ====================================================================== */
 /* Toolbar                                                                */
 /* ====================================================================== */
+/* Sits only above the content column — the full-height sidebar owns the left
+   edge (and the traffic lights). Classic layout and collapsed-sidebar mode put
+   the lights back here, so the bar stretches to the window edge then. */
 .toolbar {
   position: absolute;
   top: 0;
-  left: 0;
+  left: var(--sidebar-width);
   right: 0;
   z-index: 20;
-  display: grid;
-  grid-template-columns: 88px 40px 120px minmax(260px, 1fr) auto;
+  display: flex;
   align-items: center;
+  gap: 8px;
   height: var(--toolbar-height);
-  padding: 0 16px 0 22px;
+  padding: 0 16px 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-glass);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   -webkit-app-region: drag;
+}
+
+.app-shell.is-classic .toolbar {
+  left: 0;
+  padding-left: 22px;
+}
+
+.app-shell.is-sidebar-collapsed .toolbar {
+  left: 8px;
+  padding-left: 18px;
 }
 
 .toolbar-progress {
@@ -524,14 +537,14 @@
 /* ====================================================================== */
 .sidebar {
   position: absolute;
-  top: var(--toolbar-height);
+  top: 0;
   bottom: 0;
   left: 0;
   z-index: 10;
   display: flex;
   width: var(--sidebar-width);
   flex-direction: column;
-  padding: 20px 16px 16px 22px;
+  padding: 12px 16px 16px 22px;
   border-right: 1px solid var(--border);
   background: var(--surface-glass-strong);
   transition:
@@ -570,7 +583,7 @@
 
 .sidebar-peek-zone {
   position: absolute;
-  top: var(--toolbar-height);
+  top: 0;
   bottom: 0;
   left: 0;
   z-index: 25;
@@ -1953,18 +1966,27 @@
   --field-border: color-mix(in srgb, #aab4ff 16%, transparent);
 }
 
-/* Planet horizon backdrop behind the dark start page (the "a.png" hero).
-   A top-down scrim keeps the greeting + omnibox legible over the image; the
-   "Background glow" space toggle swaps it for a flat fill (.no-start-glow). */
+/* Aurora horizon behind the dark start page. Pure CSS (replaces the old 1.2 MB
+   start-bg.png): three accent-tinted glows rising from the bottom edge, so it
+   recolors itself with the active space for free. The "Background glow" space
+   toggle swaps it for a flat fill (.no-start-glow). */
 [data-theme="dark"] .start-page {
   background:
-    linear-gradient(
-      180deg,
-      var(--bg-base) 0%,
-      color-mix(in srgb, var(--bg-base) 68%, transparent) 24%,
-      transparent 48%
+    radial-gradient(
+      58% 44% at 16% 112%,
+      color-mix(in srgb, var(--grad-1, var(--accent)) 36%, transparent),
+      transparent 64%
     ),
-    url("./start-bg.png") center bottom / 100% auto no-repeat,
+    radial-gradient(
+      66% 50% at 52% 120%,
+      color-mix(in srgb, var(--grad-2, var(--accent-bright)) 28%, transparent),
+      transparent 66%
+    ),
+    radial-gradient(
+      56% 42% at 88% 112%,
+      color-mix(in srgb, var(--grad-3, var(--accent)) 24%, transparent),
+      transparent 64%
+    ),
     var(--bg-base);
   background-color: var(--bg-base);
 }
@@ -4988,4 +5010,151 @@
 
 .preview-note-copy {
   min-width: 0;
+}
+
+/* ====================================================================== */
+/* 0.4 shell — full-height rail, domain chip, tidy actions, command groups */
+/* ====================================================================== */
+
+/* Window controls at the top of the rail; the row doubles as a drag strip. */
+.sidebar-lights {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px 14px;
+  -webkit-app-region: drag;
+}
+
+.sidebar-lights .traffic {
+  -webkit-app-region: no-drag;
+}
+
+/* Toolbar children under the flex layout. */
+.toolbar .address-form {
+  flex: 0 1 560px;
+  margin-inline: auto;
+}
+
+.toolbar-flex {
+  flex: 1 1 auto;
+}
+
+/* Collapsed domain chip (toolbar placement while browsing). The real input
+   stays mounted underneath, 1px and invisible, so ⌘L focus still lands. */
+.address-form.is-chip {
+  display: flex;
+  align-items: center;
+  width: auto;
+  min-width: 0;
+  padding: 0;
+}
+
+.toolbar .address-form.is-chip {
+  flex: 0 1 auto;
+}
+
+.address-form.is-chip .address-lead {
+  display: none;
+}
+
+.address-form.is-chip .address-input-field {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.address-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  min-width: 0;
+  max-width: 380px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 560;
+  letter-spacing: 0.002em;
+  cursor: text;
+  transition: background-color var(--dur-fast) var(--ease-out);
+  -webkit-app-region: no-drag;
+}
+
+.address-chip:hover {
+  background: var(--hover);
+}
+
+.address-chip img {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+}
+
+.address-chip svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.address-chip-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tidy · Clear text actions in the Tabs group header. */
+.tab-group-action.is-text {
+  width: auto;
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 620;
+  letter-spacing: 0.02em;
+}
+
+.tab-group-action.is-text:hover {
+  background: var(--hover);
+  color: var(--accent-on-surface);
+}
+
+/* Command bar result groups + hint footer. */
+.command-result-row {
+  display: contents;
+}
+
+.command-group-label {
+  padding: 8px 12px 2px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.command-result-row:first-child .command-group-label {
+  padding-top: 0;
+}
+
+.command-foot {
+  display: flex;
+  gap: 16px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.command-foot kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-sunken);
+  font-family: inherit;
+  font-size: 10px;
 }

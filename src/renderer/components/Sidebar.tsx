@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useRef, useState } from "react";
 import type {
   CSSProperties,
   DragEvent,
@@ -9,14 +9,9 @@ import type {
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
 import Icon, { IconName } from "./Icon";
 import { TabFavicon } from "./TabFavicon";
-import {
-  ColorArea,
-  ColorField,
-  ColorPicker,
-  ColorSlider,
-  ColorSwatch,
-  ColorSwatchPicker
-} from "./ui/heroui-color-picker";
+// Lazy: the vendored HeroUI color picker is the biggest component in the
+// bundle and is only needed once a space menu opens.
+const SpaceColorPicker = lazy(() => import("./SpaceColorPicker"));
 
 const DEFAULT_SPACE_COLOR = "#f28366";
 
@@ -74,6 +69,12 @@ type SidebarProps = {
   onTabDragEnd: () => void;
   draggedTabId: string | null;
   onNewTab: () => void;
+  onTidyTabs: (spaceId: SpaceId) => void;
+  onClearTabs: (spaceId: SpaceId) => void;
+  showWindowControls?: boolean;
+  onCloseWindow?: () => void;
+  onMinimizeWindow?: () => void;
+  onToggleMaximizeWindow?: () => void;
   addressBar?: ReactNode;
 };
 
@@ -105,6 +106,12 @@ function Sidebar({
   onTabDragEnd,
   draggedTabId,
   onNewTab,
+  onTidyTabs,
+  onClearTabs,
+  showWindowControls,
+  onCloseWindow,
+  onMinimizeWindow,
+  onToggleMaximizeWindow,
   addressBar
 }: SidebarProps) {
   // Global "background glow" preference — toggles the warm start-page aurora.
@@ -554,6 +561,28 @@ function Sidebar({
           onMouseDown={onResizeStart}
         />
       ) : null}
+      {showWindowControls ? (
+        <div className="sidebar-lights" aria-label="Window controls">
+          <button
+            className="traffic traffic-close"
+            type="button"
+            aria-label="Close window"
+            onClick={() => onCloseWindow?.()}
+          />
+          <button
+            className="traffic traffic-minimize"
+            type="button"
+            aria-label="Minimize window"
+            onClick={() => onMinimizeWindow?.()}
+          />
+          <button
+            className="traffic traffic-maximize"
+            type="button"
+            aria-label="Zoom window"
+            onClick={() => onToggleMaximizeWindow?.()}
+          />
+        </div>
+      ) : null}
       {addressBar ? <div className="sidebar-address-section">{addressBar}</div> : null}
       <div className="sidebar-body">
         <div className="sidebar-space-heading">
@@ -620,6 +649,22 @@ function Sidebar({
               <div className="tab-group-label">
                 <span>Tabs</span>
                 <span className="tab-group-actions">
+                  <button
+                    type="button"
+                    className="tab-group-action is-text"
+                    title="Group tabs by site and close duplicates"
+                    onClick={() => onTidyTabs(selectedSpace.id)}
+                  >
+                    Tidy
+                  </button>
+                  <button
+                    type="button"
+                    className="tab-group-action is-text"
+                    title="Close all unpinned tabs (reopen with ⌘⇧T)"
+                    onClick={() => onClearTabs(selectedSpace.id)}
+                  >
+                    Clear
+                  </button>
                   <button
                     type="button"
                     className="tab-group-action"
@@ -834,35 +879,14 @@ function Sidebar({
         >
           <div className="space-context-label">Theme color</div>
           <div className="space-color-picker">
-            <ColorPicker
-              key={menuSpace.id}
-              defaultValue={menuSpace.colors[0]}
-              onChange={(next) => onPreviewSpaceColor(menuSpace.id, next.toString("hex"))}
-            >
-              <ColorArea aria-label="Saturation and brightness">
-                <ColorArea.Thumb />
-              </ColorArea>
-              <ColorSlider channel="hue" colorSpace="hsb" aria-label="Hue">
-                <ColorSlider.Track>
-                  <ColorSlider.Thumb />
-                </ColorSlider.Track>
-              </ColorSlider>
-              <ColorField aria-label="Hex color">
-                <ColorField.Group>
-                  <ColorField.Prefix>
-                    <ColorSwatch size="xs" />
-                  </ColorField.Prefix>
-                  <ColorField.Input />
-                </ColorField.Group>
-              </ColorField>
-              <ColorSwatchPicker className="space-color-swatches">
-                {SPACE_COLORS.map((swatch) => (
-                  <ColorSwatchPicker.Item key={swatch} color={swatch}>
-                    <ColorSwatchPicker.Swatch />
-                  </ColorSwatchPicker.Item>
-                ))}
-              </ColorSwatchPicker>
-            </ColorPicker>
+            <Suspense fallback={null}>
+              <SpaceColorPicker
+                key={menuSpace.id}
+                defaultValue={menuSpace.colors[0]}
+                swatches={SPACE_COLORS}
+                onPreview={(hex) => onPreviewSpaceColor(menuSpace.id, hex)}
+              />
+            </Suspense>
           </div>
           <div className="tab-context-sep" />
           <button
