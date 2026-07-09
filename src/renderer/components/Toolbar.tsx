@@ -82,9 +82,9 @@ function Toolbar({
       {isLoading ? <span className="toolbar-progress" aria-hidden="true" /> : null}
       {isClassicLayout || isSidebarCollapsed ? (
         <div className="traffic-lights" aria-label="Window controls">
-          <button className="traffic traffic-close" type="button" onClick={onCloseWindow} />
-          <button className="traffic traffic-minimize" type="button" onClick={onMinimizeWindow} />
-          <button className="traffic traffic-maximize" type="button" onClick={onToggleMaximizeWindow} />
+          <button className="traffic traffic-close" type="button" aria-label="Close window" onClick={onCloseWindow} />
+          <button className="traffic traffic-minimize" type="button" aria-label="Minimize window" onClick={onMinimizeWindow} />
+          <button className="traffic traffic-maximize" type="button" aria-label="Zoom window" onClick={onToggleMaximizeWindow} />
         </div>
       ) : null}
 
@@ -170,12 +170,13 @@ function Toolbar({
           <button
             className={isBookmarked ? "toolbar-icon is-active" : "toolbar-icon"}
             type="button"
-            aria-label={isBookmarked ? "Remove from quick links" : "Add to quick links"}
+            aria-label={isBookmarked ? "Remove from Start" : "Pin to Start"}
             aria-pressed={isBookmarked}
+            title={isBookmarked ? "Remove from Start" : "Pin to Start"}
             disabled={!canBookmark}
             onClick={onToggleBookmark}
           >
-            <Icon name="star" size={17} fill={isBookmarked ? "currentColor" : "none"} />
+            <Icon name="pin" size={16} fill={isBookmarked ? "currentColor" : "none"} />
           </button>
         ) : null}
         {toolbarButtons.split ? (
@@ -234,9 +235,10 @@ function Toolbar({
           className="toolbar-icon"
           type="button"
           aria-label="Settings"
+          title="Settings (⌘,)"
           onClick={onOpenSettings}
         >
-          <Icon name="menu" size={19} />
+          <Icon name="settings" size={18} />
         </button>
       </div>
     </header>

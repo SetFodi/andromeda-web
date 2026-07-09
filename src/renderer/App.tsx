@@ -69,7 +69,9 @@ const TAB_DRAG_DATA_TYPE = "application/x-andromeda-tab";
 const AUTO_SLEEP_MS = 60 * 60 * 1000;
 const AUTO_SLEEP_SWEEP_MS = 2 * 60 * 1000;
 const DOWNLOADS_KEY = "andromeda.downloads.v1";
-const ONBOARDED_KEY = "andromeda.onboarded";
+const ONBOARDING_VERSION = "3";
+const ONBOARDED_KEY = "andromeda.onboardingVersion";
+const START_GLOW_KEY = "andromeda.startGlow";
 
 type PaneNavigationState = {
   canGoBack: boolean;
@@ -225,6 +227,13 @@ export default function App() {
     () => localStorage.getItem("andromeda.compact") === "1"
   );
   const [isSidebarPeeking, setSidebarPeeking] = useState(false);
+  const [backgroundGlowEnabled, setBackgroundGlowEnabled] = useState(() => {
+    try {
+      return localStorage.getItem(START_GLOW_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
   const [isResizingSidebar, setResizingSidebar] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const stored = Number.parseInt(localStorage.getItem("andromeda.sidebarWidth") ?? "", 10);
@@ -243,7 +252,7 @@ export default function App() {
   const [readerArticle, setReaderArticle] = useState<ReaderArticle | null>(null);
   const [isOnboardingOpen, setOnboardingOpen] = useState(() => {
     try {
-      return localStorage.getItem(ONBOARDED_KEY) !== "1";
+      return localStorage.getItem(ONBOARDED_KEY) !== ONBOARDING_VERSION;
     } catch {
       return false;
     }
@@ -580,7 +589,7 @@ export default function App() {
     (overrides: LayoutMetrics = {}) => {
       const metrics: LayoutMetrics = {
         sidebarWidth: sidebarWidthRef.current,
-        sidebarCollapsed: isSidebarCollapsed,
+        sidebarCollapsed: isSidebarCollapsed && !isSidebarPeeking,
         splitOpen: isSplitOpen,
         splitRatio: splitRatioRef.current,
         findOpen: isFindOpen,
@@ -595,7 +604,7 @@ export default function App() {
       lastLayoutMetricsKeyRef.current = metricsKey;
       void window.andromeda.setLayoutMetrics(metrics);
     },
-    [isFindOpen, isSidebarCollapsed, isSplitOpen, settings.layout]
+    [isFindOpen, isSidebarCollapsed, isSidebarPeeking, isSplitOpen, settings.layout]
   );
 
   const flushContentLayout = useCallback(
@@ -653,7 +662,15 @@ export default function App() {
   // ResizeObserver won't fire on its own).
   useEffect(() => {
     flushContentLayout(isSplitOpen, true);
-  }, [flushContentLayout, isFindOpen, isSplitOpen, contentRightInset, settings.layout]);
+  }, [
+    flushContentLayout,
+    isFindOpen,
+    isSidebarCollapsed,
+    isSidebarPeeking,
+    isSplitOpen,
+    contentRightInset,
+    settings.layout
+  ]);
 
   useEffect(() => {
 
@@ -890,6 +907,11 @@ export default function App() {
 
   useEffect(() => {
     return window.andromeda.onOpenCommandBar(() => {
+      setSettingsOpen(false);
+      setHistoryOpen(false);
+      setBookmarksOpen(false);
+      setTabSwitcherOpen(false);
+      setReaderOpen(false);
       setCommandBarMode("default");
       setCommandBarOpen(true);
       setCommandFocusToken((current) => current + 1);
@@ -1059,6 +1081,11 @@ export default function App() {
   }, []);
 
   const openSplitCommandBar = useCallback(() => {
+    setSettingsOpen(false);
+    setHistoryOpen(false);
+    setBookmarksOpen(false);
+    setTabSwitcherOpen(false);
+    setReaderOpen(false);
     setCommandBarMode("split");
     setCommandBarOpen(true);
     setCommandFocusToken((current) => current + 1);
@@ -1122,6 +1149,11 @@ export default function App() {
   );
 
   const handleNewTab = useCallback(() => {
+    setSettingsOpen(false);
+    setHistoryOpen(false);
+    setBookmarksOpen(false);
+    setTabSwitcherOpen(false);
+    setReaderOpen(false);
     setCommandBarMode("default");
     setCommandBarOpen(true);
     setCommandFocusToken((current) => current + 1);
@@ -1323,16 +1355,32 @@ export default function App() {
   const zoomPercent =
     showReactStartPage && activePane === "main" ? null : Math.round(Math.pow(1.2, zoomLevel) * 100);
 
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openSettings = useCallback(() => {
+    setCommandBarOpen(false);
+    setHistoryOpen(false);
+    setBookmarksOpen(false);
+    setTabSwitcherOpen(false);
+    setReaderOpen(false);
+    setDownloadsOpen(false);
+    setSiteInfoOpen(false);
+    setSettingsOpen(true);
+  }, []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const openHistory = useCallback(() => {
+    setCommandBarOpen(false);
     setSettingsOpen(false);
+    setBookmarksOpen(false);
+    setTabSwitcherOpen(false);
+    setReaderOpen(false);
     setHistoryOpen(true);
   }, []);
   const closeHistory = useCallback(() => setHistoryOpen(false), []);
   const openBookmarks = useCallback(() => {
+    setCommandBarOpen(false);
     setSettingsOpen(false);
     setHistoryOpen(false);
+    setTabSwitcherOpen(false);
+    setReaderOpen(false);
     setBookmarksOpen(true);
   }, []);
   const closeBookmarks = useCallback(() => setBookmarksOpen(false), []);
@@ -1458,7 +1506,7 @@ export default function App() {
   // ---- First-run onboarding ----
   const completeOnboarding = useCallback(() => {
     try {
-      localStorage.setItem(ONBOARDED_KEY, "1");
+      localStorage.setItem(ONBOARDED_KEY, ONBOARDING_VERSION);
     } catch {
       // ignore storage failures
     }
@@ -1480,6 +1528,18 @@ export default function App() {
     },
     [handleSpaceColorPreview, selectedSpace]
   );
+  const toggleBackgroundGlow = useCallback(() => {
+    setBackgroundGlowEnabled((current) => {
+      const next = !current;
+      document.documentElement.classList.toggle("no-start-glow", !next);
+      try {
+        localStorage.setItem(START_GLOW_KEY, next ? "on" : "off");
+      } catch {
+        // ignore storage failures
+      }
+      return next;
+    });
+  }, []);
 
   const toggleDownloads = useCallback(() => {
     setSiteInfoOpen(false);
@@ -1532,6 +1592,19 @@ export default function App() {
     },
     [tabAudio]
   );
+
+  const handleSidebarResizeBy = useCallback((delta: number) => {
+    setSidebarWidth((current) => {
+      const next = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, current + delta));
+      sidebarWidthRef.current = next;
+      try {
+        localStorage.setItem("andromeda.sidebarWidth", String(next));
+      } catch {
+        // ignore storage failures
+      }
+      return next;
+    });
+  }, []);
 
   // Drag-to-resize keeps the page live, but coalesces native bounds updates and
   // temporarily disables expensive shell rendering.
@@ -1734,6 +1807,11 @@ export default function App() {
   );
 
   const openCommandBar = useCallback(() => {
+    setSettingsOpen(false);
+    setHistoryOpen(false);
+    setBookmarksOpen(false);
+    setTabSwitcherOpen(false);
+    setReaderOpen(false);
     setCommandBarMode("default");
     setCommandBarOpen(true);
     setCommandFocusToken((current) => current + 1);
@@ -1918,15 +1996,48 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isCommandBarOpen) {
-        event.preventDefault();
-        closeCommandBar();
+      if (event.key !== "Escape") {
+        return;
       }
+
+      const closeTopSurface =
+        isCommandBarOpen
+          ? closeCommandBar
+          : isSettingsOpen
+            ? closeSettings
+            : isHistoryOpen
+              ? closeHistory
+              : isBookmarksOpen
+                ? closeBookmarks
+                : isTabSwitcherOpen
+                  ? closeTabSwitcher
+                  : isReaderOpen
+                    ? closeReader
+                    : null;
+      if (!closeTopSurface) {
+        return;
+      }
+
+      event.preventDefault();
+      closeTopSurface();
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closeCommandBar, isCommandBarOpen]);
+  }, [
+    closeBookmarks,
+    closeCommandBar,
+    closeHistory,
+    closeReader,
+    closeSettings,
+    closeTabSwitcher,
+    isBookmarksOpen,
+    isCommandBarOpen,
+    isHistoryOpen,
+    isReaderOpen,
+    isSettingsOpen,
+    isTabSwitcherOpen
+  ]);
 
   const isClassic = settings.layout === "classic";
   const addressBarPlacement = isClassic ? "toolbar" : settings.addressBarPlacement;
@@ -2132,8 +2243,10 @@ export default function App() {
           <Sidebar
             spaces={state.spaces}
             selectedSpaceId={state.selectedSpaceId}
+            sidebarWidth={sidebarWidth}
             onMouseLeave={isSidebarCollapsed ? handlePeekLeave : undefined}
             onResizeStart={handleSidebarResizeStart}
+            onResizeBy={handleSidebarResizeBy}
             onSelectSpace={handleSelectSpace}
             onCreateSpace={createSpace}
             onRenameSpace={renameSpace}
@@ -2163,6 +2276,8 @@ export default function App() {
             onCloseWindow={handleCloseWindow}
             onMinimizeWindow={handleMinimizeWindow}
             onToggleMaximizeWindow={handleToggleMaximizeWindow}
+            backgroundGlowEnabled={backgroundGlowEnabled}
+            onToggleBackgroundGlow={toggleBackgroundGlow}
             addressBar={addressBarPlacement === "sidebar" ? addressBar : null}
           />
         )}
@@ -2222,9 +2337,31 @@ export default function App() {
               <div
                 className="split-divider"
                 role="separator"
+                tabIndex={0}
                 aria-orientation="vertical"
                 aria-label="Resize split"
+                aria-valuemin={25}
+                aria-valuemax={75}
+                aria-valuenow={Math.round(splitRatio * 100)}
                 onMouseDown={handleSplitResizeStart}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+                    return;
+                  }
+                  event.preventDefault();
+                  const delta = event.key === "ArrowLeft" ? -0.05 : 0.05;
+                  const next = Math.max(
+                    MIN_SPLIT_RATIO,
+                    Math.min(MAX_SPLIT_RATIO, splitRatioRef.current + delta)
+                  );
+                  splitRatioRef.current = next;
+                  setSplitRatio(next);
+                  try {
+                    localStorage.setItem(SPLIT_RATIO_KEY, String(next));
+                  } catch {
+                    // ignore storage failures
+                  }
+                }}
                 onDoubleClick={() => {
                   splitRatioRef.current = 0.5;
                   setSplitRatio(0.5);
@@ -2264,6 +2401,8 @@ export default function App() {
             <StartPage
               quickLinks={quickLinks}
               userName={settings.name}
+              spaceName={selectedSpace.name}
+              spaceIcon={selectedSpace.icon}
               onOpenCommand={handleNewTab}
               onOpenLink={navigateTo}
               onRemoveQuickLink={removeQuickLink}
@@ -2290,6 +2429,12 @@ export default function App() {
             <SettingsPanel
               isOpen={isSettingsOpen}
               settings={settings}
+              theme={theme}
+              accent={shellAccent}
+              backgroundGlowEnabled={backgroundGlowEnabled}
+              onSetTheme={setTheme}
+              onPickAccent={handleOnboardingAccent}
+              onToggleBackgroundGlow={toggleBackgroundGlow}
               onUpdateSettings={updateSettings}
               onClearBrowsingData={handleClearBrowsingData}
               onImportFromChrome={handleImportFromChrome}

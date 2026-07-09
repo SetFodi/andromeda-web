@@ -72,36 +72,36 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg-base: color-mix(in srgb, var(--accent) 9%, #fbf7f1);
+  --bg-base: color-mix(in srgb, var(--accent) 8%, #f7f0e5);
   --bg-shell: var(--bg-base);
 
-  --surface-glass: color-mix(in srgb, var(--accent) 8%, rgba(255, 252, 247, 0.72));
-  --surface-glass-strong: color-mix(in srgb, var(--accent) 9%, rgba(255, 252, 247, 0.86));
-  --surface-raised: color-mix(in srgb, var(--accent) 9%, rgba(255, 253, 249, 0.82));
-  --surface-solid: color-mix(in srgb, var(--accent) 7%, #fffdf9);
-  --surface-sunken: color-mix(in srgb, var(--accent) 8%, rgba(28, 42, 56, 0.035));
+  --surface-glass: color-mix(in srgb, var(--accent) 7%, rgba(255, 251, 244, 0.78));
+  --surface-glass-strong: color-mix(in srgb, var(--accent) 8%, rgba(255, 251, 244, 0.9));
+  --surface-raised: color-mix(in srgb, var(--accent) 8%, rgba(255, 252, 247, 0.88));
+  --surface-solid: color-mix(in srgb, var(--accent) 6%, #fffaf3);
+  --surface-sunken: color-mix(in srgb, var(--accent) 7%, rgba(42, 32, 22, 0.04));
 
-  --hover: color-mix(in srgb, var(--accent) 9%, rgba(24, 40, 56, 0.05));
-  --hover-strong: color-mix(in srgb, var(--accent) 13%, rgba(24, 40, 56, 0.08));
-  --selected: color-mix(in srgb, var(--accent) 19%, transparent);
-  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 9%, rgba(255, 250, 244, 0.34)));
+  --hover: color-mix(in srgb, var(--accent) 9%, rgba(42, 32, 22, 0.045));
+  --hover-strong: color-mix(in srgb, var(--accent) 13%, rgba(42, 32, 22, 0.07));
+  --selected: color-mix(in srgb, var(--accent) 18%, transparent);
+  --selected-wash: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 8%, rgba(255, 250, 244, 0.34)));
 
-  --text: #16273a;
-  --text-soft: #50657a;
-  --text-muted: rgba(80, 101, 122, 0.66);
-  --text-faint: rgba(80, 101, 122, 0.42);
+  --text: #1a2530;
+  --text-soft: #546474;
+  --text-muted: rgba(84, 100, 116, 0.68);
+  --text-faint: rgba(84, 100, 116, 0.42);
   --text-inverse: #fffaf4;
 
-  --border: color-mix(in srgb, var(--accent) 10%, rgba(45, 34, 25, 0.085));
-  --border-soft: color-mix(in srgb, var(--accent) 8%, rgba(45, 34, 25, 0.05));
-  --border-strong: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.14));
+  --border: color-mix(in srgb, var(--accent) 10%, rgba(45, 34, 25, 0.09));
+  --border-soft: color-mix(in srgb, var(--accent) 8%, rgba(45, 34, 25, 0.055));
+  --border-strong: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.145));
 
   --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --accent-on-surface: color-mix(in srgb, var(--accent) 78%, black);
 
-  --field: color-mix(in srgb, var(--accent) 7%, rgba(255, 252, 247, 0.66));
-  --field-border: color-mix(in srgb, var(--accent) 14%, rgba(45, 34, 25, 0.09));
+  --field: color-mix(in srgb, var(--accent) 6%, rgba(255, 251, 244, 0.72));
+  --field-border: color-mix(in srgb, var(--accent) 13%, rgba(45, 34, 25, 0.095));
 
   --texture-opacity: 0;
   --texture-blend: multiply;

@@ -56,6 +56,7 @@ type QuickOpenResult = {
   subtitle: string;
   icon: IconName;
   group: string;
+  kind: "history" | "tab" | "action" | "navigation";
   faviconUrl?: string | null;
   matchRank?: number;
   run: () => void;
@@ -137,6 +138,7 @@ export default function CommandBar({
   onOpenUrl
 }: CommandBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const completion = useMemo(() => getInlineCompletion(query, historyItems.map((item) => item.url)), [historyItems, query]);
@@ -156,13 +158,10 @@ export default function CommandBar({
         faviconUrl: getFaviconSrc(item.url, item.faviconUrl),
         icon: "history" as const,
         group: "History",
+        kind: "history" as const,
         matchRank: rank,
         run: () => onOpenUrl(item.url, navigationTarget)
       }));
-
-    if (!normalizedQuery) {
-      return historyResults.map((result) => ({ ...result, group: "Recent" }));
-    }
 
     // Open tabs beat re-opening the same page from history — switching is
     // cheaper than a duplicate. Only offered in the default mode; the split
@@ -197,20 +196,47 @@ export default function CommandBar({
               faviconUrl: tab.url ? getFaviconSrc(tab.url, tab.faviconUrl) : null,
               icon: "globe" as const,
               group: "Switch to tab",
+              kind: "tab" as const,
               run: () => onSelectTab(tab)
             }));
 
     const actionResults: QuickOpenResult[] = actions
-      .filter((action) => normalize(action.title).includes(normalizedQuery))
+      .map((action) => {
+        const title = normalize(action.title);
+        const words = title.split(/\s+/);
+        const rank =
+          title === normalizedQuery
+            ? 0
+            : title.startsWith(normalizedQuery) || words.some((word) => word === normalizedQuery)
+              ? 1
+              : words.some((word) => word.startsWith(normalizedQuery))
+                ? 2
+                : title.includes(normalizedQuery)
+                  ? 3
+                  : Number.POSITIVE_INFINITY;
+        return { action, rank };
+      })
+      .filter(({ rank }) => Number.isFinite(rank))
+      .sort((a, b) => a.rank - b.rank)
       .slice(0, 3)
-      .map((action) => ({
+      .map(({ action, rank }) => ({
         id: `action-${action.id}`,
         title: action.title,
         subtitle: action.subtitle ?? "Command",
         icon: action.icon,
         group: "Actions",
+        kind: "action" as const,
+        matchRank: rank,
         run: action.run
       }));
+
+    if (!normalizedQuery) {
+      return [
+        ...tabResults.map((result) => ({ ...result, group: "Open tabs" })),
+        ...historyResults.slice(0, 4).map((result) => ({ ...result, group: "Recent" })),
+        ...actionResults.map((result) => ({ ...result, group: "Suggested" }))
+      ];
+    }
 
     const resolvedUrl = resolveNavigationInput(query);
     const navigationResult: QuickOpenResult = {
@@ -219,6 +245,7 @@ export default function CommandBar({
       subtitle: looksLikeUrl(query) ? resolvedUrl : "Web search",
       icon: "search",
       group: "Go",
+      kind: "navigation",
       run: () => onNavigateInput(query, navigationTarget)
     };
 
@@ -228,7 +255,12 @@ export default function CommandBar({
         ? [...historyResults, navigationResult]
         : [navigationResult, ...historyResults];
 
-    return [...core, ...tabResults, ...actionResults];
+    const bestAction = actionResults[0];
+    const prioritizeActions =
+      normalizedQuery.length >= 3 && bestAction?.matchRank !== undefined && bestAction.matchRank <= 2;
+    return prioritizeActions
+      ? [...actionResults, ...core, ...tabResults]
+      : [...core, ...tabResults, ...actionResults];
   }, [actions, historyItems, mode, onNavigateInput, onOpenUrl, onSelectTab, openTabs, query]);
 
   useEffect(() => {
@@ -236,6 +268,7 @@ export default function CommandBar({
       return;
     }
 
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuery("");
     setSelectedIndex(0);
     const focusInput = () => {
@@ -254,6 +287,7 @@ export default function CommandBar({
       cancelAnimationFrame(frame);
       window.clearTimeout(shortRetry);
       window.clearTimeout(lateRetry);
+      previousFocusRef.current?.focus({ preventScroll: true });
     };
   }, [focusToken, isOpen]);
 
@@ -289,6 +323,12 @@ export default function CommandBar({
         aria-label="Andromeda command bar"
         onMouseDown={(event) => event.stopPropagation()}
       >
+        <div className="command-meta" aria-hidden="true">
+          <span><Icon name="command" size={13} /> Quick open</span>
+          <span className={mode === "split" ? "command-mode is-split" : "command-mode"}>
+            {mode === "split" ? "Choose a page for Split View" : "Search · switch · command"}
+          </span>
+        </div>
         <div className="command-input-wrap">
           <Icon name="search" size={19} />
           <span className="command-input-field">
@@ -302,7 +342,18 @@ export default function CommandBar({
               autoFocus
               ref={inputRef}
               value={query}
-              placeholder="Search..."
+              role="combobox"
+              aria-expanded={results.length > 0}
+              aria-controls="andromeda-command-results"
+              aria-activedescendant={
+                results[selectedIndex] ? `command-option-${results[selectedIndex].id}` : undefined
+              }
+              aria-autocomplete="list"
+              placeholder={
+                mode === "split"
+                  ? "Search for a page to open beside this one"
+                  : "Search, open a tab, or run a command"
+              }
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
@@ -335,6 +386,18 @@ export default function CommandBar({
                   return;
                 }
 
+                if (event.key === "Home" && results.length > 0) {
+                  event.preventDefault();
+                  setSelectedIndex(0);
+                  return;
+                }
+
+                if (event.key === "End" && results.length > 0) {
+                  event.preventDefault();
+                  setSelectedIndex(results.length - 1);
+                  return;
+                }
+
                 const isCaretAtEnd =
                   event.currentTarget.selectionStart === event.currentTarget.value.length &&
                   event.currentTarget.selectionEnd === event.currentTarget.value.length;
@@ -347,20 +410,36 @@ export default function CommandBar({
 
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  if (completion && selectedIndex === 0) {
-                    onClose();
-                    onOpenUrl(completion.url, mode === "split" ? "split" : "active");
-                  } else {
-                    runSelectedResult();
-                  }
+                  runSelectedResult();
                 }
               }}
             />
           </span>
+          {query ? (
+            <button
+              type="button"
+              className="command-clear"
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery("");
+                setSelectedIndex(0);
+                inputRef.current?.focus();
+              }}
+            >
+              <Icon name="close" size={14} />
+            </button>
+          ) : (
+            <kbd className="command-escape">esc</kbd>
+          )}
         </div>
 
         {results.length > 0 ? (
-          <div className="command-results" role="listbox" aria-label="Search suggestions">
+          <div
+            id="andromeda-command-results"
+            className="command-results"
+            role="listbox"
+            aria-label="Search suggestions"
+          >
             {results.map((result, index) => {
               const previousGroup = index > 0 ? results[index - 1].group : null;
               const showGroupLabel = result.group !== previousGroup;
@@ -375,6 +454,7 @@ export default function CommandBar({
                     className={index === selectedIndex ? "command-result is-selected" : "command-result"}
                     type="button"
                     role="option"
+                    id={`command-option-${result.id}`}
                     aria-selected={index === selectedIndex}
                     onMouseEnter={() => setSelectedIndex(index)}
                     onClick={() => runResult(result)}
@@ -384,7 +464,18 @@ export default function CommandBar({
                       <span>{result.title}</span>
                       <small>{result.subtitle}</small>
                     </span>
-                    <kbd>↵</kbd>
+                    <span className="command-result-tail">
+                      <span className={`command-result-type is-${result.kind}`}>
+                        {result.kind === "navigation"
+                          ? "Search"
+                          : result.kind === "tab"
+                            ? "Tab"
+                            : result.kind === "action"
+                              ? "Action"
+                              : "History"}
+                      </span>
+                      <kbd>↵</kbd>
+                    </span>
                   </button>
                 </div>
               );

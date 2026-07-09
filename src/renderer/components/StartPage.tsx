@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import { formatClock, formatLongDate } from "../utils/time";
 import { getFaviconSrc } from "../utils/favicon";
 import type { QuickLink } from "../state/useQuickLinks";
@@ -9,6 +9,8 @@ import type { Bookmark, BookmarkFolder } from "../state/useBookmarks";
 type StartPageProps = {
   quickLinks: QuickLink[];
   userName?: string;
+  spaceName: string;
+  spaceIcon: IconName;
   onOpenCommand: () => void;
   onOpenLink: (url: string) => void;
   onRemoveQuickLink: (id: string) => void;
@@ -75,6 +77,8 @@ function useNow(): Date {
 function StartPage({
   quickLinks,
   userName,
+  spaceName,
+  spaceIcon,
   onOpenCommand,
   onOpenLink,
   onRemoveQuickLink,
@@ -88,10 +92,11 @@ function StartPage({
 
   return (
     <main className="start-page">
+      <BookmarksBar bookmarks={bookmarks} folders={folders} onOpenUrl={onOpenLink} />
       <div className="start-scroll">
-        <BookmarksBar bookmarks={bookmarks} folders={folders} onOpenUrl={onOpenLink} />
         <section className="start-stage">
           <header className="start-head reveal" style={{ "--reveal-delay": "40ms" } as React.CSSProperties}>
+            <span className="start-space-context"><Icon name={spaceIcon} size={13} /> {spaceName}</span>
             <p className="start-greeting">{getGreeting(now, userName)}</p>
             <div className="start-clock">{formatClock(now)}</div>
             <p className="start-date">{formatLongDate(now)}</p>
@@ -178,12 +183,12 @@ function StartPage({
                 </button>
               </div>
             ))}
-            <button type="button" className="quick-add" onClick={onOpenCommand}>
-              <span className="quick-add-mark">
-                <Icon name="plus" size={26} />
-              </span>
-              <span className="quick-label">Add shortcut</span>
-            </button>
+            {quickLinks.length === 0 ? (
+              <button type="button" className="start-shortcuts-empty" onClick={onOpenCommand}>
+                <span className="quick-add-mark"><Icon name="plus" size={22} /></span>
+                <span><b>Open your first page</b><small>Pin any page from the toolbar to keep it here.</small></span>
+              </button>
+            ) : null}
           </section>
         </section>
       </div>

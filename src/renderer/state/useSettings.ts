@@ -54,7 +54,7 @@ const DEFAULT_SETTINGS: Settings = {
   name: "",
   searchEngine: "google",
   appearanceAccent: "#f28366",
-  addressBarPlacement: "toolbar",
+  addressBarPlacement: "sidebar",
   layout: "sidebar",
   toolbarButtons: DEFAULT_TOOLBAR_BUTTONS
 };

@@ -56,12 +56,12 @@ const STORAGE_KEY = "andromeda.browserState.v3";
 const MAX_TABS_PER_SPACE = 14;
 
 export const SPACE_PRESETS: Array<{ icon: IconName; accent: string }> = [
-  { icon: "globe", accent: "#4f7df4" },
-  { icon: "code", accent: "#7c5cff" },
-  { icon: "briefcase", accent: "#ff7a5c" },
+  { icon: "globe", accent: "#f28366" },
+  { icon: "code", accent: "#4f7df4" },
+  { icon: "briefcase", accent: "#f4a23b" },
   { icon: "user", accent: "#41a96c" },
   { icon: "sparkle", accent: "#e0567f" },
-  { icon: "grid", accent: "#d98a2b" }
+  { icon: "grid", accent: "#7c5cff" }
 ];
 
 const SPACE_ICON_NAMES: IconName[] = SPACE_PRESETS.map((preset) => preset.icon);
@@ -80,8 +80,8 @@ function createDefaultSpace(): BrowserSpace {
     id: randomId("space"),
     name: "Home",
     icon: "globe",
-    accent: "#4f7df4",
-    colors: ["#4f7df4"],
+    accent: "#f28366",
+    colors: ["#f28366"],
     tabs: [startTab],
     activeTabId: startTab.id
   };
@@ -239,7 +239,7 @@ function sanitizeSpace(value: unknown): BrowserSpace | null {
   const cappedTabs = capSpaceTabs(tabs.length > 0 ? tabs : [createStartTab()]);
   const icon = SPACE_ICON_NAMES.includes(space.icon as IconName) ? (space.icon as IconName) : "globe";
   const fallbackAccent =
-    typeof space.accent === "string" && HEX_RE.test(space.accent) ? space.accent : "#4f7df4";
+    typeof space.accent === "string" && HEX_RE.test(space.accent) ? space.accent : "#f28366";
   const colors = sanitizeColors(space.colors, fallbackAccent);
   const activeTabId =
     typeof space.activeTabId === "string" && cappedTabs.some((tab) => tab.id === space.activeTabId)

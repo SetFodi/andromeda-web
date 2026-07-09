@@ -163,6 +163,15 @@ function AddressBar({
         <input
           ref={inputRef}
           value={addressValue}
+          role="combobox"
+          aria-expanded={showAddressSuggestions}
+          aria-controls="andromeda-address-suggestions"
+          aria-activedescendant={
+            suggestIndex >= 0 && addressSuggestions[suggestIndex]
+              ? `address-suggestion-${addressSuggestions[suggestIndex].id}`
+              : undefined
+          }
+          aria-autocomplete="both"
           placeholder="Search or enter website"
           onChange={(event) => onAddressChange(event.target.value)}
           onFocus={() => {
@@ -225,11 +234,20 @@ function AddressBar({
         </button>
       ) : null}
       {showAddressSuggestions ? (
-        <div className="address-suggest" onMouseDown={(event) => event.preventDefault()}>
+        <div
+          id="andromeda-address-suggestions"
+          className="address-suggest"
+          role="listbox"
+          aria-label="Address suggestions"
+          onMouseDown={(event) => event.preventDefault()}
+        >
           {addressSuggestions.map((suggestion, index) => (
             <button
               key={suggestion.id}
+              id={`address-suggestion-${suggestion.id}`}
               type="button"
+              role="option"
+              aria-selected={index === suggestIndex}
               className={
                 index === suggestIndex
                   ? "address-suggest-item is-selected"

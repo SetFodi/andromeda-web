@@ -225,7 +225,7 @@ const DEFAULT_LAYOUT_METRICS: LayoutMetrics = {
   findOpen: false,
   classic: false
 };
-const TOOLBAR_HEIGHT = 56;
+const TOOLBAR_HEIGHT = 46;
 const CLASSIC_TABS_HEIGHT = 40;
 const FIND_BAR_HEIGHT = 46;
 const SPLIT_HEADER_HEIGHT = 34;
@@ -1451,10 +1451,12 @@ export class WebContentsViewManager {
 
     if (this.activeMainTabId) {
       this.attachMain(this.activeMainTabId);
+      this.mainTabs.get(this.activeMainTabId)?.view.webContents.invalidate();
     }
     if (this.split.view && !this.split.attached) {
       this.split.attached = this.addChildView(this.split.view);
       this.applySplitBounds();
+      this.split.view.webContents.invalidate();
     }
   }
 }

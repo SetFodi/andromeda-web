@@ -15,6 +15,25 @@ type BackupFile = {
   data: Record<string, string>;
 };
 
+function parseBackup(json: string): BackupFile {
+  const parsed: unknown = JSON.parse(json);
+  if (!parsed || typeof parsed !== "object" || !("schema" in parsed) || !("data" in parsed)) {
+    throw new Error("Not a valid Andromeda backup");
+  }
+
+  const candidate = parsed as Partial<BackupFile>;
+  if (candidate.schema !== BACKUP_SCHEMA || typeof candidate.data !== "object" || candidate.data === null) {
+    throw new Error("Not a valid Andromeda backup");
+  }
+
+  return {
+    schema: BACKUP_SCHEMA,
+    exportedAt: typeof candidate.exportedAt === "string" ? candidate.exportedAt : "",
+    app: typeof candidate.app === "string" ? candidate.app : "unknown",
+    data: candidate.data
+  };
+}
+
 /** Serialize every `andromeda.`-prefixed localStorage entry to a backup string. */
 export function exportBackup(): string {
   const data: Record<string, string> = {};
@@ -55,19 +74,24 @@ export function triggerBackupDownload(): void {
   URL.revokeObjectURL(url);
 }
 
+/** Validate a backup without changing local data, for restore confirmation UI. */
+export function inspectBackup(json: string): { items: number; exportedAt: string | null } {
+  const backup = parseBackup(json);
+  const items = Object.entries(backup.data).filter(
+    ([key, value]) => key.startsWith(KEY_PREFIX) && typeof value === "string"
+  ).length;
+  return {
+    items,
+    exportedAt: backup.exportedAt && !Number.isNaN(Date.parse(backup.exportedAt)) ? backup.exportedAt : null
+  };
+}
+
 /**
  * Restore a backup string. Validates the envelope, then writes back only the
  * `andromeda.`-prefixed string entries — any other key is ignored for safety.
  */
 export function restoreBackup(json: string): { restored: number } {
-  const parsed: unknown = JSON.parse(json);
-
-  if (!parsed || typeof parsed !== "object" || !("schema" in parsed) || !("data" in parsed)) {
-    throw new Error("Not a valid Andromeda backup");
-  }
-  if (parsed.schema !== BACKUP_SCHEMA || typeof parsed.data !== "object" || parsed.data === null) {
-    throw new Error("Not a valid Andromeda backup");
-  }
+  const parsed = parseBackup(json);
 
   let restored = 0;
   for (const [key, value] of Object.entries(parsed.data)) {

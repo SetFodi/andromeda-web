@@ -41,8 +41,10 @@ const SPACE_ICON_OPTIONS: IconName[] = [
 type SidebarProps = {
   spaces: BrowserSpace[];
   selectedSpaceId: SpaceId;
+  sidebarWidth: number;
   onMouseLeave?: () => void;
   onResizeStart?: (event: ReactMouseEvent) => void;
+  onResizeBy: (delta: number) => void;
   onSelectSpace: (spaceId: SpaceId) => void;
   onCreateSpace: () => SpaceId;
   onRenameSpace: (spaceId: SpaceId, name: string) => void;
@@ -75,14 +77,18 @@ type SidebarProps = {
   onCloseWindow?: () => void;
   onMinimizeWindow?: () => void;
   onToggleMaximizeWindow?: () => void;
+  backgroundGlowEnabled: boolean;
+  onToggleBackgroundGlow: () => void;
   addressBar?: ReactNode;
 };
 
 function Sidebar({
   spaces,
   selectedSpaceId,
+  sidebarWidth,
   onMouseLeave,
   onResizeStart,
+  onResizeBy,
   onSelectSpace,
   onCreateSpace,
   onRenameSpace,
@@ -112,25 +118,10 @@ function Sidebar({
   onCloseWindow,
   onMinimizeWindow,
   onToggleMaximizeWindow,
+  backgroundGlowEnabled,
+  onToggleBackgroundGlow,
   addressBar
 }: SidebarProps) {
-  // Global "background glow" preference — toggles the warm start-page aurora.
-  // Persisted and applied as a class on <html> (also bootstrapped in main.tsx).
-  const [startGlowOff, setStartGlowOff] = useState<boolean>(
-    () => typeof document !== "undefined" && document.documentElement.classList.contains("no-start-glow")
-  );
-  const toggleStartGlow = () => {
-    setStartGlowOff((prev) => {
-      const next = !prev;
-      document.documentElement.classList.toggle("no-start-glow", next);
-      try {
-        localStorage.setItem("andromeda.startGlow", next ? "off" : "on");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
   const selectedSpace = spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0];
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -138,6 +129,7 @@ function Sidebar({
   const [spaceMenu, setSpaceMenu] = useState<{ spaceId: SpaceId; x: number; y: number } | null>(null);
   const [dropSpaceId, setDropSpaceId] = useState<string | null>(null);
   const [draggedSpaceId, setDraggedSpaceId] = useState<string | null>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [headerRename, setHeaderRename] = useState<string | null>(null);
   const headerRenameRef = useRef<HTMLInputElement>(null);
@@ -207,7 +199,10 @@ function Sidebar({
   const openTabMenu = (event: ReactMouseEvent, tab: BrowserTab) => {
     event.preventDefault();
     event.stopPropagation();
-    const left = Math.max(8, Math.min(event.clientX, 280 - 200));
+    const sidebarBounds = sidebarRef.current?.getBoundingClientRect();
+    const leftEdge = sidebarBounds?.left ?? 0;
+    const rightEdge = sidebarBounds?.right ?? 286;
+    const left = Math.max(leftEdge + 8, Math.min(event.clientX, rightEdge - 204));
     const top = Math.min(event.clientY, window.innerHeight - 250);
     setSpaceMenu(null);
     setTabMenu({ tab, x: left, y: Math.max(8, top) });
@@ -220,10 +215,13 @@ function Sidebar({
     event.stopPropagation();
     // Keep the tall color-picker menu fully on-screen: pin it within the sidebar
     // width and let it grow upward when opened from a space near the bottom.
-    const MENU_WIDTH = 256;
     const MENU_HEIGHT = 504;
     const margin = 10;
-    const left = Math.max(margin, Math.min(event.clientX, 286 - MENU_WIDTH - margin));
+    const sidebarBounds = sidebarRef.current?.getBoundingClientRect();
+    const MENU_WIDTH = Math.min(256, Math.max(196, (sidebarBounds?.width ?? 286) - margin * 2));
+    const leftEdge = sidebarBounds?.left ?? 0;
+    const rightEdge = sidebarBounds?.right ?? 286;
+    const left = Math.max(leftEdge + margin, Math.min(event.clientX, rightEdge - MENU_WIDTH - margin));
     const top = Math.max(margin, Math.min(event.clientY, window.innerHeight - MENU_HEIGHT - margin));
     setTabMenu(null);
     setSpaceMenu({ spaceId: space.id, x: left, y: top });
@@ -546,6 +544,7 @@ function Sidebar({
 
   return (
     <aside
+      ref={sidebarRef}
       className="sidebar"
       onWheel={handleWheel}
       onContextMenu={handleSidebarContextMenu}
@@ -555,10 +554,20 @@ function Sidebar({
         <div
           className="sidebar-resize-handle"
           role="separator"
+          tabIndex={0}
           aria-orientation="vertical"
           aria-label="Resize sidebar"
+          aria-valuemin={220}
+          aria-valuemax={460}
+          aria-valuenow={Math.round(sidebarWidth)}
           title="Drag to resize"
           onMouseDown={onResizeStart}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+              event.preventDefault();
+              onResizeBy(event.key === "ArrowLeft" ? -12 : 12);
+            }
+          }}
         />
       ) : null}
       {showWindowControls ? (
@@ -584,6 +593,11 @@ function Sidebar({
         </div>
       ) : null}
       {addressBar ? <div className="sidebar-address-section">{addressBar}</div> : null}
+      <button type="button" className="sidebar-new-tab" onClick={onNewTab}>
+        <span className="sidebar-new-tab-icon"><Icon name="plus" size={15} /></span>
+        <span>New tab</span>
+        <kbd>⌘T</kbd>
+      </button>
       <div className="sidebar-body">
         <div className="sidebar-space-heading">
           <span
@@ -593,34 +607,37 @@ function Sidebar({
           >
             <Icon name={selectedSpace.icon} size={15} />
           </span>
-          {headerRename !== null ? (
-            <input
-              ref={headerRenameRef}
-              className="sidebar-space-rename"
-              value={headerRename}
-              spellCheck={false}
-              aria-label="Rename space"
-              onChange={(event) => setHeaderRename(event.target.value)}
-              onBlur={commitHeaderRename}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commitHeaderRename();
-                } else if (event.key === "Escape") {
-                  event.preventDefault();
-                  setHeaderRename(null);
-                }
-              }}
-            />
-          ) : (
-            <span
-              className="sidebar-space-name"
-              title="Double-click to rename"
-              onDoubleClick={() => setHeaderRename(selectedSpace.name)}
-            >
-              {selectedSpace.name}
-            </span>
-          )}
+          <span className="sidebar-space-copy">
+            {headerRename !== null ? (
+              <input
+                ref={headerRenameRef}
+                className="sidebar-space-rename"
+                value={headerRename}
+                spellCheck={false}
+                aria-label="Rename space"
+                onChange={(event) => setHeaderRename(event.target.value)}
+                onBlur={commitHeaderRename}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitHeaderRename();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setHeaderRename(null);
+                  }
+                }}
+              />
+            ) : (
+              <span
+                className="sidebar-space-name"
+                title="Double-click to rename"
+                onDoubleClick={() => setHeaderRename(selectedSpace.name)}
+              >
+                {selectedSpace.name}
+              </span>
+            )}
+            <small>{selectedSpace.tabs.length} {selectedSpace.tabs.length === 1 ? "tab" : "tabs"}</small>
+          </span>
           <button
             type="button"
             className="sidebar-space-chevron"
@@ -638,9 +655,9 @@ function Sidebar({
             <>
               <div className="tab-group-label">
                 <Icon name="pin" size={11} />
-                <span>Pinned</span>
+                <span>Favorites</span>
               </div>
-              <div className="tab-list">{pinnedTabs.map(renderTab)}</div>
+              <div className="tab-list is-pinned">{pinnedTabs.map(renderTab)}</div>
             </>
           ) : null}
 
@@ -684,7 +701,7 @@ function Sidebar({
             <>
               <div className="tab-group-label">
                 <Icon name="moon" size={11} />
-                <span>Sleeping</span>
+                <span>Archived</span>
                 <span className="tab-group-count">{sleepingTabs.length}</span>
               </div>
               <div className="tab-list">{sleepingTabs.map(renderTab)}</div>
@@ -893,12 +910,12 @@ function Sidebar({
             type="button"
             className="tab-context-item"
             role="menuitemcheckbox"
-            aria-checked={!startGlowOff}
-            onClick={toggleStartGlow}
+            aria-checked={backgroundGlowEnabled}
+            onClick={onToggleBackgroundGlow}
           >
             <Icon name="sparkle" size={15} />
             <span>Background glow</span>
-            <span className={startGlowOff ? "ctx-state" : "ctx-state is-on"}>{startGlowOff ? "Off" : "On"}</span>
+            <span className={backgroundGlowEnabled ? "ctx-state is-on" : "ctx-state"}>{backgroundGlowEnabled ? "On" : "Off"}</span>
           </button>
           <button
             type="button"
