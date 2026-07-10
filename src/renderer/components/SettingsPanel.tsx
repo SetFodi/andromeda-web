@@ -671,7 +671,27 @@ function SettingsPanel({
 
                 <section className="settings-about-card">
                   <AndromedaMark size={26} />
-                  <span><b>Andromeda {version || "—"}</b><small>Quiet browsing. Clear mind.</small></span>
+                  <span>
+                    <b>Andromeda {version || "—"}</b>
+                    <small>Quiet browsing. Clear mind.</small>
+                    <small className="settings-legal-links">
+                      <button
+                        type="button"
+                        className="settings-legal-link"
+                        onClick={() => void window.andromeda.openUpdate("https://github.com/SetFodi/andromeda-web/blob/master/TERMS.md")}
+                      >
+                        Terms
+                      </button>
+                      <span aria-hidden="true">·</span>
+                      <button
+                        type="button"
+                        className="settings-legal-link"
+                        onClick={() => void window.andromeda.openUpdate("https://github.com/SetFodi/andromeda-web/blob/master/PRIVACY.md")}
+                      >
+                        Privacy
+                      </button>
+                    </small>
+                  </span>
                 </section>
               </>
             ) : null}

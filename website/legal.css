@@ -1,0 +1,58 @@
+/* Shared legal pages — matches marketing site tokens */
+:root {
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ink: #0f1115;
+  --ink-2: #5a6170;
+  --line: rgba(15, 17, 21, 0.08);
+  --surface: #fff;
+  --bg: #f2f6fa;
+  --coral: #ff7a5c;
+}
+[data-theme="dark"] {
+  --ink: #f0f2f5;
+  --ink-2: #a2aab8;
+  --line: rgba(255, 255, 255, 0.1);
+  --surface: #151a22;
+  --bg: #0a0e14;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--coral); }
+.wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+.top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 36px; flex-wrap: wrap;
+}
+.brand {
+  font-weight: 650; letter-spacing: -0.02em; color: var(--ink);
+  text-decoration: none; font-size: 17px;
+}
+.nav a {
+  margin-left: 14px; font-size: 14px; font-weight: 550;
+  color: var(--ink-2); text-decoration: none;
+}
+.nav a:hover { color: var(--ink); }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 36px 32px;
+  box-shadow: 0 12px 40px rgba(15, 35, 55, 0.06);
+}
+h1 { font-size: 1.85rem; letter-spacing: -0.03em; margin-bottom: 8px; }
+.meta { color: var(--ink-2); font-size: 14px; margin-bottom: 28px; }
+h2 { font-size: 1.15rem; margin: 28px 0 10px; letter-spacing: -0.02em; }
+p, li { color: var(--ink-2); font-size: 15px; margin-bottom: 12px; }
+ul { padding-left: 1.2em; margin-bottom: 12px; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0 20px; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border: 1px solid var(--line); vertical-align: top; }
+th { background: rgba(15,17,21,0.03); color: var(--ink); font-weight: 600; }
+[data-theme="dark"] th { background: rgba(255,255,255,0.04); }
+strong { color: var(--ink); }
+.foot { margin-top: 28px; font-size: 13px; color: var(--ink-2); }

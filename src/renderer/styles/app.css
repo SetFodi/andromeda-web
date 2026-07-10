@@ -6766,6 +6766,30 @@
   color: var(--text-soft);
 }
 
+.settings-legal-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.settings-legal-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-on-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.settings-legal-link:hover {
+  color: var(--text);
+}
+
 .settings-workspace .settings-foot {
   min-height: 52px;
   padding: 9px 16px 9px 22px;

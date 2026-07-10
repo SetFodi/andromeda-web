@@ -5,11 +5,16 @@ A calm, fast macOS browser. Built with Electron, React, and TypeScript.
 - **Spaces** — separate worlds for work, play, and everything else, each with its own theme color
 - **Shield** — ads and trackers are blocked before they load (network-level, EasyList + EasyPrivacy)
 - **Reader** — any article, distilled to a clean serif page (⌘⇧R)
-- Split view, tab sleeping, frecency-ranked omnibar (⌘K), tab search (⌘⇧A), history (⌘Y)
+- Split view, tab sleeping, frecency-ranked omnibar (⌘K / ⌘T), tab search (⌘⇧A), history (⌘Y)
+- Full-height sidebar, domain chip address bar, Tidy / Clear tabs, hover URL pill
+
+**Current release:** [v0.4.0](https://github.com/SetFodi/andromeda-web/releases/latest)
+
+Legal: [Terms of Service](./TERMS.md) · [Privacy Policy](./PRIVACY.md)
 
 ## Installing the app
 
-Grab `Andromeda-x.y.z-arm64.dmg`, open it, and drag Andromeda into Applications.
+Grab `Andromeda-0.4.0-arm64.dmg` from the latest release, open it, and drag Andromeda into Applications.
 
 Andromeda is not signed with an Apple Developer certificate, so macOS will warn you
 on first launch. This happens once:
