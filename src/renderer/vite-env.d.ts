@@ -166,6 +166,7 @@ interface Window {
     closeWindow: () => Promise<void>;
     minimizeWindow: () => Promise<void>;
     toggleMaximizeWindow: () => Promise<void>;
+    setVibrancy: (enabled: boolean) => Promise<void>;
     onDidNavigate: (callback: (payload: NavigationPayload) => void) => () => void;
     onTitleUpdated: (callback: (payload: TitlePayload) => void) => () => void;
     onFaviconUpdated: (callback: (payload: FaviconPayload) => void) => () => void;

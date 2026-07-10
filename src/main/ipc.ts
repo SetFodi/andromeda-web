@@ -478,6 +478,27 @@ export function registerIpc(manager: WebContentsViewManager, window: BrowserWind
     window.maximize();
   });
 
+  // Aside-style frosted glass: native material under transparent chrome.
+  // CSS must stay nearly clear so the OS blur actually shows through.
+  setHandler("window:setVibrancy", (event, payload: unknown) => {
+    assertTrustedSender(event, window);
+    const enabled = Boolean((payload as { enabled?: unknown } | null)?.enabled);
+    if (process.platform === "darwin") {
+      // Keep the window fully transparent so vibrancy isn't painted over.
+      window.setBackgroundColor("#00000000");
+      if (enabled) {
+        // under-window matches Aside-style desktop blur behind the chrome.
+        window.setVibrancy("under-window", { animationDuration: 180 });
+      } else {
+        window.setVibrancy(null);
+      }
+      return;
+    }
+    if (process.platform === "win32" && typeof window.setBackgroundMaterial === "function") {
+      window.setBackgroundMaterial(enabled ? "acrylic" : "none");
+    }
+  });
+
   // ---- Passwords ---------------------------------------------------------
   // Page-callable channels. The page never supplies its own origin; it is
   // derived from the sending frame, and only main frames of our own web

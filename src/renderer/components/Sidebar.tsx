@@ -7,6 +7,7 @@ import type {
   WheelEvent
 } from "react";
 import type { BrowserSpace, BrowserTab, SpaceId } from "../state/browserStore";
+import type { ThemeMode } from "../state/useTheme";
 import Icon, { IconName } from "./Icon";
 import { TabFavicon } from "./TabFavicon";
 // Lazy: the vendored HeroUI color picker is the biggest component in the
@@ -71,7 +72,6 @@ type SidebarProps = {
   onTabDragEnd: () => void;
   draggedTabId: string | null;
   onNewTab: () => void;
-  onTidyTabs: (spaceId: SpaceId) => void;
   onClearTabs: (spaceId: SpaceId) => void;
   showWindowControls?: boolean;
   onCloseWindow?: () => void;
@@ -79,6 +79,8 @@ type SidebarProps = {
   onToggleMaximizeWindow?: () => void;
   backgroundGlowEnabled: boolean;
   onToggleBackgroundGlow: () => void;
+  theme: ThemeMode;
+  onSetTheme: (mode: ThemeMode) => void;
   addressBar?: ReactNode;
 };
 
@@ -112,7 +114,6 @@ function Sidebar({
   onTabDragEnd,
   draggedTabId,
   onNewTab,
-  onTidyTabs,
   onClearTabs,
   showWindowControls,
   onCloseWindow,
@@ -120,8 +121,11 @@ function Sidebar({
   onToggleMaximizeWindow,
   backgroundGlowEnabled,
   onToggleBackgroundGlow,
+  theme,
+  onSetTheme,
   addressBar
 }: SidebarProps) {
+  const isTransparentTheme = theme === "transparent";
   const selectedSpace = spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0];
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -131,8 +135,6 @@ function Sidebar({
   const [draggedSpaceId, setDraggedSpaceId] = useState<string | null>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const [headerRename, setHeaderRename] = useState<string | null>(null);
-  const headerRenameRef = useRef<HTMLInputElement>(null);
   const swipeLockRef = useRef(false);
   const swipeIdleRef = useRef<number | null>(null);
   const swipeDeltaRef = useRef(0);
@@ -150,19 +152,6 @@ function Sidebar({
       renameInputRef.current?.select();
     }
   }, [editingSpaceId]);
-
-  const isHeaderRenaming = headerRename !== null;
-  useEffect(() => {
-    if (isHeaderRenaming) {
-      headerRenameRef.current?.focus();
-      headerRenameRef.current?.select();
-    }
-  }, [isHeaderRenaming]);
-
-  // Cancel an in-flight header rename when the active Space changes.
-  useEffect(() => {
-    setHeaderRename(null);
-  }, [selectedSpaceId]);
 
   useEffect(() => {
     if (!tabMenu && !spaceMenu) {
@@ -240,16 +229,6 @@ function Sidebar({
       onRenameSpace(editingSpaceId, draftName);
     }
     setEditingSpaceId(null);
-  };
-
-  const commitHeaderRename = () => {
-    if (headerRename !== null) {
-      const trimmed = headerRename.trim();
-      if (trimmed) {
-        onRenameSpace(selectedSpace.id, trimmed);
-      }
-    }
-    setHeaderRename(null);
   };
 
   const handleCreateSpace = () => {
@@ -593,63 +572,7 @@ function Sidebar({
         </div>
       ) : null}
       {addressBar ? <div className="sidebar-address-section">{addressBar}</div> : null}
-      <button type="button" className="sidebar-new-tab" onClick={onNewTab}>
-        <span className="sidebar-new-tab-icon"><Icon name="plus" size={15} /></span>
-        <span>New tab</span>
-        <kbd>⌘T</kbd>
-      </button>
       <div className="sidebar-body">
-        <div className="sidebar-space-heading">
-          <span
-            className="sidebar-space-icon"
-            style={{ "--space-hue": selectedSpace.accent } as CSSProperties}
-            aria-hidden="true"
-          >
-            <Icon name={selectedSpace.icon} size={15} />
-          </span>
-          <span className="sidebar-space-copy">
-            {headerRename !== null ? (
-              <input
-                ref={headerRenameRef}
-                className="sidebar-space-rename"
-                value={headerRename}
-                spellCheck={false}
-                aria-label="Rename space"
-                onChange={(event) => setHeaderRename(event.target.value)}
-                onBlur={commitHeaderRename}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    commitHeaderRename();
-                  } else if (event.key === "Escape") {
-                    event.preventDefault();
-                    setHeaderRename(null);
-                  }
-                }}
-              />
-            ) : (
-              <span
-                className="sidebar-space-name"
-                title="Double-click to rename"
-                onDoubleClick={() => setHeaderRename(selectedSpace.name)}
-              >
-                {selectedSpace.name}
-              </span>
-            )}
-            <small>{selectedSpace.tabs.length} {selectedSpace.tabs.length === 1 ? "tab" : "tabs"}</small>
-          </span>
-          <button
-            type="button"
-            className="sidebar-space-chevron"
-            aria-label={`${selectedSpace.name} space options`}
-            title="Space options"
-            onClick={(event) => openSpaceMenu(event, selectedSpace)}
-          >
-            <Icon name="chevronDown" size={16} />
-          </button>
-        </div>
-        <div className="sidebar-rule" aria-hidden="true" />
-
         <section className="sidebar-section tabs-section" aria-label={`${selectedSpace.name} tabs`}>
           {pinnedTabs.length > 0 ? (
             <>
@@ -661,41 +584,28 @@ function Sidebar({
             </>
           ) : null}
 
-          {activeTabs.length > 0 ? (
-            <>
-              <div className="tab-group-label">
-                <span>Tabs</span>
-                <span className="tab-group-actions">
-                  <button
-                    type="button"
-                    className="tab-group-action is-text"
-                    title="Group tabs by site and close duplicates"
-                    onClick={() => onTidyTabs(selectedSpace.id)}
-                  >
-                    Tidy
-                  </button>
-                  <button
-                    type="button"
-                    className="tab-group-action is-text"
-                    title="Close all unpinned tabs (reopen with ⌘⇧T)"
-                    onClick={() => onClearTabs(selectedSpace.id)}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    className="tab-group-action"
-                    aria-label="New tab"
-                    title="New tab (⌘T)"
-                    onClick={onNewTab}
-                  >
-                    <Icon name="plus" size={14} />
-                  </button>
-                </span>
-              </div>
-              <div className="tab-list">{activeTabs.map(renderTab)}</div>
-            </>
-          ) : null}
+          <div className="tab-group-label">
+            <span>Tabs</span>
+            <span className="tab-group-actions">
+              {activeTabs.length > 0 ? (
+                <button
+                  type="button"
+                  className="tab-group-action is-text"
+                  title="Close all unpinned tabs (reopen with ⌘⇧T)"
+                  onClick={() => onClearTabs(selectedSpace.id)}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </span>
+          </div>
+          <button type="button" className="sidebar-tabs-new" onClick={onNewTab} title="New tab (⌘T)">
+            <span className="sidebar-tabs-new-icon" aria-hidden="true">
+              <Icon name="plus" size={14} />
+            </span>
+            <span>New tab</span>
+          </button>
+          {activeTabs.length > 0 ? <div className="tab-list">{activeTabs.map(renderTab)}</div> : null}
 
           {sleepingTabs.length > 0 ? (
             <>
@@ -906,6 +816,19 @@ function Sidebar({
             </Suspense>
           </div>
           <div className="tab-context-sep" />
+          <button
+            type="button"
+            className="tab-context-item"
+            role="menuitemcheckbox"
+            aria-checked={isTransparentTheme}
+            onClick={() => onSetTheme(isTransparentTheme ? "night" : "transparent")}
+          >
+            <Icon name="panel" size={15} />
+            <span>Transparent</span>
+            <span className={isTransparentTheme ? "ctx-state is-on" : "ctx-state"}>
+              {isTransparentTheme ? "On" : "Off"}
+            </span>
+          </button>
           <button
             type="button"
             className="tab-context-item"

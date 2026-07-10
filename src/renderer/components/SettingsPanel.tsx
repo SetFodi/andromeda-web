@@ -47,7 +47,8 @@ const TOOLBAR_BUTTON_LABELS: Record<ToolbarButtonKey, string> = {
 const THEME_OPTIONS: Array<{ id: ThemeMode; label: string; hint: string }> = [
   { id: "glow", label: "Glow", hint: "Ambient color" },
   { id: "day", label: "Day", hint: "Warm and bright" },
-  { id: "night", label: "Night", hint: "Quiet contrast" }
+  { id: "night", label: "Night", hint: "Quiet contrast" },
+  { id: "transparent", label: "Transparent", hint: "Frosted glass" }
 ];
 
 const ACCENT_OPTIONS = [
@@ -344,10 +345,6 @@ function SettingsPanel({
               </button>
             ))}
           </nav>
-          <div className="settings-nav-foot">
-            <span className="settings-saved-dot" aria-hidden="true" />
-            Saved automatically
-          </div>
         </aside>
 
         <div className="settings-main">

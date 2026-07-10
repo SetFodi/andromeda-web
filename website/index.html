@@ -4,61 +4,57 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Andromeda — the calm, fast browser for macOS</title>
-  <meta name="description" content="Andromeda is a small, beautiful macOS browser. Colorful Spaces, network-level ad blocking, a serif Reader, and a keyboard-first launcher — quiet by design, fast by default.">
-  <meta name="theme-color" content="#f6f0e7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0c141f" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Andromeda is a calm macOS browser with Spaces, network-level ad blocking, Reader mode, and a keyboard-first launcher. Free for Apple Silicon.">
+  <meta name="theme-color" content="#faf4ec">
 
   <meta property="og:title" content="Andromeda — the calm, fast browser for macOS">
-  <meta property="og:description" content="Colorful Spaces. Network-level ad blocking. A serif Reader. A keyboard-first launcher. Free, for Apple Silicon Macs.">
+  <meta property="og:description" content="Spaces. Shield. Reader. A browser that gets out of your way.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/og.jpg">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="assets/og.jpg">
 
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='27' r='9.6' fill='%23ff7a5c'/%3E%3Cg transform='rotate(-24 24 23)'%3E%3Cellipse cx='24' cy='21' rx='16' ry='5.4' fill='none' stroke='%231b2733' stroke-width='1.8'/%3E%3Ccircle cx='40' cy='21' r='2' fill='%231b2733'/%3E%3C/g%3E%3Cg stroke='%231b2733' stroke-width='2.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M9 34 Q16 30 23 34 T37 34'/%3E%3Cpath d='M11 39 Q18 35.6 25 39 T39 39'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='27' r='9.6' fill='%23ff7a5c'/%3E%3Cg transform='rotate(-24 24 23)'%3E%3Cellipse cx='24' cy='21' rx='16' ry='5.4' fill='none' stroke='%231a1a1a' stroke-width='1.8'/%3E%3Ccircle cx='40' cy='21' r='2' fill='%231a1a1a'/%3E%3C/g%3E%3Cg stroke='%231a1a1a' stroke-width='2.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M9 34 Q16 30 23 34 T37 34'/%3E%3Cpath d='M11 39 Q18 35.6 25 39 T39 39'/%3E%3C/g%3E%3C/svg%3E">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Hanken+Grotesk:wght@400..700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,480;9..144,560;9..144,640&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- ===== Atmosphere ===== -->
-  <div class="grain" aria-hidden="true"></div>
-  <div class="aurora" aria-hidden="true">
-    <span class="aurora-blob a"></span>
-    <span class="aurora-blob b"></span>
-    <span class="aurora-blob c"></span>
+  <div class="atmo" aria-hidden="true">
+    <div class="atmo-glow g1"></div>
+    <div class="atmo-glow g2"></div>
+    <div class="atmo-glow g3"></div>
+    <div class="atmo-grain"></div>
   </div>
 
-  <!-- ===== Icon sprite ===== -->
   <svg width="0" height="0" class="sr-only" aria-hidden="true" focusable="false">
     <defs>
-      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v13m0 0 5.5-5.5M12 17l-5.5-5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.6s.8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.8v2.6c0 .3.2.6.7.5A10 10 0 0 0 12 2Z" fill="currentColor"/></symbol>
-      <symbol id="i-spaces" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
-      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a.6.6 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
-      <symbol id="i-reader" viewBox="0 0 24 24"><path d="M3 5h7a3 3 0 0 1 2 1 3 3 0 0 1 2-1h7v13h-7a2 2 0 0 0-2 1 2 2 0 0 0-2-1H3z"/><path d="M12 6v13"/></symbol>
-      <symbol id="i-command" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
-      <symbol id="i-split" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></symbol>
-      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
-      <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="11" y="11" width="8" height="6" rx="1.4" fill="currentColor" stroke="none"/></symbol>
-      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
-      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z"/></symbol>
-      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
-      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></symbol>
+      <symbol id="i-spaces" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a.6.6 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-reader" viewBox="0 0 24 24"><path d="M3 5h7a3 3 0 0 1 2 1 3 3 0 0 1 2-1h7v13h-7a2 2 0 0 0-2 1 2 2 0 0 0-2-1H3z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 6v13" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-command" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-split" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 4v16" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="11" y="11" width="8" height="6" rx="1.4" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.2 6.2l2.1 2.1M15.7 15.7l2.1 2.1M6.2 17.8l2.1-2.1M15.7 8.3l2.1-2.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     </defs>
   </svg>
 
-  <!-- ===== Nav ===== -->
   <header class="nav" id="nav">
     <div class="nav-inner">
       <a class="brand" href="#top" aria-label="Andromeda — home">
-        <svg class="brand-mark" width="30" height="30" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <circle cx="24" cy="27" r="9.6" fill="var(--coral)"/>
+        <svg class="brand-mark" width="28" height="28" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <circle cx="24" cy="27" r="9.6" fill="#ff7a5c"/>
           <g transform="rotate(-24 24 23)">
             <ellipse cx="24" cy="21" rx="16" ry="5.4" fill="none" stroke="currentColor" stroke-width="1.8"/>
             <circle cx="40" cy="21" r="2" fill="currentColor"/>
@@ -72,290 +68,463 @@
       </a>
 
       <nav class="nav-links" aria-label="Sections">
-        <a href="#spaces">Spaces</a>
+        <a href="#features">Features</a>
         <a href="#shield">Shield</a>
-        <a href="#reader">Reader</a>
         <a href="#keys">Shortcuts</a>
       </nav>
 
       <div class="nav-actions">
-        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light and dark theme" aria-pressed="false">
-          <svg class="ic ic-sun" width="17" height="17" aria-hidden="true"><use href="#i-sun"/></svg>
-          <svg class="ic ic-moon" width="16" height="16" aria-hidden="true"><use href="#i-moon"/></svg>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme" aria-pressed="false">
+          <svg class="ic ic-sun" width="16" height="16" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="ic ic-moon" width="15" height="15" aria-hidden="true"><use href="#i-moon"/></svg>
         </button>
-        <a class="btn btn-ink nav-dl" href="#download">
-          Download
-        </a>
+        <a class="btn btn-ink nav-dl" href="#download">Download</a>
       </div>
     </div>
   </header>
 
   <main id="top">
 
-    <!-- ===== Hero ===== -->
+    <!-- ================= Hero ================= -->
     <section class="hero">
-      <div class="hero-spot" aria-hidden="true"></div>
-      <svg class="constellation" viewBox="0 0 1200 520" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-        <g class="c-lines"><path d="M120 420 L300 350 L500 300 L740 230 L920 170"/><path d="M500 300 L470 200 L450 130"/></g>
-        <g class="c-stars">
-          <circle cx="120" cy="420" r="2.6"/><circle cx="300" cy="350" r="1.8"/><circle cx="500" cy="300" r="3"/>
-          <circle cx="740" cy="230" r="1.7"/><circle cx="920" cy="170" r="2.6"/><circle cx="470" cy="200" r="1.6"/>
-          <circle cx="450" cy="130" r="1.7"/><circle cx="690" cy="90" r="1.2"/><circle cx="1040" cy="320" r="1.3"/>
-          <circle cx="220" cy="170" r="1.1"/><circle cx="1080" cy="120" r="1.5"/>
-        </g>
-      </svg>
-
       <div class="hero-inner">
-        <p class="eyebrow" data-reveal>
-          <span class="eyebrow-dot"></span>Andromeda for macOS · v0.3.0
-        </p>
-        <h1 class="hero-title" data-reveal style="--d:60ms">
-          The web,<br>without<br class="br-mob"> the <em>noise.</em>
+        <a class="hero-badge" href="https://github.com/SetFodi/andromeda-web" data-reveal>
+          Free · Apple Silicon · Open source
+          <svg class="ic" width="12" height="12" aria-hidden="true"><use href="#i-arrow"/></svg>
+        </a>
+
+        <h1 class="hero-title" data-reveal style="--d:40ms">
+          The calm browser<br>for a noisy web.
         </h1>
-        <p class="hero-lede" data-reveal style="--d:140ms">
-          A small, fast browser that refuses ads at the network, gives every part of
-          your life its own colored Space, and sets any article in quiet serif type.
+
+        <p class="hero-lede" data-reveal style="--d:90ms">
+          Spaces, network-level ad blocking, and a keyboard-first launcher —
+          designed to get out of your way.
         </p>
-        <div class="hero-cta" data-reveal style="--d:210ms">
-          <a class="btn btn-coral btn-lg" id="heroDownload" href="https://github.com/SetFodi/andromeda-web/releases/latest/download/Andromeda-0.3.0-arm64.dmg">
-            <span>Download for Mac</span>
-            <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-down"/></svg>
-          </a>
-          <a class="btn btn-ghost btn-lg" href="https://github.com/SetFodi/andromeda-web">
-            <svg class="ic" width="17" height="17" aria-hidden="true"><use href="#i-github"/></svg>
-            <span>View source</span>
+
+        <div class="hero-cta" data-reveal style="--d:140ms">
+          <a class="btn btn-ink btn-lg" id="heroDownload" href="https://github.com/SetFodi/andromeda-web/releases/latest/download/Andromeda-0.3.0-arm64.dmg">
+            <svg class="ic" width="15" height="15" aria-hidden="true"><use href="#i-down"/></svg>
+            Download for macOS
           </a>
         </div>
-        <p class="hero-fineprint" data-reveal style="--d:280ms">Free · Apple Silicon · No telemetry, ever</p>
       </div>
 
-      <div class="hero-stage" data-reveal style="--d:200ms">
-        <div class="stage-glow" aria-hidden="true"></div>
-        <div class="window" data-tilt data-parallax="0.06">
-          <img class="window-shot shot-night" src="assets/shots/start-night.webp" width="2000" height="1256"
-               alt="The Andromeda start page at night: a large clock, a search field, and colorful website shortcuts."
-               fetchpriority="high" decoding="async">
-          <img class="window-shot shot-day" src="assets/shots/start-day.webp" width="2000" height="1256"
-               alt="The Andromeda start page in Daybreak: a large clock, a search field, and colorful website shortcuts."
-               decoding="async">
-        </div>
-        <div class="stage-reflection" aria-hidden="true"></div>
-      </div>
+      <!-- Live, animated browser window (no video, no screenshots) -->
+      <div class="hero-product" data-reveal style="--d:180ms">
+        <div class="product-shell" data-tilt>
+          <div class="demo" id="appDemo" data-scene="start" role="img"
+               aria-label="Animated preview of the Andromeda browser: searching from the command bar, blocking trackers, split view, Spaces, and tab tidying">
 
-      <a class="scroll-cue" href="#shield" aria-label="Scroll down">
-        <span class="scroll-cue-line"></span>
-      </a>
-    </section>
+            <!-- Rail -->
+            <div class="demo-rail">
+              <div class="demo-rail-top">
+                <span class="demo-lights"><i></i><i></i><i></i></span>
+                <span class="demo-dots">
+                  <i class="d1"></i><i class="d2"></i><i class="d3"></i>
+                </span>
+              </div>
+              <div class="demo-find">
+                <svg class="ic" width="11" height="11"><use href="#i-search"/></svg>
+                <span>Search or jump to</span>
+                <kbd>⌘K</kbd>
+              </div>
+              <div class="demo-pins">
+                <span class="demo-pin"><i class="demo-fav f-gh">G</i></span>
+                <span class="demo-pin"><i class="demo-fav f-yt">▶</i></span>
+                <span class="demo-pin"><i class="demo-fav f-fg">F</i></span>
+                <span class="demo-pin"><i class="demo-fav f-nt">N</i></span>
+              </div>
+              <div class="demo-sec">
+                <b>Tabs</b>
+                <span class="demo-sec-act"><em class="demo-tidy-word">Tidy</em> · Clear</span>
+              </div>
+              <div class="demo-tabs">
+                <div class="demo-tab t-new">
+                  <i class="demo-fav f-na">✶</i><span>Hubble Deep Field — NASA</span>
+                </div>
+                <div class="demo-tab t-gh1">
+                  <i class="demo-fav f-gh">G</i><span>electron PR #142 — GitHub</span><b class="demo-count">×2</b>
+                </div>
+                <div class="demo-tab t-fg">
+                  <i class="demo-fav f-fg">F</i><span>andromeda ui — Figma</span>
+                </div>
+                <div class="demo-tab t-gh2">
+                  <i class="demo-fav f-gh">G</i><span>electron PR #142 — GitHub</span>
+                </div>
+                <div class="demo-tab t-zz">
+                  <i class="demo-fav f-ap">D</i><span>SF Pro — Apple Developer</span><u>☾</u>
+                </div>
+              </div>
+              <div class="demo-toast">✓ Grouped by site · closed 1 duplicate</div>
+              <div class="demo-rail-flex"></div>
+              <div class="demo-foot">
+                <span class="demo-shield">
+                  <svg class="ic" width="11" height="11"><use href="#i-shield"/></svg>
+                  <b id="demoShield">1,272</b> blocked
+                </span>
+                <span class="demo-plus" id="demoBlocked">+9</span>
+              </div>
+            </div>
 
-    <!-- ===== Marquee ===== -->
-    <div class="marquee" aria-hidden="true">
-      <div class="marquee-track">
-        <span>Spaces ✦ Network shield ✦ Reader ✦ Split view ✦ Tabs that nap ✦ ⌘K launcher ✦ Picture-in-picture ✦ Frecency omnibar ✦ Bookmarks ✦ Backups ✦ </span>
-        <span>Spaces ✦ Network shield ✦ Reader ✦ Split view ✦ Tabs that nap ✦ ⌘K launcher ✦ Picture-in-picture ✦ Frecency omnibar ✦ Bookmarks ✦ Backups ✦ </span>
-      </div>
-    </div>
+            <!-- Content column -->
+            <div class="demo-main">
+              <div class="demo-toolbar">
+                <span class="demo-nav">‹ <i>›</i> ↻</span>
+                <span class="demo-chip">
+                  <u class="demo-lock">🔒</u>
+                  <span class="demo-chip-host">nasa.gov</span>
+                  <span class="demo-chip-progress"></span>
+                </span>
+                <span class="demo-acts">⫽ ☆ ⋯</span>
+              </div>
 
-    <!-- ===== Shield band ===== -->
-    <section class="shield" id="shield">
-      <div class="shield-inner">
-        <div class="shield-copy" data-reveal>
-          <p class="section-kicker"><svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-shield"/></svg> Shield</p>
-          <h2 class="section-title">Ads are refused <em>at the door.</em></h2>
-          <p class="section-text">
-            Most blockers hide ads after the page already fetched them. Andromeda
-            declines the request itself — EasyList and EasyPrivacy at the network
-            layer — so pages arrive lighter, faster, and quieter. Filters refresh
-            in the background; nothing about you ever leaves the Mac.
-          </p>
-        </div>
-        <div class="shield-meter" data-reveal style="--d:120ms">
-          <div class="meter-card">
-            <span class="meter-label">Requests refused</span>
-            <span class="meter-num" id="shieldNum" data-target="48217">0</span>
-            <span class="meter-foot">and counting — cached offline, zero telemetry</span>
-            <div class="meter-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="demo-stage">
+                <!-- Start page -->
+                <div class="demo-start">
+                  <p class="demo-greet">Good evening, Luka</p>
+                  <div class="demo-clock">21:47</div>
+                  <div class="demo-search">
+                    <svg class="ic" width="11" height="11"><use href="#i-search"/></svg>
+                    Search the web or type a URL
+                  </div>
+                  <div class="demo-ql">
+                    <i class="demo-fav f-gh">G</i><i class="demo-fav f-yt">▶</i><i class="demo-fav f-fg">F</i><i class="demo-fav f-nt">N</i><i class="demo-fav f-plus">+</i>
+                  </div>
+                </div>
+
+                <!-- Loaded page -->
+                <div class="demo-page">
+                  <div class="demo-article">
+                    <div class="demo-img"><span class="demo-star s1"></span><span class="demo-star s2"></span><span class="demo-star s3"></span><span class="demo-star s4"></span></div>
+                    <h4>The Hubble Deep Field, revisited</h4>
+                    <p class="demo-byline">NASA · 6 min read</p>
+                    <i class="demo-line w92"></i>
+                    <i class="demo-line w100"></i>
+                    <i class="demo-line w84"></i>
+                    <i class="demo-line w96"></i>
+                    <i class="demo-line w58"></i>
+                  </div>
+                  <span class="demo-hoverpill">nasa.gov/missions/hubble/deep-field <em>· ⌘-click for new tab</em></span>
+                </div>
+
+                <!-- Split second pane -->
+                <div class="demo-pane2">
+                  <div class="demo-article a2">
+                    <h4>Webb vs. Hubble</h4>
+                    <p class="demo-byline">Docs · comparison</p>
+                    <i class="demo-line w88"></i>
+                    <i class="demo-line w96"></i>
+                    <i class="demo-line w72"></i>
+                    <i class="demo-line w90"></i>
+                  </div>
+                </div>
+
+                <!-- Command bar overlay -->
+                <div class="demo-cmd-layer">
+                  <div class="demo-cmd">
+                    <div class="demo-cmd-in">
+                      <svg class="ic" width="12" height="12"><use href="#i-search"/></svg>
+                      <span class="demo-type" id="demoType"></span>
+                      <i class="demo-caret"></i>
+                    </div>
+                    <div class="demo-cmd-results">
+                      <div class="demo-cmd-label">Go</div>
+                      <div class="demo-cmd-row is-sel">
+                        <i class="demo-fav f-na">✶</i>
+                        <span class="demo-cmd-copy"><b>hubble deep field</b><small>nasa.gov · Web search</small></span>
+                        <kbd>↵</kbd>
+                      </div>
+                      <div class="demo-cmd-label">Switch to tab</div>
+                      <div class="demo-cmd-row">
+                        <i class="demo-fav f-fg">F</i>
+                        <span class="demo-cmd-copy"><b>andromeda ui — Figma</b><small>Personal space</small></span>
+                      </div>
+                      <div class="demo-cmd-label">Actions</div>
+                      <div class="demo-cmd-row">
+                        <i class="demo-fav f-ac"><svg class="ic" width="10" height="10"><use href="#i-sparkle"/></svg></i>
+                        <span class="demo-cmd-copy"><b>Tidy tabs</b><small>Group by site · close duplicates</small></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="demo-caption-wrap" aria-hidden="true">
+            <span class="demo-caption" id="demoCaption">A calm place to start.</span>
           </div>
         </div>
+        <div class="hero-glow" aria-hidden="true"></div>
       </div>
     </section>
 
-    <!-- ===== Sticky feature showcase ===== -->
-    <section class="showcase" id="features">
-      <div class="showcase-head" data-reveal>
-        <p class="section-kicker">A tour</p>
-        <h2 class="section-title">Built for a <em>quieter</em> kind of focus.</h2>
-      </div>
-
-      <div class="showcase-grid">
-        <div class="showcase-rail">
-          <article class="feat" id="spaces" data-step="0">
-            <span class="feat-index">01</span>
-            <span class="feat-tag"><svg class="ic" width="15" height="15" aria-hidden="true"><use href="#i-spaces"/></svg> Spaces</span>
-            <h3>Every world gets its own weather.</h3>
-            <p>Work, play, and the side project each live in their own Space, with their
-               own tabs and their own color — and the whole shell re-tints to match, down
-               to the last hairline. Pick a hue, pick an icon, swipe between them.</p>
-            <div class="feat-media"><div class="window"><img class="feat-shot" src="assets/shots/spaces.webp" width="2000" height="1256" alt="Andromeda's Space editor, choosing a color and icon for a Space." loading="lazy" decoding="async"></div></div>
-          </article>
-
-          <article class="feat" data-step="1">
-            <span class="feat-index">02</span>
-            <span class="feat-tag"><svg class="ic" width="15" height="15" aria-hidden="true"><use href="#i-command"/></svg> The launcher</span>
-            <h3>One key reaches everything.</h3>
-            <p>⌘K opens a list ranked by where you actually go — visits, typing, recency.
-               The address bar completes from the same memory, so the right tab is
-               always one keystroke away.</p>
-            <div class="feat-media"><div class="window"><img class="feat-shot" src="assets/shots/command.webp" width="2000" height="1256" alt="Andromeda's ⌘K command launcher ranking sites by frecency." loading="lazy" decoding="async"></div></div>
-          </article>
-
-          <article class="feat" id="reader" data-step="2">
-            <span class="feat-index">03</span>
-            <span class="feat-tag"><svg class="ic" width="15" height="15" aria-hidden="true"><use href="#i-reader"/></svg> Reader</span>
-            <h3>Every article, set like a book.</h3>
-            <p>One key strips the chrome from any page and re-sets the words in a calm
-               serif column — the same parsing engine Firefox trusts, wearing far better
-               type. Links survive. Clutter doesn't.</p>
-            <div class="feat-media"><div class="window"><img class="feat-shot" src="assets/shots/reader.webp" width="2000" height="1256" alt="Andromeda's Reader mode showing an article in serif type." loading="lazy" decoding="async"></div></div>
-          </article>
-
-          <article class="feat" data-step="3">
-            <span class="feat-index">04</span>
-            <span class="feat-tag"><svg class="ic" width="15" height="15" aria-hidden="true"><use href="#i-sun"/></svg> Make it yours</span>
-            <h3>Calm comes in your palette.</h3>
-            <p>Name yourself, pick a search engine, hide the toolbar buttons you never
-               touch, and slide the address bar wherever your hands expect it. Three
-               appearances, one quiet temperament.</p>
-            <div class="feat-media"><div class="window"><img class="feat-shot" src="assets/shots/settings.webp" width="2000" height="1256" alt="Andromeda's settings panel." loading="lazy" decoding="async"></div></div>
-          </article>
+    <!-- ================= Highlights strip ================= -->
+    <section class="strip" aria-label="Highlights">
+      <div class="strip-inner">
+        <div class="strip-item" data-reveal>
+          <span class="strip-icon" aria-hidden="true"><svg class="ic" width="18" height="18"><use href="#i-spaces"/></svg></span>
+          <strong>Spaces</strong>
+          <span>Color-coded worlds for work and life</span>
         </div>
-
-        <div class="showcase-stage">
-          <div class="showcase-window">
-            <img class="sc-shot is-active" data-shot="0" src="assets/shots/spaces.webp" width="2000" height="1256" alt="Andromeda's Space editor, choosing a color and icon for a Space." decoding="async">
-            <img class="sc-shot" data-shot="1" src="assets/shots/command.webp" width="2000" height="1256" alt="Andromeda's ⌘K command launcher ranking sites by frecency." loading="lazy" decoding="async">
-            <img class="sc-shot" data-shot="2" src="assets/shots/reader.webp" width="2000" height="1256" alt="Andromeda's Reader mode showing an article in serif type." loading="lazy" decoding="async">
-            <img class="sc-shot" data-shot="3" src="assets/shots/settings.webp" width="2000" height="1256" alt="Andromeda's settings panel for name, search engine, and toolbar." loading="lazy" decoding="async">
-          </div>
-          <div class="showcase-dots" role="tablist" aria-label="Feature">
-            <button class="sc-dot is-active" data-go="0" type="button" aria-label="Spaces"></button>
-            <button class="sc-dot" data-go="1" type="button" aria-label="Launcher"></button>
-            <button class="sc-dot" data-go="2" type="button" aria-label="Reader"></button>
-            <button class="sc-dot" data-go="3" type="button" aria-label="Settings"></button>
-          </div>
+        <div class="strip-item" data-reveal style="--d:50ms">
+          <span class="strip-icon" aria-hidden="true"><svg class="ic" width="18" height="18"><use href="#i-shield"/></svg></span>
+          <strong>Shield</strong>
+          <span>Ads refused before they load</span>
+        </div>
+        <div class="strip-item" data-reveal style="--d:100ms">
+          <span class="strip-icon" aria-hidden="true"><svg class="ic" width="18" height="18"><use href="#i-command"/></svg></span>
+          <strong>Quick Open</strong>
+          <span>One field for search, tabs, and commands</span>
+        </div>
+        <div class="strip-item" data-reveal style="--d:150ms">
+          <span class="strip-icon" aria-hidden="true"><svg class="ic" width="18" height="18"><use href="#i-check"/></svg></span>
+          <strong>Private by default</strong>
+          <span>No telemetry. Ever.</span>
         </div>
       </div>
     </section>
 
-    <!-- ===== Any light (day/night slider) ===== -->
+    <!-- ================= Features ================= -->
+    <section class="features" id="features">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Features</p>
+        <h2>Built for a quieter kind of focus.</h2>
+        <p class="lede">Everything you need. Nothing that shouts.</p>
+      </div>
+
+      <div class="feature-grid">
+        <!-- Spaces (wide) — live accent morph -->
+        <article class="feature-card span-2" id="spaces" data-reveal>
+          <div class="feature-copy">
+            <span class="feature-tag"><svg class="ic" width="14" height="14"><use href="#i-spaces"/></svg> Spaces</span>
+            <h3>Every world gets its own color.</h3>
+            <p>Work, play, and side projects live in separate Spaces — each with its own tabs and accent. The whole shell re-tints to match, all the way to the start page.</p>
+          </div>
+          <div class="feature-shot">
+            <div class="mini mini-spaces" aria-hidden="true">
+              <div class="mini-rail">
+                <span class="mini-lights"><i></i><i></i><i></i></span>
+                <span class="mini-dotrow"><i class="md1"></i><i class="md2"></i><i class="md3"></i></span>
+                <i class="mini-row r1"></i>
+                <i class="mini-row r2"></i>
+                <i class="mini-row r3"></i>
+                <i class="mini-row r4"></i>
+              </div>
+              <div class="mini-body">
+                <div class="mini-clock">21:47</div>
+                <i class="mini-pill"></i>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Quick Open — palette with groups -->
+        <article class="feature-card" data-reveal style="--d:60ms">
+          <div class="feature-copy">
+            <span class="feature-tag"><svg class="ic" width="14" height="14"><use href="#i-command"/></svg> Quick Open</span>
+            <h3>One key for everything.</h3>
+            <p>Search ranks where you actually go. Switch to open tabs, run commands, open URLs — one field, one muscle memory.</p>
+          </div>
+          <div class="feature-shot">
+            <div class="mini mini-cmd" aria-hidden="true">
+              <div class="minicmd">
+                <div class="minicmd-in"><svg class="ic" width="11" height="11"><use href="#i-search"/></svg><b>ver</b><i class="minicmd-caret"></i></div>
+                <small class="minicmd-label">Switch to tab</small>
+                <div class="minicmd-row is-sel"><i class="demo-fav f-vc">▲</i><span>Vercel — Dashboard</span><kbd>↵</kbd></div>
+                <small class="minicmd-label">Actions</small>
+                <div class="minicmd-row"><i class="demo-fav f-ac">✦</i><span>Tidy tabs</span></div>
+                <div class="minicmd-row"><i class="demo-fav f-ac">⫽</i><span>Open split view</span></div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Reader -->
+        <article class="feature-card" id="reader" data-reveal style="--d:80ms">
+          <div class="feature-copy">
+            <span class="feature-tag"><svg class="ic" width="14" height="14"><use href="#i-reader"/></svg> Reader</span>
+            <h3>Articles, set like a book.</h3>
+            <p>Strip the chrome. Keep the words. One keystroke to a quiet serif page.</p>
+          </div>
+          <div class="feature-shot">
+            <div class="mini mini-reader" aria-hidden="true">
+              <div class="minireader">
+                <h5>The slow web, reconsidered</h5>
+                <small>By A. Carrington · 12 min</small>
+                <i class="mini-line lw96"></i>
+                <i class="mini-line lw100"></i>
+                <i class="mini-line lw88"></i>
+                <i class="mini-line lw94"></i>
+                <i class="mini-line lw62"></i>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Appearance (wide) — day/night/glow crossfade -->
+        <article class="feature-card span-2" data-reveal style="--d:40ms">
+          <div class="feature-copy">
+            <span class="feature-tag"><svg class="ic" width="14" height="14"><use href="#i-sun"/></svg> Appearance</span>
+            <h3>Day, night, glow, or glass.</h3>
+            <p>Four themes that follow the hour. Hide toolbar noise, put the address bar where your hands expect it, and let the aurora rise after dark.</p>
+          </div>
+          <div class="feature-shot">
+            <div class="mini mini-themes" aria-hidden="true">
+              <div class="mini-theme-window">
+                <span class="mini-lights"><i></i><i></i><i></i></span>
+                <div class="mini-theme-clock">09:41</div>
+                <i class="mini-pill wide"></i>
+                <span class="mini-theme-name"></span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ================= Day / night compare ================= -->
     <section class="spectrum">
-      <div class="spectrum-copy" data-reveal>
-        <p class="section-kicker">Day &amp; night</p>
-        <h2 class="section-title">Looks right at <em>any hour.</em></h2>
-        <p class="section-text">Daybreak, Night, and a soft amber Glow. Andromeda follows
-           your Mac or holds whichever mood you set. Drag to see the sun go down.</p>
+      <div class="section-head" data-reveal>
+        <p class="kicker">Day &amp; night</p>
+        <h2>Looks right at any hour.</h2>
+        <p class="lede">Drag to move between Daybreak and Night.</p>
       </div>
-      <div class="compare" data-reveal style="--d:120ms" id="compare">
-        <div class="window compare-window">
-          <img class="compare-base" src="assets/shots/start-day.webp" width="2000" height="1256" alt="Andromeda's start page in the light Daybreak theme." loading="lazy" decoding="async">
+      <div class="compare" data-reveal style="--d:80ms" id="compare">
+        <div class="compare-window">
+          <!-- Day (base) -->
+          <div class="mockstart is-day" aria-hidden="true">
+            <span class="mini-lights"><i></i><i></i><i></i></span>
+            <p class="mock-greet">Good evening, Luka</p>
+            <div class="mock-clock">21:47</div>
+            <div class="mock-search"><svg class="ic" width="12" height="12"><use href="#i-search"/></svg>Search the web or type a URL</div>
+            <div class="mock-ql"><i class="demo-fav f-gh">G</i><i class="demo-fav f-yt">▶</i><i class="demo-fav f-fg">F</i><i class="demo-fav f-nt">N</i></div>
+          </div>
+          <!-- Night (revealed) -->
           <div class="compare-top" id="compareTop">
-            <img src="assets/shots/start-night.webp" width="2000" height="1256" alt="Andromeda's start page in the dark Night theme." loading="lazy" decoding="async">
+            <div class="mockstart is-night" aria-hidden="true">
+              <span class="mini-lights"><i></i><i></i><i></i></span>
+              <p class="mock-greet">Good evening, Luka</p>
+              <div class="mock-clock">21:47</div>
+              <div class="mock-search"><svg class="ic" width="12" height="12"><use href="#i-search"/></svg>Search the web or type a URL</div>
+              <div class="mock-ql"><i class="demo-fav f-gh">G</i><i class="demo-fav f-yt">▶</i><i class="demo-fav f-fg">F</i><i class="demo-fav f-nt">N</i></div>
+            </div>
           </div>
           <div class="compare-handle" id="compareHandle" role="slider" aria-label="Reveal day or night" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0">
-            <span class="compare-grip"><svg class="ic" width="18" height="18" aria-hidden="true"><use href="#i-split"/></svg></span>
+            <span class="compare-grip"><svg class="ic" width="16" height="16"><use href="#i-split"/></svg></span>
           </div>
         </div>
-        <span class="compare-pill compare-pill-l">Night</span>
-        <span class="compare-pill compare-pill-r">Daybreak</span>
+        <span class="compare-pill l">Night</span>
+        <span class="compare-pill r">Day</span>
       </div>
     </section>
 
-    <!-- ===== Bento ===== -->
-    <section class="bento-wrap">
-      <div class="showcase-head" data-reveal>
-        <p class="section-kicker">And the rest</p>
-        <h2 class="section-title">Small touches, <em>all the way down.</em></h2>
+    <!-- ================= Shield ================= -->
+    <section class="shield" id="shield">
+      <div class="shield-inner" data-reveal>
+        <div class="shield-copy">
+          <p class="kicker light"><svg class="ic" width="14" height="14"><use href="#i-shield"/></svg> Shield</p>
+          <h2>Ads refused before they load.</h2>
+          <p>
+            EasyList and EasyPrivacy at the network layer — not cosmetic hiding after the fact.
+            Pages arrive lighter. Nothing about you leaves the Mac.
+          </p>
+          <div class="shield-stream" aria-hidden="true">
+            <span class="blocked-chip">doubleclick.net</span>
+            <span class="blocked-chip">gtm.js</span>
+            <span class="blocked-chip">pixel.gif</span>
+            <span class="blocked-chip">ads.js</span>
+            <span class="blocked-chip">tracker.io</span>
+          </div>
+        </div>
+        <div class="meter">
+          <span class="meter-label">Requests refused</span>
+          <span class="meter-num" id="shieldNum" data-target="48217">0</span>
+          <span class="meter-foot">Cached offline · zero telemetry</span>
+        </div>
       </div>
-      <div class="bento">
-        <article class="bento-card span-2" data-reveal>
-          <svg class="bento-ic" width="22" height="22" aria-hidden="true"><use href="#i-split"/></svg>
+    </section>
+
+    <!-- ================= More ================= -->
+    <section class="more">
+      <div class="section-head" data-reveal>
+        <p class="kicker">And more</p>
+        <h2>Small touches, all the way down.</h2>
+      </div>
+      <div class="more-grid">
+        <article class="more-card" data-reveal>
+          <svg class="ic" width="20" height="20"><use href="#i-split"/></svg>
           <h3>Split view</h3>
-          <p>Drag any tab onto the page for instant side-by-side. The divider remembers exactly where you like it.</p>
-          <span class="bento-key">⌘D</span>
+          <p>Side-by-side in one drag. Divider remembers your ratio.</p>
+          <kbd>⌘D</kbd>
         </article>
-        <article class="bento-card" data-reveal style="--d:60ms">
-          <svg class="bento-ic" width="22" height="22" aria-hidden="true"><use href="#i-moon"/></svg>
+        <article class="more-card" data-reveal style="--d:40ms">
+          <svg class="ic" width="20" height="20"><use href="#i-moon"/></svg>
           <h3>Tabs that nap</h3>
-          <p>Idle tabs free their memory after an hour, then spring back the moment you return.</p>
-          <span class="bento-key">auto</span>
+          <p>Idle tabs free memory, then wake instantly.</p>
+          <kbd>auto</kbd>
         </article>
-        <article class="bento-card" data-reveal style="--d:120ms">
-          <svg class="bento-ic" width="22" height="22" aria-hidden="true"><use href="#i-pip"/></svg>
-          <h3>Picture-in-picture</h3>
-          <p>Switch tabs while a video plays and it floats out on its own, then settles home.</p>
-          <span class="bento-key">auto</span>
+        <article class="more-card" data-reveal style="--d:80ms">
+          <svg class="ic" width="20" height="20"><use href="#i-sparkle"/></svg>
+          <h3>Tidy &amp; Clear</h3>
+          <p>Group tabs by site, stack duplicates, sweep the rest.</p>
+          <kbd>1 click</kbd>
         </article>
-        <article class="bento-card" data-reveal>
-          <svg class="bento-ic" width="22" height="22" aria-hidden="true"><use href="#i-bolt"/></svg>
-          <h3>Frecency omnibar</h3>
-          <p>The bar learns the places you go and completes them before you finish typing.</p>
-          <span class="bento-key">⌘L</span>
+        <article class="more-card" data-reveal style="--d:40ms">
+          <svg class="ic" width="20" height="20"><use href="#i-bookmark"/></svg>
+          <h3>Bookmarks &amp; backups</h3>
+          <p>Folders, bar, one-tap export. Yours to keep.</p>
+          <kbd>⌘⇧B</kbd>
         </article>
-        <article class="bento-card span-2" data-reveal style="--d:60ms">
-          <svg class="bento-ic" width="22" height="22" aria-hidden="true"><use href="#i-bookmark"/></svg>
-          <h3>Real bookmarks &amp; backups</h3>
-          <p>Folders, a bookmarks bar, and one-tap export — your library is yours to keep, restore, and carry between Macs.</p>
-          <span class="bento-key">⌘⇧B</span>
-        </article>
-        <article class="bento-card" data-reveal style="--d:120ms">
-          <svg class="bento-ic" width="22" height="22" aria-hidden="true"><use href="#i-search"/></svg>
+        <article class="more-card" data-reveal style="--d:80ms">
+          <svg class="ic" width="20" height="20"><use href="#i-search"/></svg>
           <h3>Tab search</h3>
-          <p>Fly across every open tab, in every Space, from one fuzzy list.</p>
-          <span class="bento-key">⌘⇧A</span>
+          <p>Every tab, every Space, one fuzzy list.</p>
+          <kbd>⌘⇧A</kbd>
+        </article>
+        <article class="more-card" data-reveal style="--d:120ms">
+          <svg class="ic" width="20" height="20"><use href="#i-pip"/></svg>
+          <h3>Picture-in-picture</h3>
+          <p>Video floats when you switch tabs.</p>
+          <kbd>auto</kbd>
         </article>
       </div>
     </section>
 
-    <!-- ===== Command sheet ===== -->
+    <!-- ================= Keys ================= -->
     <section class="keys" id="keys">
-      <div class="keys-head" data-reveal>
-        <p class="section-kicker">Keyboard-first</p>
-        <h2 class="section-title">Hands stay on the keys.</h2>
-        <p class="section-text">Every surface is reachable without the trackpad.</p>
+      <div class="section-head" data-reveal>
+        <p class="kicker">Keyboard-first</p>
+        <h2>Hands stay on the keys.</h2>
       </div>
-      <div class="keys-grid" data-reveal style="--d:80ms">
-        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>K</kbd></span><span>Command bar — search history or type a URL</span></div>
-        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>T</kbd></span><span>New tab</span></div>
-        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>A</kbd></span><span>Search open tabs across every Space</span></div>
+      <div class="keys-grid" data-reveal style="--d:60ms">
+        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>K</kbd></span><span>Quick Open</span></div>
+        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>S</kbd></span><span>Compact sidebar</span></div>
+        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>A</kbd></span><span>Search open tabs</span></div>
         <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>R</kbd></span><span>Reader mode</span></div>
         <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>D</kbd></span><span>Split view</span></div>
+        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>T</kbd></span><span>Reopen closed tab</span></div>
         <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>Y</kbd></span><span>History</span></div>
-        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>B</kbd></span><span>Bookmarks</span></div>
-        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>1</kbd><span class="dash">–</span><kbd>9</kbd></span><span>Jump straight to a tab</span></div>
-        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>T</kbd></span><span>Reopen the tab you just closed</span></div>
-        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>D</kbd></span><span>Add bookmark</span></div>
+        <div class="key-row"><span class="combo"><kbd>⌘</kbd><kbd>1</kbd><span class="dash">–</span><kbd>9</kbd></span><span>Jump to tab</span></div>
       </div>
     </section>
 
-    <!-- ===== Download ===== -->
+    <!-- ================= Download ================= -->
     <section class="download" id="download">
       <div class="download-card" data-reveal>
-        <div class="dl-stars" aria-hidden="true"></div>
-        <p class="section-kicker">Free · macOS 14+ · Apple Silicon</p>
-        <h2 class="section-title">Ready when <em>you are.</em></h2>
-        <p class="section-text dl-sub">Download the 0.3.0 disk image, drag Andromeda into Applications, and the twenty-second setup takes it from there.</p>
-        <a class="btn btn-coral btn-lg" href="https://github.com/SetFodi/andromeda-web/releases/latest/download/Andromeda-0.3.0-arm64.dmg">
-          <span>Download Andromeda 0.3.0</span>
-          <svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-down"/></svg>
+        <p class="kicker">macOS 14+ · Apple Silicon</p>
+        <h2>Start using today.</h2>
+        <p class="lede">Download, drag to Applications, done. No account. No telemetry.</p>
+        <a class="btn btn-ink btn-lg" href="https://github.com/SetFodi/andromeda-web/releases/latest/download/Andromeda-0.3.0-arm64.dmg">
+          <svg class="ic" width="15" height="15"><use href="#i-down"/></svg>
+          Download Andromeda 0.3.0
         </a>
-        <p class="dl-meta">arm64 disk image · 119 MB</p>
+        <p class="dl-meta">arm64 · ~120 MB · Free forever</p>
         <details class="gatekeeper">
-          <summary>First launch on an unsigned build</summary>
+          <summary>First launch tip (unsigned build)</summary>
           <p>
-            Andromeda isn't signed with an Apple Developer certificate yet, so macOS asks
-            once before the first open. On <b>macOS 15+</b>: open the app, dismiss the
-            warning, then System Settings → Privacy &amp; Security → <b>Open Anyway</b>. On
-            <b>macOS 14 and older</b>: right-click the app → <b>Open</b>. After that it
-            opens like any other app.
+            On <b>macOS 15+</b>: open the app, dismiss the warning, then System Settings → Privacy &amp; Security → <b>Open Anyway</b>.
+            On <b>macOS 14</b>: right-click → <b>Open</b>. Once allowed, it launches normally.
           </p>
         </details>
       </div>
@@ -364,18 +533,18 @@
 
   <footer class="footer">
     <div class="footer-inner">
-      <a class="brand brand-sm" href="#top" aria-label="Andromeda — home">
+      <a class="brand brand-sm" href="#top">
         <svg class="brand-mark" width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <circle cx="24" cy="27" r="9.6" fill="var(--coral)"/>
+          <circle cx="24" cy="27" r="9.6" fill="#ff7a5c"/>
           <g transform="rotate(-24 24 23)"><ellipse cx="24" cy="21" rx="16" ry="5.4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="40" cy="21" r="2" fill="currentColor"/></g>
           <g stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"><path d="M9 34 Q16 30 23 34 T37 34"/><path d="M11 39 Q18 35.6 25 39 T39 39"/></g>
         </svg>
         <span class="brand-name">Andromeda</span>
       </a>
-      <span class="footer-note">M31 is 2.5 million light-years away. Your tabs are closer.</span>
+      <span class="footer-note">Built in the open by Luka Fartenadze</span>
       <div class="footer-links">
         <a href="https://github.com/SetFodi/andromeda-web">GitHub</a>
-        <span class="footer-by">Built in the open by Luka Fartenadze</span>
+        <a href="#download">Download</a>
       </div>
     </div>
   </footer>

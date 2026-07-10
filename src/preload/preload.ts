@@ -365,6 +365,8 @@ contextBridge.exposeInMainWorld("andromeda", {
   closeWindow: () => ipcRenderer.invoke("window:close"),
   minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
   toggleMaximizeWindow: () => ipcRenderer.invoke("window:toggleMaximize"),
+  setVibrancy: (enabled: boolean) =>
+    ipcRenderer.invoke("window:setVibrancy", { enabled: enabled === true }),
   onDidNavigate: (callback: (payload: NavigationPayload) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
       if (isNavigationPayload(payload)) {

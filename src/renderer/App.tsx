@@ -2178,7 +2178,7 @@ export default function App() {
         ref={appShellRef}
         className={[
           "app-shell",
-          isPureBlackTheme ? "is-pure-black" : "",
+          isPureBlackTheme && theme !== "transparent" ? "is-pure-black" : "",
           isSidebarCollapsed ? "is-sidebar-collapsed" : "",
           isSidebarCollapsed && isSidebarPeeking ? "is-peeking" : "",
           isResizingSidebar ? "is-resizing-sidebar" : "",
@@ -2270,7 +2270,6 @@ export default function App() {
             onTabDragEnd={handleSidebarTabDragEnd}
             draggedTabId={draggedTab?.id ?? null}
             onNewTab={handleNewTab}
-            onTidyTabs={tidyTabs}
             onClearTabs={clearUnpinnedTabs}
             showWindowControls
             onCloseWindow={handleCloseWindow}
@@ -2278,6 +2277,8 @@ export default function App() {
             onToggleMaximizeWindow={handleToggleMaximizeWindow}
             backgroundGlowEnabled={backgroundGlowEnabled}
             onToggleBackgroundGlow={toggleBackgroundGlow}
+            theme={theme}
+            onSetTheme={setTheme}
             addressBar={addressBarPlacement === "sidebar" ? addressBar : null}
           />
         )}

@@ -69,6 +69,104 @@
   --selected-wash: color-mix(in srgb, var(--accent) 22%, #111827);
 }
 
+/*
+ * Transparent chrome (Aside-like):
+ * Native macOS vibrancy does the frost. Keep fills nearly clear so it shows.
+ * Content area stays solid so pages don't look washed out.
+ */
+[data-appearance="transparent"] .app-shell {
+  --bg-base: transparent;
+  --bg-shell: transparent;
+  --surface-glass: rgba(255, 255, 255, 0.045);
+  --surface-glass-strong: rgba(255, 255, 255, 0.07);
+  --surface-raised: rgba(255, 255, 255, 0.09);
+  --surface-solid: rgba(28, 28, 30, 0.94);
+  --surface-sunken: rgba(0, 0, 0, 0.22);
+  --hover: rgba(255, 255, 255, 0.07);
+  --hover-strong: rgba(255, 255, 255, 0.11);
+  --selected: rgba(255, 255, 255, 0.11);
+  --selected-wash: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-soft: rgba(255, 255, 255, 0.045);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --field: rgba(255, 255, 255, 0.07);
+  --field-border: rgba(255, 255, 255, 0.11);
+  --accent-soft: rgba(255, 255, 255, 0.1);
+  --accent-glow: rgba(255, 255, 255, 0.14);
+  --accent-on-surface: #f5f5f7;
+  --text-faint: rgba(180, 180, 188, 0.44);
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-appearance="transparent"] .sidebar {
+  /* Dark charcoal wash over native vibrancy — readable like Aside, still glassy. */
+  background: rgba(18, 18, 20, 0.52);
+  border-right-color: rgba(255, 255, 255, 0.06);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-appearance="transparent"] .toolbar {
+  background: rgba(16, 16, 18, 0.48);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-appearance="transparent"] .content-view-host {
+  /* Solid plate under pages so web content stays crisp over vibrancy. */
+  background: #0c0c0e;
+}
+
+[data-appearance="transparent"] .space-dock {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-appearance="transparent"] .tab-row.is-selected,
+[data-appearance="transparent"] .tab-row.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+[data-appearance="transparent"] .tab-row.is-selected::before,
+[data-appearance="transparent"] .tab-row.is-active::before {
+  opacity: 0;
+}
+
+[data-appearance="transparent"] .sidebar-new-tab {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: none;
+}
+
+[data-appearance="transparent"] .sidebar-new-tab:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-appearance="transparent"] .sidebar-tabs-new:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+[data-appearance="transparent"] .address-form,
+[data-appearance="transparent"] .tab-context,
+[data-appearance="transparent"] .space-context {
+  background: rgba(32, 32, 36, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+[data-appearance="transparent"] .space-dock-item.is-selected {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
 .app-shell.is-pure-black {
   --bg-base: #000;
   --bg-shell: #000;
@@ -197,6 +295,8 @@
       var(--surface-glass)
     );
 }
+
+/* transparent toolbar rules live with the transparent shell block above */
 
 .app-shell.is-classic .toolbar {
   left: 0;
@@ -830,6 +930,10 @@
 .tabs-section {
   min-height: 0;
   padding-top: 2px;
+}
+
+.tabs-section > .tab-group-label:first-child {
+  margin-top: 4px;
 }
 
 .tab-list {
@@ -2049,6 +2153,34 @@
 
 [data-theme="dark"].no-start-glow .start-page {
   background: var(--bg-base);
+}
+
+/* Transparent start page: soft dark plate, no indigo planet wash. */
+[data-appearance="transparent"][data-theme="dark"] .start-page,
+[data-appearance="transparent"][data-theme="dark"]:not(.no-start-glow) .start-page {
+  --bg-base: #0c0c0e;
+  --surface-glass: rgba(255, 255, 255, 0.06);
+  --surface-glass-strong: rgba(255, 255, 255, 0.08);
+  --surface-raised: rgba(255, 255, 255, 0.09);
+  --surface-solid: rgba(32, 32, 36, 0.94);
+  --surface-sunken: rgba(0, 0, 0, 0.28);
+  --hover: rgba(255, 255, 255, 0.07);
+  --hover-strong: rgba(255, 255, 255, 0.11);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-soft: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --field: rgba(255, 255, 255, 0.07);
+  --field-border: rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(70% 48% at 50% 112%, rgba(255, 255, 255, 0.04), transparent 64%),
+    #0c0c0e;
+  background-color: #0c0c0e;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-appearance="transparent"][data-theme="dark"].no-start-glow .start-page {
+  background: #0c0c0e;
 }
 
 .start-scroll {
@@ -5202,7 +5334,7 @@
   white-space: nowrap;
 }
 
-/* Tidy · Clear text actions in the Tabs group header. */
+/* Clear text action in the Tabs group header. */
 .tab-group-action.is-text {
   width: auto;
   padding: 0 7px;
@@ -5214,6 +5346,50 @@
 .tab-group-action.is-text:hover {
   background: var(--hover);
   color: var(--accent-on-surface);
+}
+
+/* Aside-style "+ New tab" row under the Tabs label. */
+.sidebar-tabs-new {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 4px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 560;
+  text-align: left;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.sidebar-tabs-new:hover {
+  background: var(--hover);
+  color: var(--text-soft);
+}
+
+.sidebar-tabs-new:active {
+  transform: scale(0.99);
+}
+
+.sidebar-tabs-new-icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: inherit;
+}
+
+.tab-group-label + .sidebar-tabs-new + .tab-list {
+  margin-top: 4px;
 }
 
 /* Command bar result groups + hint footer. */
@@ -5269,6 +5445,8 @@
 [data-appearance="glow"] .app-shell {
   --text-faint: rgba(177, 190, 207, 0.54);
 }
+
+
 
 /* ---- Sidebar --------------------------------------------------------- */
 .sidebar {
@@ -6291,8 +6469,14 @@
 
 .settings-theme-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+@media (min-width: 520px) {
+  .settings-theme-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .settings-theme {
@@ -6327,6 +6511,12 @@
 .settings-theme-preview.is-day { background: #f7eee2; }
 .settings-theme-preview.is-night { background: #111722; }
 .settings-theme-preview.is-glow { background: radial-gradient(circle at 70% 90%, color-mix(in srgb, var(--accent) 54%, #1b2340), #0a0d16 65%); }
+.settings-theme-preview.is-transparent {
+  background:
+    linear-gradient(135deg, rgba(90, 100, 120, 0.35), rgba(20, 22, 28, 0.55)),
+    repeating-conic-gradient(from 0deg, #2a2a30 0deg 90deg, #1a1a1e 90deg 180deg);
+  background-size: auto, 12px 12px;
+}
 
 .settings-theme-preview i:first-child {
   position: absolute;
@@ -6591,6 +6781,102 @@
   padding: 7px 16px;
   border-radius: 9px;
   font-size: 11.5px;
+}
+
+/* Transparent theme: keep overlays fully opaque so the start page
+   never bleeds through dialogs (Aside-style solid panels). */
+[data-appearance="transparent"] .settings-layer,
+[data-appearance="transparent"] .command-bar-layer,
+[data-appearance="transparent"] .history-layer,
+[data-appearance="transparent"] .bookmarks-layer,
+[data-appearance="transparent"] .auth-layer,
+[data-appearance="transparent"] .siteinfo-layer,
+[data-appearance="transparent"] .onboard-layer,
+[data-appearance="transparent"] .reader-layer {
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+[data-appearance="transparent"] .settings-panel.settings-workspace,
+[data-appearance="transparent"] .command-bar,
+[data-appearance="transparent"] .history-panel,
+[data-appearance="transparent"] .bookmarks-panel,
+[data-appearance="transparent"] .downloads-panel,
+[data-appearance="transparent"] .auth-panel,
+[data-appearance="transparent"] .siteinfo-panel,
+[data-appearance="transparent"] .onboard-panel,
+[data-appearance="transparent"] .reader-doc,
+[data-appearance="transparent"] .pw-prompt,
+[data-appearance="transparent"] .tab-context,
+[data-appearance="transparent"] .space-context {
+  background: rgba(28, 28, 32, 0.97);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-appearance="transparent"] .command-result:hover,
+[data-appearance="transparent"] .command-result.is-selected {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+[data-appearance="transparent"] .command-result-icon {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-appearance="transparent"] .command-mode,
+[data-appearance="transparent"] .command-result-type,
+[data-appearance="transparent"] .command-result kbd,
+[data-appearance="transparent"] .command-foot kbd {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-appearance="transparent"] .command-foot {
+  border-top-color: rgba(255, 255, 255, 0.07);
+  background: rgba(22, 22, 26, 0.96);
+}
+
+[data-appearance="transparent"] .settings-nav {
+  background: rgba(20, 20, 24, 0.98);
+  border-right-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-appearance="transparent"] .settings-card,
+[data-appearance="transparent"] .settings-theme,
+[data-appearance="transparent"] .settings-choice,
+[data-appearance="transparent"] .settings-radio,
+[data-appearance="transparent"] .settings-about-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-appearance="transparent"] .settings-nav-item.is-active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-appearance="transparent"] .settings-foot {
+  border-top-color: rgba(255, 255, 255, 0.07);
+  background: rgba(22, 22, 26, 0.96);
+}
+
+[data-appearance="transparent"] .settings-input,
+[data-appearance="transparent"] .settings-segment {
+  background: rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-appearance="transparent"] .settings-confirm-layer {
+  background: rgba(8, 8, 10, 0.72);
+}
+
+[data-appearance="transparent"] .settings-confirm {
+  background: rgba(32, 32, 36, 0.98);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .settings-confirm-layer {

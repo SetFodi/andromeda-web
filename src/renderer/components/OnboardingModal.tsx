@@ -301,7 +301,7 @@ function OnboardingModal({
               <div className="onboard-shortcut-grid">
                 <div><kbd>⌘T</kbd><span><b>Quick Open</b><small>Search or open anything</small></span></div>
                 <div><kbd>⌘⇧A</kbd><span><b>Tab switcher</b><small>See every open tab</small></span></div>
-                <div><kbd>⌘\</kbd><span><b>Sidebar</b><small>Hide it, then peek back</small></span></div>
+                <div><kbd>⌘S</kbd><span><b>Sidebar</b><small>Hide it, then peek back</small></span></div>
               </div>
               <div className="onboard-ready-note"><Icon name="shield" size={15} /> Shield is already on. No extra setup needed.</div>
             </div>

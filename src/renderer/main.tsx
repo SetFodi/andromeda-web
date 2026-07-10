@@ -15,7 +15,7 @@ import "./styles/bookmarks.css";
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches;
     const appearance =
-      stored === "glow" || stored === "day" || stored === "night"
+      stored === "glow" || stored === "day" || stored === "night" || stored === "transparent"
         ? stored
         : stored === "light"
           ? "day"
@@ -27,6 +27,7 @@ import "./styles/bookmarks.css";
     document.documentElement.dataset.appearance = appearance;
     document.documentElement.classList.toggle("dark", isDark);
     document.documentElement.classList.toggle("no-start-glow", localStorage.getItem("andromeda.startGlow") === "off");
+    // Vibrancy is applied once the preload bridge is ready (see useTheme).
   } catch {
     document.documentElement.dataset.theme = "light";
     document.documentElement.dataset.appearance = "day";

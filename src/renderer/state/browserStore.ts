@@ -53,7 +53,13 @@ type SplitState = {
 };
 
 const STORAGE_KEY = "andromeda.browserState.v3";
-const MAX_TABS_PER_SPACE = 14;
+const CLOSED_TABS_KEY = "andromeda.closedTabs.v1";
+// Soft safety ceiling — high enough for daily browsing; still bounds memory.
+const MAX_TABS_PER_SPACE = 80;
+// Reopen stack survives restarts (⌘⇧T). Cap keeps localStorage small.
+const MAX_CLOSED_TABS = 25;
+
+type ClosedTabEntry = { spaceId: SpaceId; tab: BrowserTab };
 
 export const SPACE_PRESETS: Array<{ icon: IconName; accent: string }> = [
   { icon: "globe", accent: "#f28366" },
@@ -163,24 +169,91 @@ function getReusableStartTab(tabs: BrowserTab[]): BrowserTab | null {
   return tabs.find((tab) => tab.isStartPage && tab.url === null) ?? null;
 }
 
-// Trims the oldest non-pinned, non-local-start tabs once a space grows past the cap.
+// Soft-trim when a space grows past the ceiling. Prefer dropping unpinned
+// sleeping tabs first, then other unpinned non-start tabs (oldest first).
 function capSpaceTabs(tabs: BrowserTab[]): BrowserTab[] {
   if (tabs.length <= MAX_TABS_PER_SPACE) {
     return tabs;
   }
 
   let excess = tabs.length - MAX_TABS_PER_SPACE;
-  const result: BrowserTab[] = [];
-  for (const tab of tabs) {
-    const isDroppable = !tab.pinned && !(tab.isStartPage && tab.url === null);
-    if (excess > 0 && isDroppable) {
+  const dropIds = new Set<string>();
+
+  const tryDrop = (predicate: (tab: BrowserTab) => boolean) => {
+    for (const tab of tabs) {
+      if (excess <= 0) {
+        break;
+      }
+      if (dropIds.has(tab.id) || !predicate(tab)) {
+        continue;
+      }
+      dropIds.add(tab.id);
       excess -= 1;
-      continue;
     }
-    result.push(tab);
+  };
+
+  tryDrop((tab) => Boolean(tab.isSleeping) && !tab.pinned && !(tab.isStartPage && tab.url === null));
+  tryDrop((tab) => !tab.pinned && !(tab.isStartPage && tab.url === null));
+
+  if (dropIds.size === 0) {
+    return tabs;
   }
 
-  return result;
+  return tabs.filter((tab) => !dropIds.has(tab.id));
+}
+
+function sanitizeClosedTabEntry(value: unknown): ClosedTabEntry | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const entry = value as Partial<ClosedTabEntry>;
+  if (typeof entry.spaceId !== "string") {
+    return null;
+  }
+
+  const tab = sanitizeTab(entry.tab);
+  if (!tab || !tab.url || tab.isStartPage) {
+    return null;
+  }
+
+  return {
+    spaceId: entry.spaceId,
+    tab: { ...tab, isSleeping: undefined, pinned: undefined }
+  };
+}
+
+function loadClosedTabs(): ClosedTabEntry[] {
+  let rawValue: string | null = null;
+  try {
+    rawValue = localStorage.getItem(CLOSED_TABS_KEY);
+    if (!rawValue) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map(sanitizeClosedTabEntry)
+      .filter((entry): entry is ClosedTabEntry => entry !== null)
+      .slice(-MAX_CLOSED_TABS);
+  } catch (error) {
+    quarantineCorruptValue(CLOSED_TABS_KEY, rawValue);
+    console.warn("[andromeda] closed-tabs stack unreadable; backed up and reset", error);
+    return [];
+  }
+}
+
+function pushClosedTab(stack: ClosedTabEntry[], entry: ClosedTabEntry): ClosedTabEntry[] {
+  return [...stack, entry].slice(-MAX_CLOSED_TABS);
+}
+
+function pushClosedTabs(stack: ClosedTabEntry[], entries: ClosedTabEntry[]): ClosedTabEntry[] {
+  if (entries.length === 0) {
+    return stack;
+  }
+  return [...stack, ...entries].slice(-MAX_CLOSED_TABS);
 }
 
 function isSafeFaviconUrl(value: unknown): value is string {
@@ -312,10 +385,13 @@ export function useBrowserStore() {
 
   const [state, setState] = useState<BrowserState>(() => initialStateRef.current!.state);
   const [splitState, setSplitState] = useState<SplitState>(DEFAULT_SPLIT_STATE);
-  const [closedTabs, setClosedTabs] = useState<Array<{ spaceId: SpaceId; tab: BrowserTab }>>([]);
+  const [closedTabs, setClosedTabs] = useState<ClosedTabEntry[]>(() => loadClosedTabs());
   const persistedStateRef = useRef(initialStateRef.current.persistedValue ?? "");
+  const persistedClosedRef = useRef<string | null>(null);
   const stateRef = useRef(state);
+  const closedTabsRef = useRef(closedTabs);
   stateRef.current = state;
+  closedTabsRef.current = closedTabs;
 
   const persistState = useCallback(() => {
     const serializedState = JSON.stringify(stateRef.current);
@@ -332,6 +408,19 @@ export function useBrowserStore() {
     }
   }, []);
 
+  const persistClosedTabs = useCallback(() => {
+    const serialized = JSON.stringify(closedTabsRef.current);
+    if (serialized === persistedClosedRef.current) {
+      return;
+    }
+    try {
+      localStorage.setItem(CLOSED_TABS_KEY, serialized);
+      persistedClosedRef.current = serialized;
+    } catch (error) {
+      console.warn("[andromeda] failed to persist closed tabs", error);
+    }
+  }, []);
+
   // Debounce persistence: a page load fires a burst of tab mutations (title,
   // favicon, nav state). Serializing every tab to disk on each one is wasted
   // main-thread work, so coalesce into one write 600ms after the last change.
@@ -340,13 +429,21 @@ export function useBrowserStore() {
     return () => window.clearTimeout(timer);
   }, [state, persistState]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(persistClosedTabs, 400);
+    return () => window.clearTimeout(timer);
+  }, [closedTabs, persistClosedTabs]);
+
   // Flush immediately when the window is closing or hidden so a debounced
   // change is never lost on quit / minimize / app switch.
   useEffect(() => {
-    const flush = () => persistState();
+    const flush = () => {
+      persistState();
+      persistClosedTabs();
+    };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
-        persistState();
+        flush();
       }
     };
     window.addEventListener("pagehide", flush);
@@ -355,7 +452,7 @@ export function useBrowserStore() {
       window.removeEventListener("pagehide", flush);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [persistState]);
+  }, [persistState, persistClosedTabs]);
 
   const selectedSpace = useMemo(() => {
     return state.spaces.find((space) => space.id === state.selectedSpaceId) ?? state.spaces[0];
@@ -642,10 +739,12 @@ export function useBrowserStore() {
 
       const closingTab = targetSpace.tabs.find((tab) => tab.id === tabId);
       if (closingTab && closingTab.url && !closingTab.isStartPage) {
-        setClosedTabs((stack) => [
-          ...stack.slice(-9),
-          { spaceId, tab: { ...closingTab, isSleeping: undefined } }
-        ]);
+        setClosedTabs((stack) =>
+          pushClosedTab(stack, {
+            spaceId,
+            tab: { ...closingTab, isSleeping: undefined, pinned: undefined }
+          })
+        );
       }
 
       const closingIndex = targetSpace.tabs.findIndex((tab) => tab.id === tabId);
@@ -820,31 +919,43 @@ export function useBrowserStore() {
   }, []);
 
   const reopenClosedTab = useCallback(() => {
-    if (closedTabs.length === 0) {
-      return;
-    }
+    setClosedTabs((stack) => {
+      if (stack.length === 0) {
+        return stack;
+      }
 
-    const entry = closedTabs[closedTabs.length - 1];
-    setClosedTabs(closedTabs.slice(0, -1));
+      const entry = stack[stack.length - 1];
+      const nextStack = stack.slice(0, -1);
 
-    setState((current) => {
-      const targetSpaceId = current.spaces.some((space) => space.id === entry.spaceId)
-        ? entry.spaceId
-        : current.selectedSpaceId;
-      const reopened: BrowserTab = { ...entry.tab, id: randomId("tab"), isSleeping: undefined };
+      // Reopen after stack pop so a double-tap of ⌘⇧T can't re-consume the same entry.
+      queueMicrotask(() => {
+        setState((current) => {
+          const targetSpaceId = current.spaces.some((space) => space.id === entry.spaceId)
+            ? entry.spaceId
+            : current.selectedSpaceId;
+          const reopened: BrowserTab = {
+            ...entry.tab,
+            id: randomId("tab"),
+            isSleeping: undefined,
+            pinned: undefined
+          };
 
-      return {
-        ...current,
-        selectedSpaceId: targetSpaceId,
-        spaces: current.spaces.map((space) =>
-          space.id === targetSpaceId
-            ? { ...space, tabs: capSpaceTabs([...space.tabs, reopened]), activeTabId: reopened.id }
-            : space
-        )
-      };
+          return {
+            ...current,
+            selectedSpaceId: targetSpaceId,
+            spaces: current.spaces.map((space) =>
+              space.id === targetSpaceId
+                ? { ...space, tabs: capSpaceTabs([...space.tabs, reopened]), activeTabId: reopened.id }
+                : space
+            )
+          };
+        });
+        setSplitState(resetSplitState);
+      });
+
+      return nextStack;
     });
-    setSplitState(resetSplitState);
-  }, [closedTabs]);
+  }, []);
 
   const togglePinTab = useCallback((spaceId: SpaceId, tabId: string) => {
     setState((current) => {
@@ -1294,14 +1405,14 @@ export function useBrowserStore() {
         return;
       }
 
-      const restorable = duplicates.filter((tab) => tab.url && !tab.isStartPage);
+      const restorable = duplicates
+        .filter((tab) => tab.url && !tab.isStartPage)
+        .map((tab) => ({
+          spaceId,
+          tab: { ...tab, isSleeping: undefined, pinned: undefined }
+        }));
       if (restorable.length > 0) {
-        setClosedTabs((stack) =>
-          [
-            ...stack,
-            ...restorable.map((tab) => ({ spaceId, tab: { ...tab, isSleeping: undefined } }))
-          ].slice(-10)
-        );
+        setClosedTabs((stack) => pushClosedTabs(stack, restorable));
       }
 
       setState((current) => ({
@@ -1330,14 +1441,14 @@ export function useBrowserStore() {
         return;
       }
 
-      const restorable = removed.filter((tab) => tab.url && !tab.isStartPage);
+      const restorable = removed
+        .filter((tab) => tab.url && !tab.isStartPage)
+        .map((tab) => ({
+          spaceId,
+          tab: { ...tab, isSleeping: undefined, pinned: undefined }
+        }));
       if (restorable.length > 0) {
-        setClosedTabs((stack) =>
-          [
-            ...stack,
-            ...restorable.map((tab) => ({ spaceId, tab: { ...tab, isSleeping: undefined } }))
-          ].slice(-10)
-        );
+        setClosedTabs((stack) => pushClosedTabs(stack, restorable));
       }
 
       setState((current) => {

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type ThemeMode = "glow" | "day" | "night";
+export type ThemeMode = "glow" | "day" | "night" | "transparent";
 
 const STORAGE_KEY = "andromeda.theme";
-const THEME_ORDER: ThemeMode[] = ["glow", "day", "night"];
+const THEME_ORDER: ThemeMode[] = ["glow", "day", "night", "transparent"];
 
 function normalizeTheme(value: string | null | undefined): ThemeMode | null {
-  if (value === "glow" || value === "day" || value === "night") {
+  if (value === "glow" || value === "day" || value === "night" || value === "transparent") {
     return value;
   }
 
@@ -27,6 +27,12 @@ function applyTheme(mode: ThemeMode) {
   document.documentElement.dataset.appearance = mode;
   // Mirror onto a `.dark` class so vendored components (color picker) adapt.
   document.documentElement.classList.toggle("dark", isDark);
+
+  // Transparent theme uses OS frosted glass behind the chrome.
+  const setVibrancy = window.andromeda?.setVibrancy;
+  if (typeof setVibrancy === "function") {
+    void setVibrancy(mode === "transparent");
+  }
 }
 
 function getInitialTheme(): ThemeMode {
